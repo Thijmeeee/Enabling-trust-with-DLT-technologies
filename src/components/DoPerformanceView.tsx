@@ -213,13 +213,6 @@ export default function DoPerformanceView({ dop, onEdit }: DoPerformanceViewProp
           </div>
         </div>
       </div>
-
-      {/* Download/Print Notice */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
-        <p className="text-sm text-blue-800">
-          This Declaration of Performance is part of the Digital Product Passport and is permanently recorded on the blockchain.
-        </p>
-      </div>
     </div>
   );
 }

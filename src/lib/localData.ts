@@ -144,7 +144,15 @@ class LocalDataStore {
   async updateDPP(id: string, updates: Partial<DPP>): Promise<DPP | null> {
     const dpp = this.dpps.get(id);
     if (!dpp) return null;
-    const updated = { ...dpp, ...updates, updated_at: new Date().toISOString() };
+    
+    // Deep merge metadata if it's being updated
+    const updated = { 
+      ...dpp, 
+      ...updates, 
+      metadata: updates.metadata ? { ...dpp.metadata, ...updates.metadata } : dpp.metadata,
+      updated_at: new Date().toISOString() 
+    };
+    
     this.dpps.set(id, updated);
     return updated;
   }

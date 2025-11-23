@@ -81,14 +81,15 @@ export default function ComponentDPPView({
   async function handleSaveDoP(dop: DeclarationOfPerformance) {
     if (!data?.dpp) return;
     
-    const { updateDPP } = await import('../lib/dppManagerLocal');
-    await updateDPP(data.dpp.id, {
+    const { updateDPP } = await import('../lib/enhancedAdapter');
+    const updatedDPP = await updateDPP(data.dpp.id, {
       metadata: {
         ...data.dpp.metadata,
         declarationOfPerformance: dop,
       },
     });
     
+    console.log('DoP saved successfully:', updatedDPP);
     setEditingDoP(false);
     await loadData();
   }

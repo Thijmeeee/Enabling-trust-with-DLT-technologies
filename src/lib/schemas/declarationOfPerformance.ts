@@ -140,7 +140,6 @@ export function generateWindowDoP(product: {
       {
         characteristic: 'Load-bearing Capacity',
         performance: `${Math.floor((width * height) / 1000)} kg`,
-        unit: 'kg',
         harmonizedStandard: 'EN 14351-1',
       },
       {

@@ -217,6 +217,33 @@ export class EnhancedDataStore {
     return Array.from(this.dpps.values());
   }
   
+  async updateDPP(id: string, updates: Partial<DPP>): Promise<DPP | null> {
+    const dpp = this.dpps.get(id);
+    if (!dpp) return null;
+    
+    // Deep merge metadata if it's being updated
+    const updated = { 
+      ...dpp, 
+      ...updates, 
+      metadata: updates.metadata ? { ...dpp.metadata, ...updates.metadata } : dpp.metadata,
+      updated_at: new Date().toISOString() 
+    };
+    
+    this.dpps.set(id, updated);
+    
+    // Update indexes if relevant fields changed
+    if (updates.did || updates.model || updates.owner || updates.type || 
+        updates.lifecycle_status || updates.metadata) {
+      // Re-index the updated DPP
+      this.addToIndex(updated);
+    }
+    
+    // Invalidate relevant caches
+    this.invalidateCache(updated.did);
+    
+    return updated;
+  }
+  
   // ========== Advanced Query Methods ==========
   
   async searchDPPs(query: {

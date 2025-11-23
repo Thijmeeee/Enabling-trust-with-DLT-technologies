@@ -67,6 +67,10 @@ export async function getDPPWithRelations(did: string) {
   };
 }
 
+export async function updateDPP(id: string, updates: Partial<any>): Promise<any | null> {
+  return enhancedDB.updateDPP(id, updates);
+}
+
 export async function getAggregatedMetrics(dppId: string) {
   const dpp = await enhancedDB.getDPPById(dppId);
   if (!dpp) return null;
