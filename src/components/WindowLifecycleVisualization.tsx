@@ -19,6 +19,17 @@ export default function WindowLifecycleVisualization({ dpp, events }: {
   events: any[];
 }) {
   const [expandedStage, setExpandedStage] = useState<string | null>(null);
+  
+  // Calculate progress
+  const completedStages = () => {
+    let count = 0;
+    if (dpp.created_at) count++; // Manufacturing
+    if (events.some((e: any) => e.event_type === 'assembly')) count++; // Assembly
+    if (events.some((e: any) => e.event_type === 'installation')) count++; // Installation
+    if (events.some((e: any) => e.event_type === 'maintenance')) count++; // Maintenance
+    if (dpp.lifecycle_status === 'disposed') count++; // End of Life
+    return count;
+  };
 
   // Determine current lifecycle stage based on DPP status and events
   const determineCurrentStage = () => {
@@ -146,12 +157,34 @@ export default function WindowLifecycleVisualization({ dpp, events }: {
     }
   };
 
+  const completed = completedStages();
+  const total = 5;
+  const progressPercent = (completed / total) * 100;
+
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6">
-      <h2 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
-        <Package className="w-5 h-5 text-blue-600" />
-        Window Lifecycle & DID Integration
-      </h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+          <Package className="w-5 h-5 text-blue-600" />
+          Window Lifecycle & DID Integration
+        </h2>
+        <div className="text-right">
+          <div className="text-sm font-semibold text-gray-700">
+            {completed} of {total} phases completed
+          </div>
+          <div className="text-xs text-gray-500 mt-0.5">{progressPercent.toFixed(0)}% Complete</div>
+        </div>
+      </div>
+      
+      {/* Progress Bar */}
+      <div className="mb-6">
+        <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+          <div 
+            className="h-full bg-gradient-to-r from-green-500 to-blue-600 transition-all duration-500 rounded-full"
+            style={{ width: `${progressPercent}%` }}
+          />
+        </div>
+      </div>
 
       <div className="space-y-4">
         {lifecycleStages.map((stage, index) => (
@@ -172,7 +205,11 @@ export default function WindowLifecycleVisualization({ dpp, events }: {
                   ? 'bg-blue-50 border border-blue-200'
                   : stage.status === 'current'
                   ? 'bg-blue-50'
+                  : stage.status === 'future'
+                  ? 'opacity-60 hover:opacity-80'
                   : 'hover:bg-gray-50'
+              } ${
+                stage.status === 'future' ? 'border border-dashed border-gray-300' : ''
               }`}
               onClick={() => setExpandedStage(expandedStage === stage.id ? null : stage.id)}
             >
@@ -187,6 +224,16 @@ export default function WindowLifecycleVisualization({ dpp, events }: {
                     {stage.status === 'current' && (
                       <span className="px-2 py-0.5 bg-blue-600 text-white text-xs rounded-full">
                         Current
+                      </span>
+                    )}
+                    {stage.status === 'future' && (
+                      <span className="px-2 py-0.5 bg-gray-300 text-gray-600 text-xs rounded-full">
+                        Upcoming
+                      </span>
+                    )}
+                    {stage.status === 'completed' && (
+                      <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">
+                        ✓ Completed
                       </span>
                     )}
                   </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, AlertCircle, Plus, User } from 'lucide-react';
+import { Search, AlertCircle, Plus, User, ArrowUpDown } from 'lucide-react';
 import { searchDPPs } from '../lib/dppManagerLocal';
 import type { DPP } from '../lib/localData';
 import DPPListItem from './DPPListItem';
@@ -13,6 +13,8 @@ export default function Dashboard({ onSelectDPP }: { onSelectDPP: (did: string) 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'main' | 'component'>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'replaced'>('all');
+  const [sortBy, setSortBy] = useState<'date' | 'trust' | 'model'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [stats, setStats] = useState({ total: 0, main: 0, components: 0, active: 0 });
   const [offset, setOffset] = useState(0);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -36,10 +38,24 @@ export default function Dashboard({ onSelectDPP }: { onSelectDPP: (did: string) 
     const result = await searchDPPs(filters);
     console.log('Search result:', result);
     
+    // Sort data based on selection
     const sortedData = result.data.sort((a, b) => {
+      // First by type (main first)
       if (a.type === 'main' && b.type === 'component') return -1;
       if (a.type === 'component' && b.type === 'main') return 1;
-      return 0;
+      
+      // Then by selected sort
+      let comparison = 0;
+      if (sortBy === 'date') {
+        comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      } else if (sortBy === 'model') {
+        comparison = a.model.localeCompare(b.model);
+      } else if (sortBy === 'trust') {
+        // Mock trust score - would need to calculate in real scenario
+        comparison = 0; // Default equal for now
+      }
+      
+      return sortOrder === 'asc' ? comparison : -comparison;
     });
     
     setDpps(sortedData);
@@ -58,7 +74,7 @@ export default function Dashboard({ onSelectDPP }: { onSelectDPP: (did: string) 
     });
 
     setLoading(false);
-  }, [searchTerm, filterType, filterStatus, offset, limit]);
+  }, [searchTerm, filterType, filterStatus, offset, limit, sortBy, sortOrder]);
 
   useEffect(() => {
     console.log('Dashboard effect triggered, loading DPPs...');
@@ -187,6 +203,28 @@ export default function Dashboard({ onSelectDPP }: { onSelectDPP: (did: string) 
                 <option value="active">Active</option>
                 <option value="replaced">Replaced</option>
               </select>
+              
+              <div className="flex gap-1 border border-gray-300 rounded-lg overflow-hidden">
+                <select
+                  value={sortBy}
+                  onChange={(e) => {
+                    setSortBy(e.target.value as 'date' | 'trust' | 'model');
+                    setOffset(0);
+                  }}
+                  className="px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 border-r border-gray-300"
+                >
+                  <option value="date">By Date</option>
+                  <option value="model">By Name</option>
+                  <option value="trust">By Trust Score</option>
+                </select>
+                <button
+                  onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                  className="px-3 py-2 hover:bg-gray-50 transition-colors"
+                  title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
+                >
+                  <ArrowUpDown className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
         </div>

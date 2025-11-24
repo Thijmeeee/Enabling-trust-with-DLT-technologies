@@ -1,9 +1,17 @@
-import { CheckCircle, AlertCircle, Package, Box, Link } from 'lucide-react';
+import { CheckCircle, AlertCircle, Package, Box, Link, Shield } from 'lucide-react';
 import type { DPP } from '../lib/localData';
 
 export default function DPPListItem({ dpp, onSelect }: { dpp: DPP; onSelect: () => void }) {
   const isMain = dpp.type === 'main';
   const isActive = dpp.lifecycle_status === 'active';
+  const hasAttestation = true; // Mock - would check actual attestations
+  
+  const getStatusColor = () => {
+    if (isActive) return 'bg-green-100 text-green-700 border-green-300';
+    if (dpp.lifecycle_status === 'replaced') return 'bg-orange-100 text-orange-700 border-orange-300';
+    if (dpp.lifecycle_status === 'disposed') return 'bg-red-100 text-red-700 border-red-300';
+    return 'bg-gray-100 text-gray-700 border-gray-300';
+  };
 
   return (
     <button
@@ -33,10 +41,15 @@ export default function DPPListItem({ dpp, onSelect }: { dpp: DPP; onSelect: () 
                 >
                   {isMain ? 'Main Product' : 'Component'}
                 </span>
-                {isActive ? (
-                  <CheckCircle className="w-5 h-5 text-green-600" />
-                ) : (
-                  <AlertCircle className="w-5 h-5 text-orange-600" />
+                <span className={`px-3 py-1 text-xs font-semibold rounded-full border ${getStatusColor()}`}>
+                  {isActive && '🟢 '}
+                  {dpp.lifecycle_status.toUpperCase()}
+                </span>
+                {hasAttestation && (
+                  <span className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 text-xs font-semibold rounded-full border border-blue-300">
+                    <Shield className="w-3 h-3" />
+                    Verified
+                  </span>
                 )}
               </div>
 
@@ -51,8 +64,12 @@ export default function DPPListItem({ dpp, onSelect }: { dpp: DPP; onSelect: () 
 
               <div className="flex items-center gap-4 text-xs text-gray-600">
                 <span className="font-medium">Version {dpp.version}</span>
-                <span className="capitalize px-2 py-1 bg-gray-100 rounded">{dpp.lifecycle_status}</span>
                 <span>{new Date(dpp.created_at).toLocaleDateString()}</span>
+                {dpp.metadata?.batch && (
+                  <span className="px-2 py-1 bg-purple-50 text-purple-700 rounded font-medium">
+                    Batch: {dpp.metadata.batch}
+                  </span>
+                )}
               </div>
             </div>
 

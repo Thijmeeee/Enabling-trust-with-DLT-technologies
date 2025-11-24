@@ -160,7 +160,7 @@ function AppContent() {
           )}
 
           {view === 'dpp-component' && (
-            <ComponentDPPView did={currentDID} onBack={handleBack} onNavigate={handleSelectDPP} />
+            <MainDPPView did={currentDID} onBack={handleBack} onNavigate={handleSelectDPP} />
           )}
         </>
       )}

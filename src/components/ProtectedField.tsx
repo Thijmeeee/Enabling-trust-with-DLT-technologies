@@ -60,6 +60,9 @@ export function ProtectedMetadata({ metadata, fieldMapping = {} }: MetadataProps
     ...fieldMapping,
   };
 
+  // Filter out image_url from metadata display
+  const filteredMetadata = Object.entries(metadata).filter(([key]) => key !== 'image_url');
+
   return (
     <div className="mt-4 pt-4 border-t border-gray-200">
       <div className="flex items-center justify-between mb-2">
@@ -69,7 +72,7 @@ export function ProtectedMetadata({ metadata, fieldMapping = {} }: MetadataProps
         </div>
       </div>
       <div className="text-sm text-gray-900 space-y-1">
-        {Object.entries(metadata).map(([key, value]) => {
+        {filteredMetadata.map(([key, value]) => {
           const requiredPermission = defaultMapping[key] || 'basic';
           const hasPermission = canSeeField(requiredPermission);
 

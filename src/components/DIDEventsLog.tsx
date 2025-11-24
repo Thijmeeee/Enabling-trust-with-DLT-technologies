@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Clock, FileText, Shield, Link2, CheckCircle2, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Clock, FileText, Shield, Link2, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Download, Search, Filter } from 'lucide-react';
 import { enhancedDB } from '../lib/enhancedDataStore';
 import type { AnchoringEvent, WitnessAttestation } from '../lib/localData';
 
@@ -18,6 +18,8 @@ export default function DIDEventsLog({ did }: { did: string }) {
   const [events, setEvents] = useState<DIDEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedEvent, setExpandedEvent] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState<'all' | 'creation' | 'update' | 'attestation' | 'anchoring' | 'verification'>('all');
 
   useEffect(() => {
     console.log('DIDEventsLog: useEffect triggered, loading events...');
@@ -44,7 +46,7 @@ export default function DIDEventsLog({ did }: { did: string }) {
       timestamp: dpp.created_at,
       type: 'creation',
       did: dpp.did,
-      description: 'DPP Created',
+      description: String('DPP Created'),
       details: {
         type: dpp.type,
         model: dpp.model,
@@ -160,6 +162,41 @@ export default function DIDEventsLog({ did }: { did: string }) {
     setLoading(false);
   }
 
+  const exportAuditTrail = () => {
+    const filtered = getFilteredEvents();
+    const auditData = {
+      did: did,
+      exportDate: new Date().toISOString(),
+      totalEvents: filtered.length,
+      events: filtered.map(e => ({
+        timestamp: e.timestamp,
+        type: e.type,
+        description: e.description,
+        details: e.details,
+      })),
+    };
+    
+    const blob = new Blob([JSON.stringify(auditData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `audit-trail-${did.split(':').pop()}-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const getFilteredEvents = () => {
+    return events.filter(event => {
+      const matchesSearch = searchTerm === '' || 
+        event.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        event.did.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesType = filterType === 'all' || event.type === filterType;
+      return matchesSearch && matchesType;
+    });
+  };
+
+  const filteredEvents = getFilteredEvents();
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -170,14 +207,52 @@ export default function DIDEventsLog({ did }: { did: string }) {
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6">
-      <div className="flex items-center gap-2 mb-4">
-        <Clock className="w-5 h-5 text-gray-600" />
-        <h3 className="text-lg font-semibold text-gray-900">Event Timeline</h3>
-        <span className="ml-auto text-sm text-gray-500">{events.length} events</span>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Clock className="w-5 h-5 text-gray-600" />
+          <h3 className="text-lg font-semibold text-gray-900">Event Timeline</h3>
+          <span className="ml-2 text-sm text-gray-500">{filteredEvents.length} events</span>
+        </div>
+        <button
+          onClick={exportAuditTrail}
+          className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+        >
+          <Download className="w-4 h-4" />
+          Export Audit Trail
+        </button>
+      </div>
+
+      {/* Filters */}
+      <div className="flex gap-3 mb-4">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search events..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <div className="relative">
+          <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value as any)}
+            className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none bg-white cursor-pointer"
+          >
+            <option value="all">All Types</option>
+            <option value="creation">Creation</option>
+            <option value="update">Updates</option>
+            <option value="attestation">Attestations</option>
+            <option value="anchoring">Anchoring</option>
+            <option value="verification">Verification</option>
+          </select>
+        </div>
       </div>
 
       <div className="space-y-4">
-        {events.length === 0 ? (
+        {filteredEvents.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <AlertCircle className="w-12 h-12 mx-auto mb-2 opacity-50" />
             No events found for this DID
@@ -189,7 +264,7 @@ export default function DIDEventsLog({ did }: { did: string }) {
             
             {/* Events */}
             <div className="space-y-8">
-              {events.map((event, index) => {
+              {filteredEvents.map((event, index) => {
                 const IconComponent = event.icon;
                 const colorClasses = {
                   blue: 'bg-blue-500 border-blue-200',
@@ -214,7 +289,7 @@ export default function DIDEventsLog({ did }: { did: string }) {
                           </div>
                           <div className="flex-grow min-w-0">
                             <div className="flex items-center justify-between">
-                              <h4 className="font-semibold text-gray-900 text-sm mb-1">{event.description}</h4>
+                              <h4 className="font-semibold text-gray-900 text-sm mb-1">{event.description.trim()}</h4>
                               {expandedEvent === event.id ? (
                                 <ChevronUp className="w-4 h-4 text-gray-400" />
                               ) : (

@@ -38,6 +38,15 @@ export async function generateBulkTestData(input: BulkDPPInput): Promise<void> {
       ...input.customMetadata,
     };
     
+    // Add image URLs for different product types
+    if (input.productType === 'window') {
+      metadata.image_url = '/images/window.png';
+    } else if (input.productType === 'glass') {
+      metadata.image_url = '/images/glass.png';
+    } else if (input.productType === 'frame') {
+      metadata.image_url = '/images/frame.png';
+    }
+    
     for (const prop of schema.properties) {
       if (prop.key in metadata) continue;
       
@@ -88,6 +97,13 @@ export async function generateBulkTestData(input: BulkDPPInput): Promise<void> {
           const compDid = `did:webvh:example.com:products:${allowedType}-${uniqueId}-${j}`;
           const compMetadata: Record<string, any> = { productType: allowedType };
           
+          // Add image URLs for component types
+          if (allowedType === 'glass') {
+            compMetadata.image_url = '/images/glass.png';
+          } else if (allowedType === 'frame') {
+            compMetadata.image_url = '/images/frame.png';
+          }
+          
           for (const prop of compSchema.properties) {
             switch (prop.type) {
               case 'string':
@@ -112,7 +128,7 @@ export async function generateBulkTestData(input: BulkDPPInput): Promise<void> {
           const compDpp = await enhancedDB.insertDPP({
             did: compDid,
             type: 'component',
-            model: `${compSchema.name}-${i}-${j}`,
+            model: `${compSchema.name}-${i + 1}-${j + 1}`,
             parent_did: did,
             lifecycle_status: 'active',
             owner: `did:webvh:example.com:organizations:${allowedType}-supplier`,
