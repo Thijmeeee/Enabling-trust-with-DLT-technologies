@@ -4,11 +4,20 @@ export type UserRole = 'Operator' | 'Recycler' | 'Manufacturer' | 'Supervisor';
 
 interface RoleContextType {
   currentRole: UserRole;
+  currentRoleDID: string;
   setRole: (role: UserRole) => void;
   canSeeField: (field: string) => boolean;
 }
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
+
+// Define DID for each role
+const roleDIDs: Record<UserRole, string> = {
+  Operator: 'did:webvh:example.com:roles:operator-001',
+  Recycler: 'did:webvh:example.com:roles:recycler-001',
+  Manufacturer: 'did:webvh:example.com:organizations:window-manufacturer',
+  Supervisor: 'did:webvh:example.com:roles:supervisor-001',
+};
 
 // Define what each role can see
 const rolePermissions: Record<UserRole, string[]> = {
@@ -30,8 +39,10 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     return permissions.includes('all') || permissions.includes(field);
   };
 
+  const currentRoleDID = roleDIDs[currentRole];
+
   return (
-    <RoleContext.Provider value={{ currentRole, setRole, canSeeField }}>
+    <RoleContext.Provider value={{ currentRole, currentRoleDID, setRole, canSeeField }}>
       {children}
     </RoleContext.Provider>
   );

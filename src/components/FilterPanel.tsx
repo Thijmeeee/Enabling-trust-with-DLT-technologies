@@ -67,7 +67,7 @@ export function FilterPanel({ onFilterChange, stats }: FilterPanelProps) {
           type="text"
           value={filters.text}
           onChange={(e) => updateFilter('text', e.target.value)}
-          placeholder="Zoek op DID, model, beschrijving..."
+          placeholder="Search up an DID, model, description..."
           className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         />
       </div>

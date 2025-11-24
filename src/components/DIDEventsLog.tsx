@@ -75,32 +75,62 @@ export default function DIDEventsLog({ did }: { did: string }) {
       });
     });
 
-    // Attestations (Witness Events)
+    // Attestations - separate DID events from lifecycle events
     const attestations = await enhancedDB.getAttestationsByDID(did);
     console.log('DIDEventsLog: Attestations found:', attestations.length, attestations);
     attestations.forEach((attestation: WitnessAttestation) => {
-      // Check if this is a lifecycle event (assembly, installation, maintenance, disposal)
+      // DID-related witness events (what witnesses actually monitor)
+      const didEventTypes = ['did_creation', 'key_rotation', 'ownership_change', 'did_update', 'did_lifecycle_update'];
+      const isDIDEvent = didEventTypes.includes(attestation.attestation_type);
+      
+      // Product lifecycle events (separate from witness attestations)
       const lifecycleEventTypes = ['assembly', 'installation', 'maintenance', 'disposal', 'manufacturing'];
       const isLifecycleEvent = lifecycleEventTypes.includes(attestation.attestation_type);
       
       // Use attestation_data.timestamp if available, otherwise use attestation.timestamp
       const eventTimestamp = (attestation.attestation_data as any)?.timestamp || attestation.timestamp;
       
+      let description = '';
+      let eventType: 'attestation' | 'update' = 'attestation';
+      let color = 'green';
+      
+      if (isDIDEvent) {
+        // These are witness attestations of DID operations
+        const eventNames: Record<string, string> = {
+          'did_creation': 'DID Created & Registered',
+          'key_rotation': 'Cryptographic Key Rotated',
+          'ownership_change': 'Ownership Transferred',
+          'did_update': 'DID Document Updated',
+          'did_lifecycle_update': 'DID Lifecycle Stage Change'
+        };
+        description = eventNames[attestation.attestation_type] || attestation.attestation_type;
+        color = 'green'; // Witness events are green
+      } else if (isLifecycleEvent) {
+        // These are product lifecycle events (not DID events)
+        description = `Product Lifecycle: ${attestation.attestation_type.charAt(0).toUpperCase() + attestation.attestation_type.slice(1)}`;
+        eventType = 'update';
+        color = 'blue'; // Lifecycle events are blue
+      } else {
+        // Fallback for any other attestation types
+        description = `Event: ${attestation.attestation_type.replace(/_/g, ' ')}`;
+      }
+      
       allEvents.push({
         id: `attestation-${attestation.id}`,
         timestamp: eventTimestamp,
-        type: 'attestation',
+        type: eventType,
         did: attestation.did,
-        description: isLifecycleEvent 
-          ? `Lifecycle Event: ${attestation.attestation_type.charAt(0).toUpperCase() + attestation.attestation_type.slice(1)}`
-          : `Witness Attestation: ${attestation.attestation_type.replace('_', ' ')}`,
+        description: description,
         details: {
           witness: attestation.witness_did,
+          eventType: (attestation.attestation_data as any)?.eventType || attestation.attestation_type,
           data: attestation.attestation_data,
           signature: attestation.signature,
+          isDIDEvent: isDIDEvent,
+          isLifecycleEvent: isLifecycleEvent,
         },
         icon: Shield,
-        color: isLifecycleEvent ? 'blue' : 'green',
+        color: color,
       });
     });
 
@@ -208,7 +238,19 @@ export default function DIDEventsLog({ did }: { did: string }) {
                               <p><span className="font-medium">Network:</span> {event.details.network} • <span className="font-medium">Block:</span> {event.details.blockNumber}</p>
                             )}
                             {event.type === 'attestation' && (
-                              <p><span className="font-medium">Witness:</span> {event.details.witness.split(':').pop()}</p>
+                              <div>
+                                <p className="mb-1"><span className="font-medium">Witness Node:</span> {event.details.witness.split(':').pop()}</p>
+                                {event.details.isDIDEvent && (
+                                  <div className="mt-2 px-2 py-1 bg-green-50 border border-green-200 rounded text-green-800 font-medium">
+                                    ✓ DID Event - Monitored by Witnesses
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            {event.type === 'update' && event.details.isLifecycleEvent && (
+                              <div className="mt-2 px-2 py-1 bg-blue-50 border border-blue-200 rounded text-blue-800 text-xs">
+                                Product Lifecycle Event (not a DID event)
+                              </div>
                             )}
                             {event.type === 'verification' && (
                               <p><span className="font-medium">Verification Methods:</span> {event.details.verificationMethods}</p>

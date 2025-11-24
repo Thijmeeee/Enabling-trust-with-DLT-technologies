@@ -19,9 +19,9 @@ import DIDEventsLog from './DIDEventsLog';
 import WitnessFlowVisualization from './WitnessFlowVisualization';
 import DLTTrustAnchor from './DLTTrustAnchor';
 import { ProtectedField, ProtectedMetadata } from './ProtectedField';
-import DIDLifecycleVisualization from './DIDLifecycleVisualization';
 import WindowLifecycleVisualization from './WindowLifecycleVisualization';
 import { LifecycleControls } from './LifecycleControls';
+import DIDOperationsPanel from './DIDOperationsPanel';
 import DoPerformanceView from './DoPerformanceView';
 import DoPerformanceEditor from './DoPerformanceEditor';
 import AttestationDetailsModal from './AttestationDetailsModal';
@@ -37,7 +37,7 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
   const [trustScore, setTrustScore] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showQR, setShowQR] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'specifications' | 'components' | 'lifecycle' | 'witness' | 'anchoring' | 'events'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'specifications' | 'components' | 'lifecycle' | 'did-operations' | 'witness' | 'anchoring' | 'events'>('overview');
   const [eventRefreshKey, setEventRefreshKey] = useState(0);
   const [editingDoP, setEditingDoP] = useState(false);
   const [selectedAttestation, setSelectedAttestation] = useState<any>(null);
@@ -197,9 +197,10 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
               { id: 'specifications', label: 'Specifications' },
               { id: 'components', label: 'Components' },
               { id: 'lifecycle', label: 'Lifecycle' },
-              { id: 'witness', label: 'Witness Flow' },
-              { id: 'anchoring', label: 'DLT Anchor' },
-              { id: 'events', label: 'Event Log' },
+              { id: 'did-operations', label: 'DID Operations' },
+              { id: 'witness', label: 'Witness Network' },
+              { id: 'anchoring', label: 'DLT Anchoring' },
+              { id: 'events', label: 'Events' },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -488,18 +489,18 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
 
         {activeTab === 'lifecycle' && (
           <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-6">
-              <DIDLifecycleVisualization 
-                did={did} 
-                didDocument={data.didDocument} 
-                anchoringEvents={data.anchoringEvents || []} 
-              />
-              <WindowLifecycleVisualization 
-                dpp={dpp} 
-                events={data.events || []} 
-              />
-            </div>
+            <WindowLifecycleVisualization 
+              dpp={dpp} 
+              events={data.events || []} 
+            />
           </div>
+        )}
+
+        {activeTab === 'did-operations' && (
+          <DIDOperationsPanel 
+            dpp={dpp}
+            onUpdate={loadData}
+          />
         )}
 
         {activeTab === 'witness' && (

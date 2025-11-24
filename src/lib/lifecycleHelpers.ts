@@ -2,104 +2,112 @@ import { enhancedDB } from './enhancedDataStore';
 import { localDB } from './localData';
 
 /**
- * Generate realistic witness attestations for a DPP
+ * Generate realistic witness attestations for DID events
+ * Witnesses monitor and attest to DID operations, not product events
  */
 export async function generateWitnessAttestations(dppId: string, did: string, dppType: 'main' | 'component') {
   const witnesses = [
     {
-      did: 'did:webvh:example.com:witnesses:quality-inspector-1',
-      name: 'Quality Inspector - Maria Santos',
-      org: 'TÜV Certification',
+      did: 'did:webvh:example.com:witnesses:did-validator-1',
+      name: 'DID Validator Node 1',
+      org: 'Decentralized Identity Network',
     },
     {
-      did: 'did:webvh:example.com:witnesses:production-manager',
-      name: 'Production Manager - Jan Bakker',
-      org: 'Window Manufacturing Co',
+      did: 'did:webvh:example.com:witnesses:did-validator-2',
+      name: 'DID Validator Node 2',
+      org: 'Identity Trust Consortium',
     },
     {
-      did: 'did:webvh:example.com:witnesses:logistics-officer',
-      name: 'Logistics Officer - Sarah Williams',
-      org: 'Supply Chain Services',
+      did: 'did:webvh:example.com:witnesses:did-validator-3',
+      name: 'DID Validator Node 3',
+      org: 'Blockchain Verification Service',
     },
   ];
 
   const now = Date.now();
   const attestations = [];
 
-  // Production attestation (always)
+  // DID Creation/Registration attestation (always)
   attestations.push({
     dpp_id: dppId,
     did: did,
-    witness_did: witnesses[1].did,
-    attestation_type: 'production_verified',
+    witness_did: witnesses[0].did,
+    attestation_type: 'did_creation',
     attestation_data: {
       timestamp: new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString(),
-      witness: witnesses[1].name,
-      organization: witnesses[1].org,
-      location: 'Factory Floor A',
-      batchNumber: `BATCH-${Math.floor(Math.random() * 10000)}`,
-      notes: 'Production completed according to specifications',
+      witness: witnesses[0].name,
+      organization: witnesses[0].org,
+      eventType: 'DID Creation',
+      method: 'did:webvh',
+      controller: did,
+      notes: 'DID document created and registered on decentralized network',
+      verificationMethodsCount: 1,
+      initialProofType: 'Ed25519Signature2020',
     },
     signature: `0x${Math.random().toString(16).substring(2, 66)}`,
   });
 
-  // Quality inspection (80% chance)
-  if (Math.random() > 0.2) {
+  // Key Rotation attestation (70% chance)
+  if (Math.random() > 0.3) {
     attestations.push({
       dpp_id: dppId,
       did: did,
-      witness_did: witnesses[0].did,
-      attestation_type: 'quality_inspection',
-      attestation_data: {
-        timestamp: new Date(now - 6 * 24 * 60 * 60 * 1000).toISOString(),
-        witness: witnesses[0].name,
-        organization: witnesses[0].org,
-        result: 'passed',
-        testResults: {
-          dimensionalAccuracy: 'pass',
-          visualInspection: 'pass',
-          functionalTest: 'pass',
-        },
-        certificateNumber: `CERT-${Math.floor(Math.random() * 100000)}`,
-      },
-      signature: `0x${Math.random().toString(16).substring(2, 66)}`,
-    });
-  }
-
-  // Assembly attestation (for main products)
-  if (dppType === 'main') {
-    attestations.push({
-      dpp_id: dppId,
-      did: did,
-      witness_did: 'did:webvh:example.com:witnesses:assembly-supervisor',
-      attestation_type: 'assembly',
+      witness_did: witnesses[1].did,
+      attestation_type: 'key_rotation',
       attestation_data: {
         timestamp: new Date(now - 4 * 24 * 60 * 60 * 1000).toISOString(),
-        witness: 'Assembly Supervisor - John Smith',
-        organization: 'Window Manufacturing Co',
-        location: 'Assembly Line B',
-        notes: 'Components assembled and integrated successfully',
-        componentsVerified: true,
+        witness: witnesses[1].name,
+        organization: witnesses[1].org,
+        eventType: 'Key Rotation',
+        oldKeyId: `${did}#key-1`,
+        newKeyId: `${did}#key-2`,
+        rotationReason: 'Scheduled security rotation',
+        previousKeyRevoked: true,
+        newKeyType: 'Ed25519VerificationKey2020',
       },
       signature: `0x${Math.random().toString(16).substring(2, 66)}`,
     });
   }
 
-  // Transfer attestation (for components)
-  if (dppType === 'component' && Math.random() > 0.3) {
+  // Ownership Change attestation (for components and some main products)
+  if (dppType === 'component' || Math.random() > 0.6) {
     attestations.push({
       dpp_id: dppId,
       did: did,
       witness_did: witnesses[2].did,
-      attestation_type: 'transfer',
+      attestation_type: 'ownership_change',
       attestation_data: {
-        timestamp: new Date(now - 5 * 24 * 60 * 60 * 1000).toISOString(),
+        timestamp: new Date(now - 2 * 24 * 60 * 60 * 1000).toISOString(),
         witness: witnesses[2].name,
         organization: witnesses[2].org,
-        from: 'Supplier Warehouse',
-        to: 'Manufacturer Assembly Line',
-        transportMethod: 'Truck',
-        condition: 'Excellent',
+        eventType: 'Ownership Transfer',
+        previousOwner: 'did:webvh:example.com:organizations:original-owner',
+        newOwner: 'did:webvh:example.com:organizations:current-owner',
+        transferMethod: 'Smart Contract',
+        blockchainTxHash: `0x${Math.random().toString(16).substring(2, 66)}`,
+        transferApproved: true,
+      },
+      signature: `0x${Math.random().toString(16).substring(2, 66)}`,
+    });
+  }
+
+  // DID Document Update attestation (60% chance)
+  if (Math.random() > 0.4) {
+    attestations.push({
+      dpp_id: dppId,
+      did: did,
+      witness_did: witnesses[0].did,
+      attestation_type: 'did_update',
+      attestation_data: {
+        timestamp: new Date(now - 1 * 24 * 60 * 60 * 1000).toISOString(),
+        witness: witnesses[0].name,
+        organization: witnesses[0].org,
+        eventType: 'DID Document Update',
+        updateType: 'Service Endpoint Addition',
+        changeDescription: 'Added new service endpoint for data access',
+        versionNumber: 2,
+        previousHash: `0x${Math.random().toString(16).substring(2, 66)}`,
+        newHash: `0x${Math.random().toString(16).substring(2, 66)}`,
       },
       signature: `0x${Math.random().toString(16).substring(2, 66)}`,
     });

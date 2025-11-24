@@ -3,13 +3,12 @@ import EnhancedDashboard from './components/EnhancedDashboard';
 import MainDPPView from './components/MainDPPView';
 import ComponentDPPView from './components/ComponentDPPView';
 import CreateDPPForm from './components/CreateDPPForm';
-import DIDManagement from './components/DIDManagement';
 import { RoleProvider, useRole } from './lib/roleContext';
 import { enhancedDB } from './lib/enhancedDataStore';
 import { generateMixedTestData } from './lib/bulkOperations';
-import { User, ChevronDown, FileText } from 'lucide-react';
+import { User, ChevronDown } from 'lucide-react';
 
-type View = 'dashboard' | 'dpp-main' | 'dpp-component' | 'create-dpp' | 'did-operations';
+type View = 'dashboard' | 'dpp-main' | 'dpp-component' | 'create-dpp';
 
 function AppContent() {
   const { currentRole, setRole } = useRole();
@@ -95,27 +94,6 @@ function AppContent() {
 
   return (
     <div className="relative">
-      {/* DID Operations button */}
-      {view === 'dashboard' && (
-        <button
-          onClick={() => setView('did-operations')}
-          className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-lg transition-colors"
-        >
-          <FileText className="w-4 h-4" />
-          DID Operations
-        </button>
-      )}
-
-      {/* Back to Dashboard button when in DID Operations */}
-      {view === 'did-operations' && (
-        <button
-          onClick={() => setView('dashboard')}
-          className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg shadow-lg transition-colors"
-        >
-          ← Back to Dashboard
-        </button>
-      )}
-
       {/* Role selector dropdown */}
       <div className="fixed top-4 left-4 z-50">
         <div className="relative">
@@ -183,14 +161,6 @@ function AppContent() {
 
           {view === 'dpp-component' && (
             <ComponentDPPView did={currentDID} onBack={handleBack} onNavigate={handleSelectDPP} />
-          )}
-
-          {view === 'did-operations' && (
-            <div className="min-h-screen bg-gray-50 pt-20 pb-12">
-              <div className="max-w-4xl mx-auto px-4">
-                <DIDManagement />
-              </div>
-            </div>
           )}
         </>
       )}
