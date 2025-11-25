@@ -156,8 +156,8 @@ export default function DIDEventsLog({ did }: { did: string }) {
     }
 
     console.log('DIDEventsLog: Total events collected:', allEvents.length);
-    // Sort by timestamp descending
-    allEvents.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    // Sort by timestamp ascending (oldest first)
+    allEvents.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     setEvents(allEvents);
     setLoading(false);
   }

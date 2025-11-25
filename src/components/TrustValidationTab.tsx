@@ -32,7 +32,13 @@ export default function TrustValidationTab({ did }: TrustValidationTabProps) {
       localDB.getAnchoringEventsByDID(did),
     ]);
 
-    setAttestations(attestationsData);
+    // Filter to only show DID-related witness attestations (not product lifecycle events)
+    const didEventTypes = ['did_creation', 'key_rotation', 'ownership_change', 'did_update', 'did_lifecycle_update'];
+    const filteredAttestations = attestationsData.filter(att => 
+      didEventTypes.includes(att.attestation_type)
+    );
+    
+    setAttestations(filteredAttestations);
     
     // Filter alerts related to this DID
     const dpp = await localDB.getDPPByDID(did);
