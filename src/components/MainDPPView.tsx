@@ -367,91 +367,48 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
                     </div>
 
                     <div className="space-y-4">
-                      {/* Thermal Insulation */}
-                      {dop.essentialCharacteristics?.thermalTransmittance && (
-                        <div className="border-l-4 border-blue-500 pl-4 py-2">
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-center gap-3 flex-1">
-                              <Thermometer className="w-5 h-5 text-blue-600 flex-shrink-0" />
-                              <div className="flex-1">
-                                <div className="font-semibold text-gray-900 mb-1">
-                                  Thermal Insulation (U-value): {dop.essentialCharacteristics.thermalTransmittance.value} W/(m²·K)
+                      {/* Display declared performance characteristics */}
+                      {dop.declaredPerformance && dop.declaredPerformance.length > 0 && (
+                        <div className="space-y-3">
+                          {dop.declaredPerformance.map((perf, idx) => {
+                            const getIconAndColor = (characteristic: string) => {
+                              const lower = characteristic.toLowerCase();
+                              if (lower.includes('thermal') || lower.includes('u-value')) {
+                                return { icon: Thermometer, color: 'blue' };
+                              } else if (lower.includes('sound') || lower.includes('acoustic')) {
+                                return { icon: Volume2, color: 'purple' };
+                              } else if (lower.includes('fire')) {
+                                return { icon: Flame, color: 'orange' };
+                              } else if (lower.includes('water')) {
+                                return { icon: Droplets, color: 'cyan' };
+                              } else {
+                                return { icon: Shield, color: 'green' };
+                              }
+                            };
+                            
+                            const { icon: Icon, color } = getIconAndColor(perf.characteristic);
+                            
+                            return (
+                              <div key={idx} className={`border-l-4 border-${color}-500 pl-4 py-2`}>
+                                <div className="flex items-start gap-3">
+                                  <Icon className={`w-5 h-5 text-${color}-600 flex-shrink-0 mt-0.5`} />
+                                  <div className="flex-1">
+                                    <div className="font-semibold text-gray-900 mb-1">
+                                      {perf.characteristic}
+                                    </div>
+                                    <div className="text-sm text-gray-700">
+                                      {perf.performance} {perf.unit && `(${perf.unit})`}
+                                    </div>
+                                    {perf.classification && (
+                                      <div className="text-xs text-gray-600 mt-1">
+                                        Classification: {perf.classification}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
-                                <div className="text-sm text-gray-600">
-                                  {parseFloat(dop.essentialCharacteristics.thermalTransmittance.value) <= 1.2 
-                                    ? '⭐⭐⭐⭐⭐ Excellent insulation - saves approximately €340/year'
-                                    : parseFloat(dop.essentialCharacteristics.thermalTransmittance.value) <= 1.6
-                                    ? '⭐⭐⭐⭐ Good insulation - saves approximately €250/year'
-                                    : '⭐⭐⭐ Moderate insulation'}
-                                </div>
                               </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Sound Insulation */}
-                      {dop.essentialCharacteristics?.airborneSound && (
-                        <div className="border-l-4 border-purple-500 pl-4 py-2">
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-center gap-3 flex-1">
-                              <Volume2 className="w-5 h-5 text-purple-600 flex-shrink-0" />
-                              <div className="flex-1">
-                                <div className="font-semibold text-gray-900 mb-1">
-                                  Sound Insulation: {dop.essentialCharacteristics.airborneSound.value} dB
-                                </div>
-                                <div className="text-sm text-gray-600">
-                                  {parseFloat(dop.essentialCharacteristics.airborneSound.value) >= 40
-                                    ? '⭐⭐⭐⭐⭐ Excellent - blocks most outdoor noise'
-                                    : parseFloat(dop.essentialCharacteristics.airborneSound.value) >= 34
-                                    ? '⭐⭐⭐⭐ Good - significantly reduces outdoor noise'
-                                    : '⭐⭐⭐ Moderate noise reduction'}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Fire Resistance */}
-                      {dop.essentialCharacteristics?.fireResistance && (
-                        <div className="border-l-4 border-orange-500 pl-4 py-2">
-                          <div className="flex items-center gap-3">
-                            <Flame className="w-5 h-5 text-orange-600 flex-shrink-0" />
-                            <div>
-                              <div className="font-semibold text-gray-900">
-                                Fire Resistance: Class {dop.essentialCharacteristics.fireResistance.value}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Water Tightness */}
-                      {dop.essentialCharacteristics?.waterTightness && (
-                        <div className="border-l-4 border-cyan-500 pl-4 py-2">
-                          <div className="flex items-center gap-3">
-                            <Droplets className="w-5 h-5 text-cyan-600 flex-shrink-0" />
-                            <div>
-                              <div className="font-semibold text-gray-900">
-                                Water Tightness: Class {dop.essentialCharacteristics.waterTightness.value} (Very Good)
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Durability */}
-                      {dop.essentialCharacteristics?.mechanicalResistance && (
-                        <div className="border-l-4 border-green-500 pl-4 py-2">
-                          <div className="flex items-center gap-3">
-                            <Shield className="w-5 h-5 text-green-600 flex-shrink-0" />
-                            <div>
-                              <div className="font-semibold text-gray-900">
-                                Durability: {dop.essentialCharacteristics.mechanicalResistance.value} cycles lifespan
-                              </div>
-                            </div>
-                          </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
