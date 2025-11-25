@@ -323,8 +323,10 @@ export default function DIDEventsLog({ did }: { did: string }) {
                               </div>
                             )}
                             {event.type === 'update' && event.details.isLifecycleEvent && (
-                              <div className="mt-2 px-2 py-1 bg-blue-50 border border-blue-200 rounded text-blue-800 text-xs">
-                                Product Lifecycle Event (not a DID event)
+                              <div>
+                                <div className="mt-2 px-2 py-1 bg-blue-50 border border-blue-200 rounded text-blue-800 text-xs">
+                                  Product Lifecycle Event (not a DID event)
+                                </div>
                               </div>
                             )}
                             {event.type === 'verification' && (
@@ -338,16 +340,25 @@ export default function DIDEventsLog({ did }: { did: string }) {
                           <div className="mt-4 pt-4 border-t border-gray-200">
                             <div className="text-xs font-semibold text-gray-600 mb-2">Full Event Details:</div>
                             <div className="space-y-2 text-xs">
-                              {Object.entries(event.details).map(([key, value]) => (
-                                <div key={key} className="flex justify-between items-start gap-2">
-                                  <span className="text-gray-600 font-medium capitalize min-w-fit">
-                                    {key.replace(/([A-Z])/g, ' $1').trim()}:
-                                  </span>
-                                  <span className="text-gray-900 font-mono break-all text-right">
-                                    {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
-                                  </span>
-                                </div>
-                              ))}
+                              {Object.entries(event.details)
+                                .filter(([key]) => {
+                                  // Hide witness, isDIDEvent, and isLifecycleEvent for lifecycle events
+                                  if (event.type === 'update' && event.details.isLifecycleEvent) {
+                                    return !['witness', 'isDIDEvent', 'isLifecycleEvent', 'signature'].includes(key);
+                                  }
+                                  // Hide internal flags for all events
+                                  return !['isDIDEvent', 'isLifecycleEvent'].includes(key);
+                                })
+                                .map(([key, value]) => (
+                                  <div key={key} className="flex justify-between items-start gap-2">
+                                    <span className="text-gray-600 font-medium capitalize min-w-fit">
+                                      {key.replace(/([A-Z])/g, ' $1').trim()}:
+                                    </span>
+                                    <span className="text-gray-900 font-mono break-all text-right">
+                                      {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                                    </span>
+                                  </div>
+                                ))}
                             </div>
                             
                             <div className="mt-3 pt-3 border-t border-gray-100">
