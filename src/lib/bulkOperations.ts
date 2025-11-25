@@ -39,12 +39,13 @@ export async function generateBulkTestData(input: BulkDPPInput): Promise<void> {
     };
     
     // Add image URLs for different product types
+    const baseUrl = import.meta.env.BASE_URL || '/';
     if (input.productType === 'window') {
-      metadata.image_url = '/images/window.png';
+      metadata.image_url = `${baseUrl}images/window.png`;
     } else if (input.productType === 'glass') {
-      metadata.image_url = '/images/glass.png';
+      metadata.image_url = `${baseUrl}images/glass.png`;
     } else if (input.productType === 'frame') {
-      metadata.image_url = '/images/frame.png';
+      metadata.image_url = `${baseUrl}images/frame.png`;
     }
     
     for (const prop of schema.properties) {
@@ -98,10 +99,11 @@ export async function generateBulkTestData(input: BulkDPPInput): Promise<void> {
           const compMetadata: Record<string, any> = { productType: allowedType };
           
           // Add image URLs for component types
+          const baseUrl = import.meta.env.BASE_URL || '/';
           if (allowedType === 'glass') {
-            compMetadata.image_url = '/images/glass.png';
+            compMetadata.image_url = `${baseUrl}images/glass.png`;
           } else if (allowedType === 'frame') {
-            compMetadata.image_url = '/images/frame.png';
+            compMetadata.image_url = `${baseUrl}images/frame.png`;
           }
           
           for (const prop of compSchema.properties) {
