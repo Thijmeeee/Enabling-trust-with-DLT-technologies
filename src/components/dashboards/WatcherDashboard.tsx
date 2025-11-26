@@ -266,7 +266,7 @@ export default function WatcherDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50 p-6 pt-20">
       <div className="max-w-[1920px] mx-auto">
         {/* Header */}
         <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
