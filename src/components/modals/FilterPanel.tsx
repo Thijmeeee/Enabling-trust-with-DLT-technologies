@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Search, Filter, X, ChevronDown, Square, Maximize, ArrowUpDown } from 'lucide-react';
-import { PRODUCT_SCHEMAS } from '../lib/schemas/productSchema';
+import { PRODUCT_SCHEMAS } from '../../lib/schemas/productSchema';
 
 type FilterPanelProps = {
   onFilterChange: (filters: FilterState) => void;

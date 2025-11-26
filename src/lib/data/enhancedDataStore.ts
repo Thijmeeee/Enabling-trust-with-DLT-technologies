@@ -486,6 +486,14 @@ export class EnhancedDataStore {
     return att;
   }
   
+  async updateAttestation(id: string, updates: Partial<WitnessAttestation>): Promise<WitnessAttestation | null> {
+    const existing = this.attestations.get(id);
+    if (!existing) return null;
+    const updated = { ...existing, ...updates };
+    this.attestations.set(id, updated);
+    return updated;
+  }
+  
   async getAttestationsByDID(did: string): Promise<WitnessAttestation[]> {
     return Array.from(this.attestations.values()).filter(a => a.did === did);
   }
@@ -522,6 +530,10 @@ export class EnhancedDataStore {
   
   async getAlertsByWatcherId(watcherId: string): Promise<WatcherAlert[]> {
     return Array.from(this.alerts.values()).filter(a => a.watcher_id === watcherId);
+  }
+  
+  async getAlertsByWatcherDID(watcherDID: string): Promise<WatcherAlert[]> {
+    return Array.from(this.alerts.values()).filter(a => a.watcher_did === watcherDID);
   }
   
   // ========== Bulk Operations ==========

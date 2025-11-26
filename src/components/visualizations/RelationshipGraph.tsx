@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import * as d3 from 'd3';
-import { getHierarchyTree } from '../lib/dppManagerLocal';
+import { getHierarchyTree } from '../../lib/operations/dppManagerLocal';
 
 interface Node {
   id: string;

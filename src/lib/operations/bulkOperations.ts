@@ -2,13 +2,13 @@
  * Bulk Operations and Test Data Generator
  */
 
-import { enhancedDB } from './enhancedDataStore';
-import { PRODUCT_SCHEMAS } from './schemas/productSchema';
+import { enhancedDB } from '../data/enhancedDataStore';
+import { PRODUCT_SCHEMAS } from '../schemas/productSchema';
 import { 
   generateWitnessAttestations, 
   generateAnchoringEvents,
   generateDefaultLifecycleEvents 
-} from './lifecycleHelpers';
+} from '../operations/lifecycleHelpers';
 
 type BulkDPPInput = {
   productType: string;
@@ -39,7 +39,7 @@ export async function generateBulkTestData(input: BulkDPPInput): Promise<void> {
     };
     
     // Add image URLs for different product types
-    const baseUrl = import.meta.env.BASE_URL || '/';
+    const baseUrl = '/Enabling-trust-with-DLT-technologies/';
     if (input.productType === 'window') {
       metadata.image_url = `${baseUrl}images/window.png`;
     } else if (input.productType === 'glass') {
@@ -99,7 +99,7 @@ export async function generateBulkTestData(input: BulkDPPInput): Promise<void> {
           const compMetadata: Record<string, any> = { productType: allowedType };
           
           // Add image URLs for component types
-          const baseUrl = import.meta.env.BASE_URL || '/';
+          const baseUrl = '/Enabling-trust-with-DLT-technologies/';
           if (allowedType === 'glass') {
             compMetadata.image_url = `${baseUrl}images/glass.png`;
           } else if (allowedType === 'frame') {

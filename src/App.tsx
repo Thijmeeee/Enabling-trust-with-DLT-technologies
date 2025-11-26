@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import EnhancedDashboard from './components/EnhancedDashboard';
-import MainDPPView from './components/MainDPPView';
-import ComponentDPPView from './components/ComponentDPPView';
-import CreateDPPForm from './components/CreateDPPForm';
-import { RoleProvider, useRole } from './lib/roleContext';
-import { enhancedDB } from './lib/enhancedDataStore';
-import { generateMixedTestData } from './lib/bulkOperations';
+import EnhancedDashboard from './components/dashboards/EnhancedDashboard';
+import MainDPPView from './components/dpp/MainDPPView';
+import ComponentDPPView from './components/dpp/ComponentDPPView';
+import CreateDPPForm from './components/dpp/CreateDPPForm';
+import WitnessDashboard from './components/dashboards/WitnessDashboard';
+import WatcherDashboard from './components/dashboards/WatcherDashboard';
+import { RoleProvider, useRole, type UserRole } from './lib/utils/roleContext';
+import { enhancedDB } from './lib/data/enhancedDataStore';
+import { generateMixedTestData } from './lib/operations/bulkOperations';
 import { User, ChevronDown } from 'lucide-react';
 
 type View = 'dashboard' | 'dpp-main' | 'dpp-component' | 'create-dpp';
@@ -90,6 +92,8 @@ function AppContent() {
     { value: 'Manufacturer' as const, label: 'Manufacturer' },
     { value: 'Recycler' as const, label: 'Recycler' },
     { value: 'Supervisor' as const, label: 'Supervisor' },
+    { value: 'Witness' as const, label: 'Witness' },
+    { value: 'Watcher' as const, label: 'Watcher' },
   ];
 
   return (
@@ -138,7 +142,15 @@ function AppContent() {
         </div>
       ) : (
         <>
-          {view === 'dashboard' && (
+          {view === 'dashboard' && currentRole === 'Witness' && (
+            <WitnessDashboard />
+          )}
+          
+          {view === 'dashboard' && currentRole === 'Watcher' && (
+            <WatcherDashboard />
+          )}
+          
+          {view === 'dashboard' && currentRole !== 'Witness' && currentRole !== 'Watcher' && (
             <EnhancedDashboard 
               onNavigate={handleSelectDPP} 
               onCreateDPP={currentRole === 'Manufacturer' ? handleCreateDPP : undefined}

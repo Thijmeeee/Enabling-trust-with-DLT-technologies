@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { createLifecycleEvent } from '../lib/lifecycleHelpers';
+import { createLifecycleEvent } from '../lib/operations/lifecycleHelpers';
 
 type LifecycleControlsProps = {
   dppId: string;

@@ -6,23 +6,22 @@ import {
   Leaf,
   Award,
   ExternalLink,
-  Download,
   QrCode,
   Link2,
   Activity,
 } from 'lucide-react';
-import { getDPPWithRelations, exportDPPHierarchyToJSON } from '../lib/enhancedAdapter';
-import { calculateTrustScore } from '../lib/verificationLocal';
-import { getSchemaForType } from '../lib/schemas/productSchema';
-import { getDoP } from '../lib/schemas/declarationOfPerformance';
-import type { DeclarationOfPerformance } from '../lib/schemas/declarationOfPerformance';
-import { useRole } from '../lib/roleContext';
-import QRCodeDisplay from './QRCodeDisplay';
-import DIDEventsLog from './DIDEventsLog';
-import WitnessFlowVisualization from './WitnessFlowVisualization';
-import DLTTrustAnchor from './DLTTrustAnchor';
-import DoPerformanceView from './DoPerformanceView';
-import DoPerformanceEditor from './DoPerformanceEditor';
+import { getDPPWithRelations } from '../../lib/data/enhancedAdapter';
+import { calculateTrustScore } from '../../lib/utils/verificationLocal';
+import { getSchemaForType } from '../../lib/schemas/productSchema';
+import { getDoP } from '../../lib/schemas/declarationOfPerformance';
+import type { DeclarationOfPerformance } from '../../lib/schemas/declarationOfPerformance';
+import { useRole } from '../../lib/utils/roleContext';
+import QRCodeDisplay from '../visualizations/QRCodeDisplay';
+import DIDEventsLog from '../DIDEventsLog';
+import WitnessFlowVisualization from '../visualizations/WitnessFlowVisualization';
+import DLTTrustAnchor from '../DLTTrustAnchor';
+import DoPerformanceView from '../DoPerformanceView';
+import DoPerformanceEditor from '../DoPerformanceEditor';
 
 export default function ComponentDPPView({
   did,
@@ -67,21 +66,10 @@ export default function ComponentDPPView({
     }
   }
 
-  async function handleExport() {
-    const json = await exportDPPHierarchyToJSON(did);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `dpp-component-${did.split(':').pop()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   async function handleSaveDoP(dop: DeclarationOfPerformance) {
     if (!data?.dpp) return;
     
-    const { updateDPP } = await import('../lib/enhancedAdapter');
+    const { updateDPP } = await import('../../lib/data/enhancedAdapter');
     const updatedDPP = await updateDPP(data.dpp.id, {
       metadata: {
         ...data.dpp.metadata,
@@ -192,13 +180,7 @@ export default function ComponentDPPView({
                 <QrCode className="w-4 h-4" />
                 QR Code
               </button>
-              <button
-                onClick={handleExport}
-                className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2"
-              >
-                <Download className="w-4 h-4" />
-                Export JSON
-              </button>
+
             </div>
           </div>
 

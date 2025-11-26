@@ -1,6 +1,6 @@
 import { Package, CheckCircle, AlertCircle, ExternalLink, ChevronRight } from 'lucide-react';
-import type { DPP } from '../lib/localData';
-import { getSchemaForType } from '../lib/schemas/productSchema';
+import type { DPP } from '../../lib/data/localData';
+import { getSchemaForType } from '../../lib/schemas/productSchema';
 
 type DPPCardProps = {
   dpp: DPP;

@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Package, Download, RefreshCw, Grid, List as ListIcon } from 'lucide-react';
-import { enhancedDB } from '../lib/enhancedDataStore';
-import { FilterPanel, FilterState } from './FilterPanel';
-import { DPPCard } from './DPPCard.js';
-import { generateMixedTestData, exportDPPsToJSON } from '../lib/bulkOperations';
-import type { DPP } from '../lib/localData';
+import { Package, RefreshCw, Grid, List as ListIcon } from 'lucide-react';
+import { enhancedDB } from '../../lib/data/enhancedDataStore';
+import { FilterPanel, FilterState } from '../modals/FilterPanel';
+import { DPPCard } from '../dpp/DPPCard';
+import { generateMixedTestData } from '../../lib/operations/bulkOperations';
+import type { DPP } from '../../lib/data/localData';
 
 type ViewMode = 'grid' | 'list';
 
@@ -88,19 +88,6 @@ export default function EnhancedDashboard({
     setLoading(false);
   };
   
-  const handleExport = async () => {
-    const ids = filteredDpps.map(d => d.id);
-    const json = await exportDPPsToJSON(ids);
-    
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `dpps-export-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-  
   const handleClearAll = async () => {
     if (!confirm('DELETE ALL data? This cannot be undone!')) return;
     
@@ -148,15 +135,6 @@ export default function EnhancedDashboard({
               >
                 <RefreshCw className="w-4 h-4" />
                 Test Data
-              </button>
-              
-              <button
-                onClick={handleExport}
-                disabled={filteredDpps.length === 0}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Download className="w-4 h-4" />
-                Export ({filteredDpps.length})
               </button>
             </div>
           </div>

@@ -1,5 +1,5 @@
 import { X, FileCheck, Calendar, User, Hash, CheckCircle, ExternalLink, AlertCircle } from 'lucide-react';
-import type { WitnessAttestation } from '../lib/localData';
+import type { WitnessAttestation } from '../../lib/data/localData';
 
 interface AttestationDetailsModalProps {
   attestation: WitnessAttestation;

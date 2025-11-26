@@ -1,5 +1,5 @@
-import { Package, Box, Link, Shield } from 'lucide-react';
-import type { DPP } from '../lib/data/localData';
+import { CheckCircle, AlertCircle, Package, Box, Link, Shield } from 'lucide-react';
+import type { DPP } from '../../lib/data/localData';
 
 export default function DPPListItem({ dpp, onSelect }: { dpp: DPP; onSelect: () => void }) {
   const isMain = dpp.type === 'main';
@@ -67,7 +67,7 @@ export default function DPPListItem({ dpp, onSelect }: { dpp: DPP; onSelect: () 
                 <span>{new Date(dpp.created_at).toLocaleDateString()}</span>
                 {dpp.metadata?.batch && (
                   <span className="px-2 py-1 bg-purple-50 text-purple-700 rounded font-medium">
-                    Batch: {String(dpp.metadata.batch)}
+                    Batch: {dpp.metadata.batch}
                   </span>
                 )}
               </div>

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { AlertTriangle, CheckCircle, Info, X, ChevronDown, ChevronUp, Package, Shield } from 'lucide-react';
-import { localDB } from '../lib/localData';
-import { enhancedDB } from '../lib/enhancedDataStore';
-import type { WatcherAlert } from '../lib/localData';
+import { localDB } from '../../lib/data/localData';
+import { enhancedDB } from '../../lib/data/enhancedDataStore';
+import type { WatcherAlert } from '../../lib/data/localData';
 
 interface GroupedAlerts {
   dppId: string;

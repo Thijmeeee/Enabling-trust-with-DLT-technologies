@@ -1,4 +1,4 @@
-import { localDB } from './localData';
+import { localDB } from '../data/localData';
 
 export class DPPWatcher {
   private watcherId: string | null = null;

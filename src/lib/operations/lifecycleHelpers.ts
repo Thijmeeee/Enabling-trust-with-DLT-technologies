@@ -1,5 +1,5 @@
-import { enhancedDB } from './enhancedDataStore';
-import { localDB } from './localData';
+import { enhancedDB } from '../data/enhancedDataStore';
+import { localDB } from '../data/localData';
 
 /**
  * Generate realistic witness attestations for DID events
@@ -44,7 +44,8 @@ export async function generateWitnessAttestations(dppId: string, did: string, dp
       verificationMethodsCount: 1,
       initialProofType: 'Ed25519Signature2020',
     },
-    signature: `0x${Math.random().toString(16).substring(2, 66)}`,
+    signature: `witness-sig-${Math.random().toString(16).substring(2, 18)}`,
+    approval_status: 'approved' as const,
   });
 
   // Key Rotation attestation (70% chance)
@@ -65,7 +66,8 @@ export async function generateWitnessAttestations(dppId: string, did: string, dp
         previousKeyRevoked: true,
         newKeyType: 'Ed25519VerificationKey2020',
       },
-      signature: `0x${Math.random().toString(16).substring(2, 66)}`,
+      signature: `witness-sig-${Math.random().toString(16).substring(2, 18)}`,
+      approval_status: 'approved' as const,
     });
   }
 
@@ -87,7 +89,8 @@ export async function generateWitnessAttestations(dppId: string, did: string, dp
         blockchainTxHash: `0x${Math.random().toString(16).substring(2, 66)}`,
         transferApproved: true,
       },
-      signature: `0x${Math.random().toString(16).substring(2, 66)}`,
+      signature: `witness-sig-${Math.random().toString(16).substring(2, 18)}`,
+      approval_status: 'approved' as const,
     });
   }
 
@@ -109,7 +112,8 @@ export async function generateWitnessAttestations(dppId: string, did: string, dp
         previousHash: `0x${Math.random().toString(16).substring(2, 66)}`,
         newHash: `0x${Math.random().toString(16).substring(2, 66)}`,
       },
-      signature: `0x${Math.random().toString(16).substring(2, 66)}`,
+      signature: `witness-sig-${Math.random().toString(16).substring(2, 18)}`,
+      approval_status: 'approved' as const,
     });
   }
 

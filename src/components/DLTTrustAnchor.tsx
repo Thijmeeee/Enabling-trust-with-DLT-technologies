@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link2, Database, Hash, CheckCircle2, ExternalLink, Blocks } from 'lucide-react';
-import { localDB } from '../lib/localData';
-import type { AnchoringEvent } from '../lib/localData';
+import { localDB } from '../lib/data/localData';
+import type { AnchoringEvent } from '../lib/data/localData';
 
 export default function DLTTrustAnchor({ did }: { did: string }) {
   const [anchorings, setAnchorings] = useState<AnchoringEvent[]>([]);

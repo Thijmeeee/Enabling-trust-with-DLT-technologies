@@ -2,8 +2,8 @@
  * Adapter layer to make enhanced datastore compatible with existing components
  */
 
-import { enhancedDB } from './enhancedDataStore';
-import { exportHierarchyToJSON } from './bulkOperations';
+import { enhancedDB } from '../data/enhancedDataStore';
+import { exportHierarchyToJSON } from '../operations/bulkOperations';
 
 export async function getDPPWithRelations(did: string) {
   console.log('getDPPWithRelations called for:', did);

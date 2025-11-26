@@ -79,13 +79,17 @@ export type Watcher = {
 export type WatcherAlert = {
   id: string;
   watcher_id: string;
+  watcher_did: string;
   dpp_id: string | null;
   did: string | null;
   alert_type: string;
   severity: 'info' | 'warning' | 'critical';
+  description: string;
   message: string;
   details: Record<string, unknown>;
+  status: 'active' | 'resolved';
   resolved: boolean;
+  detected_at: string;
   created_at: string;
 };
 
@@ -99,6 +103,7 @@ export type WitnessAttestation = {
   signature: string;
   timestamp: string;
   created_at: string;
+  approval_status?: 'pending' | 'approved' | 'rejected';
 };
 
 export type Specification = {
@@ -256,6 +261,14 @@ class LocalDataStore {
     const newAtt: WitnessAttestation = { ...att, id, created_at: now, timestamp: now };
     this.attestations.set(id, newAtt);
     return newAtt;
+  }
+
+  async updateAttestation(id: string, updates: Partial<WitnessAttestation>): Promise<WitnessAttestation | null> {
+    const existing = this.attestations.get(id);
+    if (!existing) return null;
+    const updated = { ...existing, ...updates };
+    this.attestations.set(id, updated);
+    return updated;
   }
 
   async getAttestationsByDID(did: string): Promise<WitnessAttestation[]> {

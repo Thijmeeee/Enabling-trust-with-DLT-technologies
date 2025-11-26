@@ -1,6 +1,6 @@
-import { localDB } from './localData';
-import { enhancedDB } from './enhancedDataStore';
-import type { DPP } from './localData';
+import { localDB } from '../data/localData';
+import { enhancedDB } from '../data/enhancedDataStore';
+import type { DPP } from '../data/localData';
 
 export async function verifyDPPIntegrity(dpp: DPP): Promise<{
   valid: boolean;

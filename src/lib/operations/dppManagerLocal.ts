@@ -1,5 +1,5 @@
-import { localDB } from './localData';
-import type { DPP } from './localData';
+import { localDB } from '../data/localData';
+import type { DPP } from '../data/localData';
 
 export async function getDPPWithRelations(did: string) {
   const dpp = await localDB.getDPPByDID(did);

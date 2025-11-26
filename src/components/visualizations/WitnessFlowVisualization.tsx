@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Shield, UserCheck, FileSignature, CheckCircle2, Clock } from 'lucide-react';
-import { localDB } from '../lib/localData';
-import type { WitnessAttestation } from '../lib/localData';
+import { localDB } from '../../lib/data/localData';
+import type { WitnessAttestation } from '../../lib/data/localData';
 
 export default function WitnessFlowVisualization({ did }: { did: string }) {
   const [attestations, setAttestations] = useState<WitnessAttestation[]>([]);

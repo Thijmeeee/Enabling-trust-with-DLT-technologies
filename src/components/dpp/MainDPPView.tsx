@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import {
   ArrowLeft,
   Package,
-  Download,
   QrCode,
   Shield,
   Activity,
@@ -25,24 +24,22 @@ import {
   FileCheck,
   Clock,
 } from 'lucide-react';
-import { getDPPWithRelations, getAggregatedMetrics } from '../lib/data/enhancedAdapter';
-import { calculateTrustScore } from '../lib/utils/verificationLocal';
-import { getSchemaForType } from '../lib/schemas/productSchema';
-import { getDoP } from '../lib/schemas/declarationOfPerformance';
-import type { DeclarationOfPerformance } from '../lib/schemas/declarationOfPerformance';
-import { useRole } from '../lib/utils/roleContext';
-import QRCodeDisplay from './visualizations/QRCodeDisplay';
-import DIDEventsLog from './DIDEventsLog';
-import WitnessFlowVisualization from './visualizations/WitnessFlowVisualization';
-import DLTTrustAnchor from './DLTTrustAnchor';
-import { ProtectedField, ProtectedMetadata } from './ProtectedField';
-import WindowLifecycleVisualization from './visualizations/WindowLifecycleVisualization';
-import { LifecycleControls } from './LifecycleControls';
-import DIDOperationsPanel from './DIDOperationsPanel';
-import TrustValidationTab from './TrustValidationTab';
-import DoPerformanceView from './DoPerformanceView';
-import DoPerformanceEditor from './DoPerformanceEditor';
-import AttestationDetailsModal from './modals/AttestationDetailsModal';
+import { getDPPWithRelations, getAggregatedMetrics } from '../../lib/data/enhancedAdapter';
+import { calculateTrustScore } from '../../lib/utils/verificationLocal';
+import { getSchemaForType } from '../../lib/schemas/productSchema';
+import { getDoP } from '../../lib/schemas/declarationOfPerformance';
+import type { DeclarationOfPerformance } from '../../lib/schemas/declarationOfPerformance';
+import { useRole } from '../../lib/utils/roleContext';
+import QRCodeDisplay from '../visualizations/QRCodeDisplay';
+import DIDEventsLog from '../DIDEventsLog';
+import { ProtectedField, ProtectedMetadata } from '../ProtectedField';
+import WindowLifecycleVisualization from '../visualizations/WindowLifecycleVisualization';
+import { LifecycleControls } from '../LifecycleControls';
+import DIDOperationsPanel from '../DIDOperationsPanel';
+import TrustValidationTab from '../TrustValidationTab';
+import DoPerformanceView from '../DoPerformanceView';
+import DoPerformanceEditor from '../DoPerformanceEditor';
+import AttestationDetailsModal from '../modals/AttestationDetailsModal';
 
 export default function MainDPPView({ did, onBack, onNavigate }: {
   did: string;
@@ -172,7 +169,7 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
   
   async function loadPendingApprovals(didValue: string) {
     try {
-      const { enhancedDB } = await import('../lib/data/enhancedDataStore');
+      const { enhancedDB } = await import('../../lib/data/enhancedDataStore');
       const attestations = await enhancedDB.getAttestationsByDID(didValue);
       
       console.log('MainDPPView: All attestations for DID:', attestations);
@@ -204,10 +201,21 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
     loadData();
   }
 
+  async function handleExport() {
+    const json = await exportDPPHierarchyToJSON(did);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dpp-${did.split(':').pop()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function handleSaveDoP(dop: DeclarationOfPerformance) {
     if (!data?.dpp) return;
     
-    const { updateDPP } = await import('../lib/data/enhancedAdapter');
+    const { updateDPP } = await import('../../lib/data/enhancedAdapter');
     const updatedDPP = await updateDPP(data.dpp.id, {
       metadata: {
         ...data.dpp.metadata,

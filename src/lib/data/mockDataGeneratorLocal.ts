@@ -1,8 +1,8 @@
-import { localDB } from './localData';
+import { localDB } from '../data/localData';
 import {
   generateWitnessAttestations,
   generateAnchoringEvents,
-} from './lifecycleHelpers';
+} from '../operations/lifecycleHelpers';
 
 export async function generateMockData() {
   const mainWindowDPP = {

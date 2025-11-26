@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Shield, Eye, Anchor, ChevronDown, ChevronUp, CheckCircle2, AlertTriangle, Clock, Hash, Activity } from 'lucide-react';
-import { localDB } from '../lib/localData';
-import { useRole } from '../lib/roleContext';
-import type { WitnessAttestation, WatcherAlert, AnchoringEvent } from '../lib/localData';
+import { localDB } from '../lib/data/localData';
+import { useRole } from '../lib/utils/roleContext';
+import type { WitnessAttestation, WatcherAlert, AnchoringEvent } from '../lib/data/localData';
 
 interface TrustValidationTabProps {
   did: string;

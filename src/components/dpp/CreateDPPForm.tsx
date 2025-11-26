@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, Plus, CheckCircle, ArrowRight, ArrowLeft, Package } from 'lucide-react';
-import { localDB } from '../lib/localData';
+import { localDB } from '../../lib/data/localData';
+import { generateWitnessAttestations } from '../../lib/operations/lifecycleHelpers';
 
 interface WindowData {
   model: string;
@@ -158,6 +159,11 @@ export default function CreateDPPForm({ onClose, onComplete }: {
         proof: { type: 'Ed25519Signature2020' },
         document_metadata: { created: true },
       });
+
+      // Generate DID attestations (creation events)
+      await generateWitnessAttestations(windowResult.id, windowDid, 'main');
+      await generateWitnessAttestations(glassResult.id, glassDid, 'component');
+      await generateWitnessAttestations(frameResult.id, frameDid, 'component');
 
       // Success!
       setTimeout(() => {

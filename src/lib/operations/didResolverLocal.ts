@@ -1,5 +1,5 @@
-import { localDB } from './localData';
-import type { DIDDocument } from './localData';
+import { localDB } from '../data/localData';
+import type { DIDDocument } from '../data/localData';
 
 export async function resolveDID(did: string): Promise<DIDDocument | null> {
   return localDB.getDIDDocumentByDID(did);

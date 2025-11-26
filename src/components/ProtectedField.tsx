@@ -1,4 +1,4 @@
-import { useRole } from '../lib/roleContext';
+import { useRole } from '../lib/utils/roleContext';
 import { EyeOff } from 'lucide-react';
 
 interface FieldProps {

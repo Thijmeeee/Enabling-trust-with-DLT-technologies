@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Play, Check, Loader, X } from 'lucide-react';
-import { localDB } from '../lib/localData';
-import { DPPWatcher, createWitnessAttestation } from '../lib/watcherLocal';
+import { localDB } from '../lib/data/localData';
+import { DPPWatcher, createWitnessAttestation } from '../lib/utils/watcherLocal';
 
 export default function DemoScenarios({ onClose, onRefresh }: { onClose: () => void; onRefresh: () => void }) {
   const [running, setRunning] = useState<string | null>(null);

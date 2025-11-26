@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Clock, FileText, Shield, Link2, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Download, Search, Filter } from 'lucide-react';
-import { enhancedDB } from '../lib/enhancedDataStore';
-import type { AnchoringEvent, WitnessAttestation } from '../lib/localData';
+import { Clock, FileText, Shield, Link2, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Search, Filter } from 'lucide-react';
+import { enhancedDB } from '../lib/data/enhancedDataStore';
+import type { AnchoringEvent, WitnessAttestation } from '../lib/data/localData';
 
 interface DIDEvent {
   id: string;
@@ -85,6 +85,16 @@ export default function DIDEventsLog({ did }: { did: string }) {
       const didEventTypes = ['did_creation', 'key_rotation', 'ownership_change', 'did_update', 'did_lifecycle_update'];
       const isDIDEvent = didEventTypes.includes(attestation.attestation_type);
       
+      // Skip pending DID events - they should only appear after witness approval
+      if (isDIDEvent && attestation.approval_status === 'pending') {
+        return;
+      }
+      
+      // Skip rejected DID events
+      if (isDIDEvent && attestation.approval_status === 'rejected') {
+        return;
+      }
+      
       // Product lifecycle events (separate from witness attestations)
       const lifecycleEventTypes = ['assembly', 'installation', 'maintenance', 'disposal', 'manufacturing'];
       const isLifecycleEvent = lifecycleEventTypes.includes(attestation.attestation_type);
@@ -162,29 +172,6 @@ export default function DIDEventsLog({ did }: { did: string }) {
     setLoading(false);
   }
 
-  const exportAuditTrail = () => {
-    const filtered = getFilteredEvents();
-    const auditData = {
-      did: did,
-      exportDate: new Date().toISOString(),
-      totalEvents: filtered.length,
-      events: filtered.map(e => ({
-        timestamp: e.timestamp,
-        type: e.type,
-        description: e.description,
-        details: e.details,
-      })),
-    };
-    
-    const blob = new Blob([JSON.stringify(auditData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `audit-trail-${did.split(':').pop()}-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   const getFilteredEvents = () => {
     return events.filter(event => {
       const matchesSearch = searchTerm === '' || 
@@ -213,13 +200,6 @@ export default function DIDEventsLog({ did }: { did: string }) {
           <h3 className="text-lg font-semibold text-gray-900">Event Timeline</h3>
           <span className="ml-2 text-sm text-gray-500">{filteredEvents.length} events</span>
         </div>
-        <button
-          onClick={exportAuditTrail}
-          className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
-        >
-          <Download className="w-4 h-4" />
-          Export Audit Trail
-        </button>
       </div>
 
       {/* Filters */}

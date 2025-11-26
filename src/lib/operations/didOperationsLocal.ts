@@ -1,5 +1,5 @@
-import { enhancedDB } from './enhancedDataStore';
-import { localDB } from './localData';
+import { enhancedDB } from '../data/enhancedDataStore';
+import { localDB } from '../data/localData';
 
 /**
  * Transfer ownership of a DPP
@@ -22,27 +22,31 @@ export async function transferOwnership(
       return { success: false, message: 'Only the current owner can transfer ownership' };
     }
 
-    // Update the DPP owner
+    // Store pending ownership transfer in metadata (don't update owner yet)
     const updatedDPP = await enhancedDB.updateDPP(dppId, {
-      owner: newOwnerDID,
       metadata: {
         ...dpp.metadata,
-        previousOwner: currentOwnerDID,
-        ownershipTransferredAt: new Date().toISOString(),
+        pendingOwnershipTransfer: {
+          from: currentOwnerDID,
+          to: newOwnerDID,
+          requestedAt: new Date().toISOString(),
+        }
       }
     });
 
     // Update in localDB for compatibility
     await localDB.updateDPP(dppId, {
-      owner: newOwnerDID,
       metadata: {
         ...dpp.metadata,
-        previousOwner: currentOwnerDID,
-        ownershipTransferredAt: new Date().toISOString(),
+        pendingOwnershipTransfer: {
+          from: currentOwnerDID,
+          to: newOwnerDID,
+          requestedAt: new Date().toISOString(),
+        }
       }
     });
 
-    // Create witness attestation for ownership change
+    // Create witness attestation for ownership change - pending approval
     const attestation = {
       dpp_id: dppId,
       did: dpp.did,
@@ -58,7 +62,8 @@ export async function transferOwnership(
         transferMethod: 'Direct Transfer',
         transferApproved: true,
       },
-      signature: `0x${Math.random().toString(16).substring(2, 66)}`,
+      signature: `pending-${Date.now()}`,
+      approval_status: 'pending' as const,
     };
 
     await enhancedDB.insertAttestation(attestation);
@@ -66,7 +71,7 @@ export async function transferOwnership(
 
     return {
       success: true,
-      message: 'Ownership transferred successfully',
+      message: 'Ownership transfer request submitted. Awaiting witness approval.',
       dpp: updatedDPP
     };
   } catch (error) {
@@ -109,7 +114,7 @@ export async function rotateKey(
     // Note: In a real system, you would update the verification_method array
     // For now, we track the rotation in metadata
 
-    // Create witness attestation for key rotation
+    // Create witness attestation for key rotation - pending approval
     const attestation = {
       dpp_id: dppId,
       did: dpp.did,
@@ -126,7 +131,8 @@ export async function rotateKey(
         previousKeyRevoked: true,
         newKeyType: 'Ed25519VerificationKey2020',
       },
-      signature: `0x${Math.random().toString(16).substring(2, 66)}`,
+      signature: `pending-${Date.now()}`,
+      approval_status: 'pending' as const,
     };
 
     await enhancedDB.insertAttestation(attestation);
@@ -134,7 +140,7 @@ export async function rotateKey(
 
     return {
       success: true,
-      message: 'Key rotated successfully',
+      message: 'Key rotation request submitted. Awaiting witness approval.',
       newKeyId: newKeyId
     };
   } catch (error) {
@@ -174,7 +180,7 @@ export async function updateDIDDocument(
       ? didDoc.document_metadata['version'] + 1
       : 2;
 
-    // Create witness attestation for DID update
+    // Create witness attestation for DID update - pending approval
     const attestation = {
       dpp_id: dppId,
       did: dpp.did,
@@ -191,7 +197,8 @@ export async function updateDIDDocument(
         previousHash: `0x${Math.random().toString(16).substring(2, 66)}`,
         newHash: `0x${Math.random().toString(16).substring(2, 66)}`,
       },
-      signature: `0x${Math.random().toString(16).substring(2, 66)}`,
+      signature: `pending-${Date.now()}`,
+      approval_status: 'pending' as const,
     };
 
     await enhancedDB.insertAttestation(attestation);
@@ -209,6 +216,7 @@ export async function updateDIDDocument(
 
 /**
  * Get DID operations history for a DPP
+ * Only returns approved events (excludes pending and rejected)
  */
 export async function getDIDOperationsHistory(dppId: string) {
   try {
@@ -219,10 +227,25 @@ export async function getDIDOperationsHistory(dppId: string) {
 
     const attestations = await enhancedDB.getAttestationsByDID(dpp.did);
     
-    // Filter DID-related operations
-    const didOperations = attestations.filter(att => 
-      ['ownership_change', 'key_rotation', 'did_update', 'did_creation'].includes(att.attestation_type)
-    );
+    // Filter DID-related operations that are approved (not pending or rejected)
+    const didOperations = attestations.filter(att => {
+      const isDIDOperation = ['ownership_change', 'key_rotation', 'did_update', 'did_creation'].includes(att.attestation_type);
+      
+      // Explicitly exclude rejected operations
+      if (att.approval_status === 'rejected') {
+        return false;
+      }
+      
+      // Consider approved if:
+      // 1. Explicitly marked as approved, OR
+      // 2. No approval_status field (old data - consider approved), OR
+      // 3. Signature doesn't start with 'pending-' and isn't a reject signature
+      const isApproved = 
+        att.approval_status === 'approved' || 
+        (!att.approval_status && att.signature && !att.signature.startsWith('pending-') && !att.signature.startsWith('witness-reject-'));
+      
+      return isDIDOperation && isApproved;
+    });
 
     // Sort by timestamp descending
     didOperations.sort((a, b) => 
@@ -236,5 +259,30 @@ export async function getDIDOperationsHistory(dppId: string) {
   } catch (error) {
     console.error('Error getting DID operations history:', error);
     return { success: false, message: 'Failed to get DID operations history', operations: [] };
+  }
+}
+
+/**
+ * Get pending and rejected DID operations
+ */
+export async function getPendingAndRejectedOperations(did: string) {
+  try {
+    const dpp = await enhancedDB.getDPPByDID(did);
+    if (!dpp) {
+      return { pending: [], rejected: [] };
+    }
+
+    // Use enhancedDB for consistency
+    const allAttestations = await enhancedDB.getAttestationsByDID(dpp.did);
+    
+    const pending = allAttestations.filter((att: any) => att.approval_status === 'pending');
+    const rejected = allAttestations.filter((att: any) => att.approval_status === 'rejected');
+
+    console.log('getPendingAndRejectedOperations:', { did: dpp.did, pending, rejected });
+
+    return { pending, rejected };
+  } catch (error) {
+    console.error('Error getting pending/rejected operations:', error);
+    return { pending: [], rejected: [] };
   }
 }

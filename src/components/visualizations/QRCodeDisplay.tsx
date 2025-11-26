@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import QRCode from 'qrcode';
-import { generateQRCodeData } from '../lib/dppManagerLocal';
+import { generateQRCodeData } from '../../lib/operations/dppManagerLocal';
 
 export default function QRCodeDisplay({ did, onClose }: { did: string; onClose: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
