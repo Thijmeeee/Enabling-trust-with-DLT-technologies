@@ -1,6 +1,7 @@
 import { Package, CheckCircle, AlertCircle, ExternalLink, ChevronRight } from 'lucide-react';
 import type { DPP } from '../../lib/data/localData';
 import { getSchemaForType } from '../../lib/schemas/productSchema';
+import { useRole } from '../../lib/utils/roleContext';
 
 type DPPCardProps = {
   dpp: DPP;
@@ -8,16 +9,36 @@ type DPPCardProps = {
   viewMode: 'grid' | 'list';
 };
 
+// Map metadata fields to permission requirements
+const fieldPermissions: Record<string, string> = {
+  batch: 'operations',
+  productionDate: 'operations',
+  custodian: 'operations',
+  // Add more field mappings as needed
+};
+
 export function DPPCard({ dpp, onClick, viewMode }: DPPCardProps) {
+  const { canSeeField } = useRole();
   const productType = dpp.metadata.productType as string || 'unknown';
   const schema = getSchemaForType(productType);
   
   const color = schema?.color || '#6B7280';
   const isMain = dpp.type === 'main';
   
-  // Get primary fields from schema
-  const primaryFields = schema?.ui?.listView?.primaryFields || ['model'];
-  const secondaryFields = schema?.ui?.listView?.secondaryFields || [];
+  // Get primary fields from schema and filter based on permissions
+  const allPrimaryFields = schema?.ui?.listView?.primaryFields || ['model'];
+  const allSecondaryFields = schema?.ui?.listView?.secondaryFields || [];
+  
+  // Filter fields based on role permissions
+  const primaryFields = allPrimaryFields.filter(field => {
+    const requiredPermission = fieldPermissions[field];
+    return !requiredPermission || canSeeField(requiredPermission);
+  });
+  
+  const secondaryFields = allSecondaryFields.filter(field => {
+    const requiredPermission = fieldPermissions[field];
+    return !requiredPermission || canSeeField(requiredPermission);
+  });
   
   const renderField = (key: string) => {
     const value = key === 'model' ? dpp.model : dpp.metadata[key];

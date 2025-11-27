@@ -24,7 +24,7 @@ export default function WatcherDashboard() {
   const { currentRoleDID } = useRole();
   const [monitoredDPPs, setMonitoredDPPs] = useState<MonitoredDPP[]>([]);
   const [alerts, setAlerts] = useState<WatcherAlert[]>([]);
-  const [filter, setFilter] = useState<'all' | 'critical' | 'warning' | 'info' | 'resolved'>('all');
+  const [filter, setFilter] = useState<'all' | 'selected' | 'critical' | 'warning' | 'info' | 'resolved'>('all');
   const [expandedDPP, setExpandedDPP] = useState<string | null>(null);
   const [expandedComponents, setExpandedComponents] = useState<Set<string>>(new Set());
   const [selectedDPPForDetails, setSelectedDPPForDetails] = useState<MonitoredDPP | null>(null);
@@ -55,10 +55,14 @@ export default function WatcherDashboard() {
     const allAlerts = await localDB.getAlerts();
     const watcherAlerts = allAlerts.filter(a => a.watcher_did === currentRoleDID);
     
-    // Calculate integrity scores for each DPP
+    // Calculate integrity scores for each DPP with verification
     const monitored: MonitoredDPP[] = await Promise.all(
       allDPPs.map(async (dpp) => {
         const dppAlerts = watcherAlerts.filter(a => a.dpp_id === dpp.id);
+        
+        // Perform continuous verification (Watcher's core function)
+        await performContinuousVerification(dpp, dppAlerts);
+        
         const integrityScore = calculateIntegrityScore(dpp, dppAlerts);
         
         return {
@@ -71,11 +75,12 @@ export default function WatcherDashboard() {
     );
 
     setMonitoredDPPs(monitored);
-    setAlerts(watcherAlerts);
+    setAlerts(await localDB.getAlerts().then(alerts => alerts.filter(a => a.watcher_did === currentRoleDID)));
 
     // Calculate stats
-    const criticalCount = watcherAlerts.filter(a => a.severity === 'critical' && a.status === 'active').length;
-    const warningCount = watcherAlerts.filter(a => a.severity === 'warning' && a.status === 'active').length;
+    const updatedAlerts = await localDB.getAlerts().then(alerts => alerts.filter(a => a.watcher_did === currentRoleDID));
+    const criticalCount = updatedAlerts.filter(a => a.severity === 'critical' && a.status === 'active').length;
+    const warningCount = updatedAlerts.filter(a => a.severity === 'warning' && a.status === 'active').length;
     const avgIntegrity = monitored.length > 0
       ? monitored.reduce((sum, dpp) => sum + dpp.integrityScore, 0) / monitored.length
       : 100;
@@ -88,6 +93,208 @@ export default function WatcherDashboard() {
     });
   }
 
+  async function performContinuousVerification(dpp: DPP, existingAlerts: WatcherAlert[]) {
+    // Watchers continuously verify DID-log integrity
+    const history = await getDIDOperationsHistory(dpp.id);
+    if (!history.success) return;
+
+    const attestations = await enhancedDB.getAttestationsByDID(dpp.did);
+    
+    // 1. Recompute hashes across all entries
+    const hashChainValid = verifyHashChainContinuous(history.operations, existingAlerts, dpp);
+    
+    // 2. Validate controller signatures
+    const controllerProofsValid = verifyControllerProofs(attestations, existingAlerts, dpp);
+    
+    // 3. Validate witness proofs
+    const witnessProofsValid = verifyWitnessProofs(attestations, existingAlerts, dpp);
+    
+    // 4. Compare resulting state with expected (e.g., keys, owner)
+    const stateConsistent = verifyStateConsistency(dpp, history.operations, existingAlerts);
+    
+    // Log any new inconsistencies as alerts
+    if (!hashChainValid || !controllerProofsValid || !witnessProofsValid || !stateConsistent) {
+      console.log(`Watcher detected inconsistencies in ${dpp.did}`);
+    }
+  }
+
+  function verifyHashChainContinuous(operations: any[], existingAlerts: WatcherAlert[], dpp: DPP): boolean {
+    // Check if hash chain is intact
+    if (operations.length === 0) return true;
+    
+    // In a real implementation: recompute hash for each entry and verify chain
+    // For now: check if entries are sequential
+    for (let i = 1; i < operations.length; i++) {
+      const current = operations[i];
+      const previous = operations[i - 1];
+      
+      // Check if timestamps are sequential
+      if (new Date(current.timestamp) < new Date(previous.timestamp)) {
+        // Create alert if not already exists
+        const alertExists = existingAlerts.some(a => 
+          a.alert_type === 'hash_chain_broken' && a.status === 'active'
+        );
+        
+        if (!alertExists) {
+          localDB.insertAlert({
+            watcher_id: currentRoleDID,
+            watcher_did: currentRoleDID,
+            dpp_id: dpp.id,
+            did: dpp.did,
+            alert_type: 'hash_chain_broken',
+            severity: 'critical',
+            description: 'Hash chain integrity compromised: timestamps out of order',
+            message: 'Hash chain integrity compromised',
+            details: { operation_index: i },
+            status: 'active',
+            resolved: false,
+            detected_at: new Date().toISOString(),
+          });
+        }
+        
+        return false;
+      }
+    }
+    
+    return true;
+  }
+
+  function verifyControllerProofs(attestations: any[], existingAlerts: WatcherAlert[], dpp: DPP): boolean {
+    // Validate all controller signatures
+    const criticalOps = attestations.filter(a => 
+      a.attestation_type === 'ownership_change' || 
+      a.attestation_type === 'key_rotation' ||
+      a.attestation_type === 'did_creation'
+    );
+    
+    for (const attestation of criticalOps) {
+      if (!attestation.signature || attestation.signature.startsWith('pending-')) {
+        const alertExists = existingAlerts.some(a => 
+          a.alert_type === 'missing_controller_signature' && a.status === 'active'
+        );
+        
+        if (!alertExists && attestation.approval_status === 'approved') {
+          localDB.insertAlert({
+            watcher_id: currentRoleDID,
+            watcher_did: currentRoleDID,
+            dpp_id: dpp.id,
+            did: dpp.did,
+            alert_type: 'missing_controller_signature',
+            severity: 'critical',
+            description: `Missing or invalid controller signature on ${attestation.attestation_type}`,
+            message: 'Missing controller signature',
+            details: { attestation_id: attestation.id },
+            status: 'active',
+            resolved: false,
+            detected_at: new Date().toISOString(),
+          });
+        }
+        
+        return false;
+      }
+    }
+    
+    return true;
+  }
+
+  function verifyWitnessProofs(attestations: any[], existingAlerts: WatcherAlert[], dpp: DPP): boolean {
+    // Validate witness attestations
+    const witnessRequired = attestations.filter(a => 
+      a.attestation_type === 'ownership_change' || 
+      a.attestation_type === 'key_rotation'
+    );
+    
+    for (const attestation of witnessRequired) {
+      if (attestation.approval_status === 'rejected') {
+        const alertExists = existingAlerts.some(a => 
+          a.alert_type === 'rejected_by_witness' && a.status === 'active'
+        );
+        
+        if (!alertExists) {
+          localDB.insertAlert({
+            watcher_id: currentRoleDID,
+            watcher_did: currentRoleDID,
+            dpp_id: dpp.id,
+            did: dpp.did,
+            alert_type: 'rejected_by_witness',
+            severity: 'warning',
+            description: `Operation ${attestation.attestation_type} was rejected by witness`,
+            message: 'Operation rejected by witness',
+            details: { attestation_id: attestation.id },
+            status: 'active',
+            resolved: false,
+            detected_at: new Date().toISOString(),
+          });
+        }
+      }
+      
+      if (!attestation.witness_did && attestation.approval_status === 'approved') {
+        const alertExists = existingAlerts.some(a => 
+          a.alert_type === 'missing_witness_proof' && a.status === 'active'
+        );
+        
+        if (!alertExists) {
+          localDB.insertAlert({
+            watcher_id: currentRoleDID,
+            watcher_did: currentRoleDID,
+            dpp_id: dpp.id,
+            did: dpp.did,
+            alert_type: 'missing_witness_proof',
+            severity: 'critical',
+            description: `Missing witness proof for ${attestation.attestation_type}`,
+            message: 'Missing witness proof',
+            details: { attestation_id: attestation.id },
+            status: 'active',
+            resolved: false,
+            detected_at: new Date().toISOString(),
+          });
+        }
+        
+        return false;
+      }
+    }
+    
+    return true;
+  }
+
+  function verifyStateConsistency(dpp: DPP, operations: any[], existingAlerts: WatcherAlert[]): boolean {
+    // Compare current state with expected state from history
+    const ownershipChanges = operations.filter(op => 
+      op.attestation_type === 'ownership_change' && op.approval_status === 'approved'
+    );
+    
+    if (ownershipChanges.length > 0) {
+      const lastOwnershipChange = ownershipChanges[ownershipChanges.length - 1];
+      const expectedOwner = lastOwnershipChange.attestation_data?.newOwner;
+      
+      if (expectedOwner && dpp.owner !== expectedOwner) {
+        const alertExists = existingAlerts.some(a => 
+          a.alert_type === 'state_mismatch' && a.status === 'active'
+        );
+        
+        if (!alertExists) {
+          localDB.insertAlert({
+            watcher_id: currentRoleDID,
+            watcher_did: currentRoleDID,
+            dpp_id: dpp.id,
+            did: dpp.did,
+            alert_type: 'state_mismatch',
+            severity: 'critical',
+            description: `Owner mismatch: DID document shows ${dpp.owner} but history indicates ${expectedOwner}`,
+            message: 'State inconsistency detected',
+            details: { expected_owner: expectedOwner, actual_owner: dpp.owner },
+            status: 'active',
+            resolved: false,
+            detected_at: new Date().toISOString(),
+          });
+        }
+        
+        return false;
+      }
+    }
+    
+    return true;
+  }
   function calculateIntegrityScore(dpp: DPP, alerts: WatcherAlert[]): number {
     let score = 100;
     
@@ -156,6 +363,10 @@ export default function WatcherDashboard() {
   }
 
   const getFilteredAlerts = () => {
+    if (filter === 'selected' && selectedDPPForDetails) {
+      // Show alerts for selected product only
+      return alerts.filter(a => a.dpp_id === selectedDPPForDetails.id && a.status === 'active');
+    }
     if (filter === 'all') return alerts.filter(a => a.status === 'active');
     if (filter === 'resolved') return alerts.filter(a => a.status === 'resolved');
     return alerts.filter(a => a.severity === filter && a.status === 'active');
@@ -255,6 +466,7 @@ export default function WatcherDashboard() {
 
   async function loadDPPDetails(dpp: MonitoredDPP) {
     setSelectedDPPForDetails(dpp);
+    setFilter('selected'); // Auto-switch to selected product tab
     
     // Load DID history (operations) - pass DPP ID not DID
     const historyResult = await getDIDOperationsHistory(dpp.id);
@@ -357,7 +569,7 @@ export default function WatcherDashboard() {
                       <div key={group.dppId} className="border border-gray-200 rounded-lg overflow-hidden">
                         {/* Window/Main Product Header */}
                         <div 
-                          className={`bg-gradient-to-r from-blue-50 to-blue-100 p-3 cursor-pointer hover:from-blue-100 hover:to-blue-200 transition-colors ${
+                          className={`bg-blue-100 p-3 cursor-pointer hover:bg-blue-200 transition-colors ${
                             selectedDPPForDetails?.id === dpp.id ? 'ring-2 ring-blue-500' : ''
                           }`}
                           onClick={() => {
@@ -441,7 +653,7 @@ export default function WatcherDashboard() {
                                 <div key={component.name} className="border-t border-gray-300">
                                   {/* Component Header */}
                                   <div 
-                                    className={`bg-gradient-to-r from-purple-50 to-purple-100 px-4 py-2 cursor-pointer hover:from-purple-100 hover:to-purple-200 transition-colors ${
+                                    className={`bg-purple-100 px-4 py-2 cursor-pointer hover:bg-purple-200 transition-colors ${
                                       selectedDPPForDetails?.id === compDpp.id ? 'ring-2 ring-purple-500' : ''
                                     }`}
                                     onClick={() => {
@@ -660,6 +872,11 @@ export default function WatcherDashboard() {
               <div className="flex">
                 {[
                   { id: 'all', label: 'All Alerts', count: alerts.filter(a => a.status === 'active').length },
+                  ...(selectedDPPForDetails ? [{
+                    id: 'selected',
+                    label: selectedDPPForDetails.model || 'Selected',
+                    count: alerts.filter(a => a.dpp_id === selectedDPPForDetails.id && a.status === 'active').length
+                  }] : []),
                   { id: 'critical', label: 'Critical', count: alerts.filter(a => a.severity === 'critical' && a.status === 'active').length },
                   { id: 'warning', label: 'Warning', count: alerts.filter(a => a.severity === 'warning').length },
                   { id: 'resolved', label: 'Resolved', count: alerts.filter(a => a.status === 'resolved').length },
@@ -679,7 +896,7 @@ export default function WatcherDashboard() {
               </div>
             </div>
             
-            <div className="p-4 max-h-[600px] overflow-y-auto">
+            <div className="p-4 min-h-[800px] max-h-[800px] overflow-y-auto">
               {filteredAlerts.length === 0 ? (
                 <div className="text-center py-8">
                   <CheckCircle className="w-12 h-12 text-gray-300 mx-auto mb-3" />

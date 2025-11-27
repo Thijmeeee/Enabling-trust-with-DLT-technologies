@@ -5,6 +5,7 @@ import ComponentDPPView from './components/dpp/ComponentDPPView';
 import CreateDPPForm from './components/dpp/CreateDPPForm';
 import WitnessDashboard from './components/dashboards/WitnessDashboard';
 import WatcherDashboard from './components/dashboards/WatcherDashboard';
+import ResolverDashboard from './components/dashboards/ResolverDashboard';
 import { RoleProvider, useRole, type UserRole } from './lib/utils/roleContext';
 import { enhancedDB } from './lib/data/enhancedDataStore';
 import { generateMixedTestData } from './lib/operations/bulkOperations';
@@ -94,6 +95,7 @@ function AppContent() {
     { value: 'Supervisor' as const, label: 'Supervisor' },
     { value: 'Witness' as const, label: 'Witness' },
     { value: 'Watcher' as const, label: 'Watcher' },
+    { value: 'Resolver' as const, label: 'Resolver' },
   ];
 
   return (
@@ -150,7 +152,11 @@ function AppContent() {
             <WatcherDashboard />
           )}
           
-          {view === 'dashboard' && currentRole !== 'Witness' && currentRole !== 'Watcher' && (
+          {view === 'dashboard' && currentRole === 'Resolver' && (
+            <ResolverDashboard />
+          )}
+          
+          {view === 'dashboard' && currentRole !== 'Witness' && currentRole !== 'Watcher' && currentRole !== 'Resolver' && (
             <EnhancedDashboard 
               onNavigate={handleSelectDPP} 
               onCreateDPP={currentRole === 'Manufacturer' ? handleCreateDPP : undefined}

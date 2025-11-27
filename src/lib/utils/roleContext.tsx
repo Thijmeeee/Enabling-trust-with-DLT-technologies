@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, ReactNode } from 'react';
 
-export type UserRole = 'Operator' | 'Recycler' | 'Manufacturer' | 'Supervisor' | 'Witness' | 'Watcher';
+export type UserRole = 'Operator' | 'Recycler' | 'Manufacturer' | 'Supervisor' | 'Witness' | 'Watcher' | 'Resolver';
 
 interface RoleContextType {
   currentRole: UserRole;
@@ -19,6 +19,7 @@ const roleDIDs: Record<UserRole, string> = {
   Supervisor: 'did:webvh:example.com:roles:supervisor-001',
   Witness: 'did:webvh:example.com:witnesses:witness-node-001',
   Watcher: 'did:webvh:example.com:watchers:watcher-node-001',
+  Resolver: 'did:webvh:example.com:resolvers:resolver-node-001',
 };
 
 // Define what each role can see
@@ -28,7 +29,8 @@ const rolePermissions: Record<UserRole, string[]> = {
   Manufacturer: ['basic', 'materials', 'lifecycle', 'operations', 'manufacturing', 'suppliers', 'costs'],
   Supervisor: ['basic', 'materials', 'lifecycle', 'operations', 'manufacturing', 'suppliers', 'costs', 'sensitive', 'all'],
   Witness: ['basic', 'operations', 'did-events'],
-  Watcher: ['basic', 'operations', 'monitoring', 'alerts'],
+  Watcher: ['basic', 'operations', 'did-events', 'monitoring', 'alerts'],
+  Resolver: ['basic', 'operations', 'did-events', 'history', 'verification'],
 };
 
 export function RoleProvider({ children }: { children: ReactNode }) {
