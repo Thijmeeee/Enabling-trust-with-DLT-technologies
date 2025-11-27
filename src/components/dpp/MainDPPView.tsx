@@ -59,6 +59,8 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
   const [showTrustTooltip, setShowTrustTooltip] = useState(false);
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
   const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
+  const [recentEvents, setRecentEvents] = useState<any[]>([]);
+  const [openEventId, setOpenEventId] = useState<string | null>(null);
 
   // Helper to get icon color based on product type
   const getIconColor = (productType: string) => {
@@ -150,6 +152,70 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
       console.log('MainDPPView data loaded:', dppData);
       setData(dppData);
 
+      // Build combined recent events (creation, anchorings, attestations, verification)
+      try {
+        const { enhancedDB } = await import('../../lib/data/enhancedDataStore');
+        const allEvents: any[] = [];
+        // Creation
+        if (dppData.dpp) {
+          allEvents.push({
+            id: `creation-${dppData.dpp.id}`,
+            timestamp: dppData.dpp.created_at,
+            description: 'DPP Created',
+            source: 'creation'
+          });
+        }
+
+        // Anchorings
+        const anchorings = await enhancedDB.getAnchoringEventsByDID(did);
+        anchorings.forEach((a: any) => {
+          allEvents.push({
+            id: `anchor-${a.id}`,
+            timestamp: a.timestamp,
+            description: `Anchored to DLT (${a.anchor_type})`,
+            source: 'anchoring'
+          });
+        });
+
+        // Attestations
+        const attestations = await enhancedDB.getAttestationsByDID(did);
+        attestations.forEach((att: any) => {
+          // Skip pending/rejected DID events similar to DIDEventsLog
+          const didEventTypes = ['did_creation', 'key_rotation', 'ownership_change', 'did_update', 'did_lifecycle_update'];
+          if (didEventTypes.includes(att.attestation_type) && (att.approval_status === 'pending' || att.approval_status === 'rejected')) return;
+          const eventTimestamp = (att.attestation_data && (att.attestation_data as any).timestamp) || att.timestamp;
+          const desc = didEventTypes.includes(att.attestation_type)
+            ? ({'did_creation':'DID Created & Registered','key_rotation':'Cryptographic Key Rotated','ownership_change':'Ownership Transferred','did_update':'DID Document Updated','did_lifecycle_update':'DID Lifecycle Stage Change'} as any)[att.attestation_type] || att.attestation_type
+            : (['assembly','installation','maintenance','disposal','manufacturing'].includes(att.attestation_type) ? `Product Lifecycle: ${att.attestation_type}` : att.attestation_type.replace(/_/g,' '));
+          allEvents.push({
+            id: `attestation-${att.id}`,
+            timestamp: eventTimestamp,
+            description: desc,
+            source: 'attestation'
+          });
+        });
+
+        // DID Document verification
+        const didDoc = await enhancedDB.getDIDDocumentByDID(did);
+        if (didDoc) {
+          allEvents.push({
+            id: `verification-${didDoc.id}`,
+            timestamp: didDoc.created_at,
+            description: 'DID Document Verified',
+            source: 'verification'
+          });
+        }
+
+        // Sort descending (newest first) and take top 3
+        const sorted = allEvents.slice().sort((a,b) => {
+          const ta = a?.timestamp ? new Date(a.timestamp).getTime() : 0;
+          const tb = b?.timestamp ? new Date(b.timestamp).getTime() : 0;
+          return tb - ta;
+        }).slice(0,3);
+        setRecentEvents(sorted);
+      } catch (err) {
+        console.error('Error building recentEvents:', err);
+      }
       if (dppData?.dpp) {
         const metricsData = await getAggregatedMetrics(dppData.dpp.id);
         setMetrics(metricsData);
@@ -856,16 +922,19 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
                   Recent Events
                 </h2>
                 <div className="space-y-2">
-                  {data.events && data.events.length > 0 ? (
-                    data.events.slice(0, 3).map((event: any) => (
+                  {recentEvents && recentEvents.length > 0 ? (
+                    recentEvents.map((event: any) => (
                       <button
                         key={event.id}
-                        onClick={() => setActiveTab('events')}
+                        onClick={() => {
+                          setActiveTab('events');
+                          setOpenEventId(event.id);
+                        }}
                         className="w-full text-left text-sm border-l-2 border-blue-500 pl-3 py-2 hover:bg-blue-50 transition-colors rounded-r"
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-medium text-blue-600 capitalize hover:underline">
-                            {event.attestation_type ? event.attestation_type.replace(/_/g, ' ') : 'Unknown Event'}
+                            {event.description ? String(event.description) : (event.attestation_type ? event.attestation_type.replace(/_/g, ' ') : 'Unknown Event')}
                           </span>
                           <span className="text-xs text-gray-500">
                             {event.timestamp ? new Date(event.timestamp).toLocaleString('nl-NL', { 
@@ -1042,7 +1111,7 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
               did={did}
               onEventCreated={handleEventCreated}
             />
-            <DIDEventsLog key={`events-${eventRefreshKey}`} did={did} />
+            <DIDEventsLog key={`events-${eventRefreshKey}`} did={did} openEventId={openEventId} />
           </>
         )}
       </div>

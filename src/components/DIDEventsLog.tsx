@@ -14,7 +14,7 @@ interface DIDEvent {
   color: string;
 }
 
-export default function DIDEventsLog({ did }: { did: string }) {
+export default function DIDEventsLog({ did, openEventId }: { did: string; openEventId?: string | null }) {
   const [events, setEvents] = useState<DIDEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedEvent, setExpandedEvent] = useState<string | null>(null);
@@ -25,6 +25,18 @@ export default function DIDEventsLog({ did }: { did: string }) {
     console.log('DIDEventsLog: useEffect triggered, loading events...');
     loadEvents();
   }, [did]);
+
+  // When parent requests to open a specific event, expand and scroll to it
+  useEffect(() => {
+    if (!openEventId) return;
+    console.log('DIDEventsLog: openEventId received:', openEventId);
+    setExpandedEvent(openEventId);
+    // scroll after a tick to ensure element exists
+    setTimeout(() => {
+      const el = document.getElementById(`event-${openEventId}`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+  }, [openEventId]);
 
   async function loadEvents() {
     console.log('DIDEventsLog: Loading events for DID:', did);
@@ -243,7 +255,7 @@ export default function DIDEventsLog({ did }: { did: string }) {
             <div className="absolute left-1/2 transform -translate-x-1/2 h-full w-1 bg-gradient-to-b from-blue-200 via-purple-200 to-green-200"></div>
             
             {/* Events */}
-            <div className="space-y-8">
+              <div className="space-y-8">
               {filteredEvents.map((event, index) => {
                 const IconComponent = event.icon;
                 const colorClasses = {
@@ -256,7 +268,7 @@ export default function DIDEventsLog({ did }: { did: string }) {
                 const isLeft = index % 2 === 0;
 
                 return (
-                  <div key={event.id} className={`flex items-center ${isLeft ? 'flex-row' : 'flex-row-reverse'}`}>
+                  <div key={event.id} id={`event-${event.id}`} className={`flex items-center ${isLeft ? 'flex-row' : 'flex-row-reverse'}`}>
                     {/* Content card */}
                     <div className={`w-5/12 ${isLeft ? 'pr-8 text-right' : 'pl-8 text-left'}`}>
                       <div 

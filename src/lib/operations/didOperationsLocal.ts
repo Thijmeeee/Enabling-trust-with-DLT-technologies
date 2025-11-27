@@ -226,6 +226,8 @@ export async function getDIDOperationsHistory(dppId: string) {
     }
 
     const attestations = await enhancedDB.getAttestationsByDID(dpp.did);
+    console.log('getDIDOperationsHistory: raw attestations count', attestations.length);
+    console.log('getDIDOperationsHistory: attestations preview', attestations.map(a => ({ id: a.id, type: a.attestation_type, approval_status: a.approval_status, signature: a.signature, timestamp: a.timestamp })));
     
     // Filter DID-related operations that are approved (not pending or rejected)
     const didOperations = attestations.filter(att => {
@@ -251,6 +253,8 @@ export async function getDIDOperationsHistory(dppId: string) {
     didOperations.sort((a, b) => 
       new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
+    console.log('getDIDOperationsHistory: filtered DID operations count', didOperations.length);
+    console.log('getDIDOperationsHistory: operations preview', didOperations.map(o => ({ id: o.id, type: o.attestation_type, approval_status: o.approval_status, timestamp: o.timestamp })));
 
     return {
       success: true,
