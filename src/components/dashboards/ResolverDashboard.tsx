@@ -138,14 +138,21 @@ export default function ResolverDashboard() {
     };
   }
 
-  function verifyHashChain(history: any[], _attestations: any[]): { valid: boolean; message: string } {
+  function verifyHashChain(history: any[], _attestations: any[]): { valid: boolean; message: string; details?: any } {
     if (history.length === 0) {
-      return { valid: true, message: 'No history to verify (new DID)' };
+      return { valid: true, message: 'No history to verify (new DID)', details: { totalEntries: 0 } };
     }
 
     // Check if each entry references the previous hash correctly
+    const entries = [];
     for (let i = 0; i < history.length; i++) {
       const entry = history[i];
+      entries.push({
+        index: i,
+        type: entry.attestation_type,
+        timestamp: entry.timestamp,
+        hash: entry.operationHash || 'N/A',
+      });
       
       // First entry should not have a previous hash requirement
       if (i === 0) {
@@ -157,10 +164,17 @@ export default function ResolverDashboard() {
       entry; // Use entry to avoid unused warning
     }
 
-    return { valid: true, message: `Hash chain verified: ${history.length} entries` };
+    return { 
+      valid: true, 
+      message: `Hash chain verified: ${history.length} entries`,
+      details: {
+        totalEntries: history.length,
+        entries: entries,
+      }
+    };
   }
 
-  function verifyControllerSignatures(_history: any[], attestations: any[], _dpp: DPP): { valid: boolean; message: string } {
+  function verifyControllerSignatures(_history: any[], attestations: any[], _dpp: DPP): { valid: boolean; message: string; details?: any } {
     // Check if all operations have valid controller signatures
     const operationsWithSignatures = attestations.filter(a => 
       a.attestation_type === 'ownership_change' || 
@@ -169,28 +183,57 @@ export default function ResolverDashboard() {
     );
 
     if (operationsWithSignatures.length === 0) {
-      return { valid: true, message: 'No operations requiring controller signatures' };
+      return { 
+        valid: true, 
+        message: 'No operations requiring controller signatures',
+        details: { totalOperations: 0, signatures: [] }
+      };
     }
 
     // In a real implementation, verify cryptographic signatures
     // For now, check if signature field exists
     const hasSignatures = operationsWithSignatures.every(op => op.signature);
     
+    const signatureDetails = operationsWithSignatures.map(op => ({
+      type: op.attestation_type,
+      timestamp: op.timestamp,
+      signature: op.signature ? op.signature.substring(0, 40) + '...' : 'Missing',
+      status: op.signature ? 'Valid' : 'Invalid',
+    }));
+    
     if (hasSignatures) {
-      return { valid: true, message: `${operationsWithSignatures.length} controller signatures verified` };
+      return { 
+        valid: true, 
+        message: `${operationsWithSignatures.length} controller signatures verified`,
+        details: {
+          totalOperations: operationsWithSignatures.length,
+          signatures: signatureDetails,
+        }
+      };
     } else {
-      return { valid: false, message: 'Missing controller signatures on some operations' };
+      return { 
+        valid: false, 
+        message: 'Missing controller signatures on some operations',
+        details: {
+          totalOperations: operationsWithSignatures.length,
+          signatures: signatureDetails,
+        }
+      };
     }
   }
 
-  function verifyWitnessProofs(attestations: any[]): { valid: boolean; message: string } {
+  function verifyWitnessProofs(attestations: any[]): { valid: boolean; message: string; details?: any } {
     const witnessRequired = attestations.filter(a => 
       a.attestation_type === 'ownership_change' || 
       a.attestation_type === 'key_rotation'
     );
 
     if (witnessRequired.length === 0) {
-      return { valid: true, message: 'No operations requiring witness proofs' };
+      return { 
+        valid: true, 
+        message: 'No operations requiring witness proofs',
+        details: { totalOperations: 0, proofs: [] }
+      };
     }
 
     // Check if all operations have witness attestations
@@ -198,15 +241,54 @@ export default function ResolverDashboard() {
     const pendingWitness = witnessRequired.filter(a => a.approval_status === 'pending');
     const rejectedWitness = witnessRequired.filter(a => a.approval_status === 'rejected');
 
+    const proofDetails = witnessRequired.map(a => ({
+      type: a.attestation_type,
+      timestamp: a.timestamp,
+      witness: a.witness_did || 'Unknown',
+      status: a.approval_status || 'Unknown',
+      eventData: a.attestation_data || {},
+      signature: a.signature,
+    }));
+
     if (rejectedWitness.length > 0) {
-      return { valid: false, message: `${rejectedWitness.length} operations rejected by witness` };
+      return { 
+        valid: false, 
+        message: `${rejectedWitness.length} operations rejected by witness`,
+        details: {
+          totalOperations: witnessRequired.length,
+          approved: approvedByWitness.length,
+          pending: pendingWitness.length,
+          rejected: rejectedWitness.length,
+          proofs: proofDetails,
+        }
+      };
     }
 
     if (pendingWitness.length > 0) {
-      return { valid: true, message: `${approvedByWitness.length} proofs verified, ${pendingWitness.length} pending (warning)` };
+      return { 
+        valid: true, 
+        message: `${approvedByWitness.length} proofs verified, ${pendingWitness.length} pending (warning)`,
+        details: {
+          totalOperations: witnessRequired.length,
+          approved: approvedByWitness.length,
+          pending: pendingWitness.length,
+          rejected: rejectedWitness.length,
+          proofs: proofDetails,
+        }
+      };
     }
 
-    return { valid: true, message: `${approvedByWitness.length} witness proofs verified` };
+    return { 
+      valid: true, 
+      message: `${approvedByWitness.length} witness proofs verified`,
+      details: {
+        totalOperations: witnessRequired.length,
+        approved: approvedByWitness.length,
+        pending: pendingWitness.length,
+        rejected: rejectedWitness.length,
+        proofs: proofDetails,
+      }
+    };
   }
 
   function verifyDocumentConsistency(dpp: DPP, history: any[]): { valid: boolean; message: string; details?: any } {
@@ -560,16 +642,12 @@ export default function ResolverDashboard() {
                           )}
                           <div className="flex-1">
                             <p className="text-sm font-medium text-gray-900">Hash Chain</p>
-                            {!group.verification.checks.hashChain.valid ? (
-                              <button
-                                onClick={() => openDetailsModal('Hash Chain Verification', group.verification.checks.hashChain, group.verification)}
-                                className="text-xs text-blue-600 hover:text-blue-800 hover:underline text-left"
-                              >
-                                {group.verification.checks.hashChain.message}
-                              </button>
-                            ) : (
-                              <p className="text-xs text-gray-600">{group.verification.checks.hashChain.message}</p>
-                            )}
+                            <button
+                              onClick={() => openDetailsModal('Hash Chain Verification', group.verification.checks.hashChain, group.verification)}
+                              className="text-xs text-blue-600 hover:text-blue-800 hover:underline text-left"
+                            >
+                              {group.verification.checks.hashChain.message}
+                            </button>
                           </div>
                         </div>
 
@@ -581,16 +659,12 @@ export default function ResolverDashboard() {
                           )}
                           <div className="flex-1">
                             <p className="text-sm font-medium text-gray-900">Controller Signatures</p>
-                            {!group.verification.checks.controllerSignatures.valid ? (
-                              <button
-                                onClick={() => openDetailsModal('Controller Signatures Verification', group.verification.checks.controllerSignatures, group.verification)}
-                                className="text-xs text-blue-600 hover:text-blue-800 hover:underline text-left"
-                              >
-                                {group.verification.checks.controllerSignatures.message}
-                              </button>
-                            ) : (
-                              <p className="text-xs text-gray-600">{group.verification.checks.controllerSignatures.message}</p>
-                            )}
+                            <button
+                              onClick={() => openDetailsModal('Controller Signatures Verification', group.verification.checks.controllerSignatures, group.verification)}
+                              className="text-xs text-blue-600 hover:text-blue-800 hover:underline text-left"
+                            >
+                              {group.verification.checks.controllerSignatures.message}
+                            </button>
                           </div>
                         </div>
 
@@ -602,16 +676,12 @@ export default function ResolverDashboard() {
                           )}
                           <div className="flex-1">
                             <p className="text-sm font-medium text-gray-900">Witness Proofs</p>
-                            {!group.verification.checks.witnessProofs.valid ? (
-                              <button
-                                onClick={() => openDetailsModal('Witness Proofs Verification', group.verification.checks.witnessProofs, group.verification)}
-                                className="text-xs text-blue-600 hover:text-blue-800 hover:underline text-left"
-                              >
-                                {group.verification.checks.witnessProofs.message}
-                              </button>
-                            ) : (
-                              <p className="text-xs text-gray-600">{group.verification.checks.witnessProofs.message}</p>
-                            )}
+                            <button
+                              onClick={() => openDetailsModal('Witness Proofs Verification', group.verification.checks.witnessProofs, group.verification)}
+                              className="text-xs text-blue-600 hover:text-blue-800 hover:underline text-left"
+                            >
+                              {group.verification.checks.witnessProofs.message}
+                            </button>
                           </div>
                         </div>
 
@@ -623,16 +693,12 @@ export default function ResolverDashboard() {
                           )}
                           <div className="flex-1">
                             <p className="text-sm font-medium text-gray-900">Document Consistency</p>
-                            {!group.verification.checks.documentConsistency.valid ? (
-                              <button
-                                onClick={() => openDetailsModal('Document Consistency Verification', group.verification.checks.documentConsistency, group.verification)}
-                                className="text-xs text-blue-600 hover:text-blue-800 hover:underline text-left"
-                              >
-                                {group.verification.checks.documentConsistency.message}
-                              </button>
-                            ) : (
-                              <p className="text-xs text-gray-600">{group.verification.checks.documentConsistency.message}</p>
-                            )}
+                            <button
+                              onClick={() => openDetailsModal('Document Consistency Verification', group.verification.checks.documentConsistency, group.verification)}
+                              className="text-xs text-blue-600 hover:text-blue-800 hover:underline text-left"
+                            >
+                              {group.verification.checks.documentConsistency.message}
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -707,16 +773,12 @@ export default function ResolverDashboard() {
                                         )}
                                         <div className="flex-1">
                                           <p className="text-xs font-medium text-gray-900">Hash Chain</p>
-                                          {!component.verification.checks.hashChain.valid ? (
-                                            <button
-                                              onClick={() => openDetailsModal('Hash Chain Verification', component.verification.checks.hashChain, component.verification)}
-                                              className="text-xs text-blue-600 hover:text-blue-800 hover:underline text-left"
-                                            >
-                                              {component.verification.checks.hashChain.message}
-                                            </button>
-                                          ) : (
-                                            <p className="text-xs text-gray-600">{component.verification.checks.hashChain.message}</p>
-                                          )}
+                                          <button
+                                            onClick={() => openDetailsModal('Hash Chain Verification', component.verification.checks.hashChain, component.verification)}
+                                            className="text-xs text-blue-600 hover:text-blue-800 hover:underline text-left"
+                                          >
+                                            {component.verification.checks.hashChain.message}
+                                          </button>
                                         </div>
                                       </div>
 
@@ -728,16 +790,12 @@ export default function ResolverDashboard() {
                                         )}
                                         <div className="flex-1">
                                           <p className="text-xs font-medium text-gray-900">Controller Signatures</p>
-                                          {!component.verification.checks.controllerSignatures.valid ? (
-                                            <button
-                                              onClick={() => openDetailsModal('Controller Signatures Verification', component.verification.checks.controllerSignatures, component.verification)}
-                                              className="text-xs text-blue-600 hover:text-blue-800 hover:underline text-left"
-                                            >
-                                              {component.verification.checks.controllerSignatures.message}
-                                            </button>
-                                          ) : (
-                                            <p className="text-xs text-gray-600">{component.verification.checks.controllerSignatures.message}</p>
-                                          )}
+                                          <button
+                                            onClick={() => openDetailsModal('Controller Signatures Verification', component.verification.checks.controllerSignatures, component.verification)}
+                                            className="text-xs text-blue-600 hover:text-blue-800 hover:underline text-left"
+                                          >
+                                            {component.verification.checks.controllerSignatures.message}
+                                          </button>
                                         </div>
                                       </div>
 
@@ -749,16 +807,12 @@ export default function ResolverDashboard() {
                                         )}
                                         <div className="flex-1">
                                           <p className="text-xs font-medium text-gray-900">Witness Proofs</p>
-                                          {!component.verification.checks.witnessProofs.valid ? (
-                                            <button
-                                              onClick={() => openDetailsModal('Witness Proofs Verification', component.verification.checks.witnessProofs, component.verification)}
-                                              className="text-xs text-blue-600 hover:text-blue-800 hover:underline text-left"
-                                            >
-                                              {component.verification.checks.witnessProofs.message}
-                                            </button>
-                                          ) : (
-                                            <p className="text-xs text-gray-600">{component.verification.checks.witnessProofs.message}</p>
-                                          )}
+                                          <button
+                                            onClick={() => openDetailsModal('Witness Proofs Verification', component.verification.checks.witnessProofs, component.verification)}
+                                            className="text-xs text-blue-600 hover:text-blue-800 hover:underline text-left"
+                                          >
+                                            {component.verification.checks.witnessProofs.message}
+                                          </button>
                                         </div>
                                       </div>
 
@@ -770,16 +824,12 @@ export default function ResolverDashboard() {
                                         )}
                                         <div className="flex-1">
                                           <p className="text-xs font-medium text-gray-900">Document Consistency</p>
-                                          {!component.verification.checks.documentConsistency.valid ? (
-                                            <button
-                                              onClick={() => openDetailsModal('Document Consistency Verification', component.verification.checks.documentConsistency, component.verification)}
-                                              className="text-xs text-blue-600 hover:text-blue-800 hover:underline text-left"
-                                            >
-                                              {component.verification.checks.documentConsistency.message}
-                                            </button>
-                                          ) : (
-                                            <p className="text-xs text-gray-600">{component.verification.checks.documentConsistency.message}</p>
-                                          )}
+                                          <button
+                                            onClick={() => openDetailsModal('Document Consistency Verification', component.verification.checks.documentConsistency, component.verification)}
+                                            className="text-xs text-blue-600 hover:text-blue-800 hover:underline text-left"
+                                          >
+                                            {component.verification.checks.documentConsistency.message}
+                                          </button>
                                         </div>
                                       </div>
                                     </div>
@@ -907,21 +957,162 @@ export default function ResolverDashboard() {
                 </div>
               )}
 
-              {modalDetails.title === 'Witness Proofs Verification' && !modalDetails.check.valid && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-                  <h4 className="font-semibold text-sm text-red-900 mb-2">Witness Proof Issues</h4>
-                  <p className="text-sm text-red-800 mb-3">
-                    The witness proofs for this DID are missing, invalid, or have not been approved.
-                  </p>
-                  <div className="space-y-2">
-                    <div>
-                      <span className="text-xs font-semibold text-red-900">Possible causes:</span>
-                      <ul className="list-disc list-inside text-xs text-red-800 mt-1 space-y-1">
-                        <li>Operations are pending witness approval</li>
-                        <li>Witness rejected the operation</li>
-                        <li>Witness proofs were not properly recorded</li>
-                      </ul>
+              {modalDetails.title === 'Witness Proofs Verification' && modalDetails.check.details && (
+                <div className={`border rounded-lg p-4 mb-6 ${modalDetails.check.valid ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                  <h4 className={`font-semibold text-sm mb-2 ${modalDetails.check.valid ? 'text-green-900' : 'text-red-900'}`}>
+                    Witness Proofs Details
+                  </h4>
+                  <div className="bg-white rounded p-3 mb-3">
+                    <div className="grid grid-cols-4 gap-2 text-xs mb-2">
+                      <div><span className="font-semibold text-gray-700">Total:</span> {modalDetails.check.details.totalOperations}</div>
+                      <div><span className="font-semibold text-green-700">Approved:</span> {modalDetails.check.details.approved}</div>
+                      <div><span className="font-semibold text-yellow-700">Pending:</span> {modalDetails.check.details.pending}</div>
+                      <div><span className="font-semibold text-red-700">Rejected:</span> {modalDetails.check.details.rejected}</div>
                     </div>
+                    {modalDetails.check.details.proofs && modalDetails.check.details.proofs.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-xs font-semibold text-gray-700">Proof Details:</p>
+                        {modalDetails.check.details.proofs.map((proof: any, idx: number) => (
+                          <div key={idx} className="bg-gray-50 rounded p-3 text-xs space-y-2">
+                            <div className="flex justify-between">
+                              <span className="font-medium">{proof.type}</span>
+                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                proof.status === 'approved' ? 'bg-green-100 text-green-800' :
+                                proof.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-red-100 text-red-800'
+                              }`}>{proof.status}</span>
+                            </div>
+                            <div className="text-gray-600">
+                              <span className="font-semibold">Witness:</span> <span className="font-mono text-xs">{proof.witness}</span>
+                            </div>
+                            <div className="text-gray-600">
+                              <span className="font-semibold">Time:</span> {new Date(proof.timestamp).toLocaleString()}
+                            </div>
+                            
+                            {/* Event Data Details */}
+                            {proof.eventData && Object.keys(proof.eventData).length > 0 && (
+                              <div className="mt-2 pt-2 border-t border-gray-200">
+                                <p className="font-semibold text-gray-700 mb-1">Event Data:</p>
+                                <div className="space-y-1">
+                                  {proof.eventData.previousOwner && (
+                                    <div>
+                                      <span className="font-semibold text-gray-600">Previous Owner:</span>
+                                      <div className="font-mono text-xs text-gray-700 break-all ml-2">{proof.eventData.previousOwner}</div>
+                                    </div>
+                                  )}
+                                  {proof.eventData.newOwner && (
+                                    <div>
+                                      <span className="font-semibold text-gray-600">New Owner:</span>
+                                      <div className="font-mono text-xs text-gray-700 break-all ml-2">{proof.eventData.newOwner}</div>
+                                    </div>
+                                  )}
+                                  {proof.eventData.oldKeyId && (
+                                    <div>
+                                      <span className="font-semibold text-gray-600">Old Key:</span>
+                                      <span className="font-mono text-xs text-gray-700 ml-2">{proof.eventData.oldKeyId}</span>
+                                    </div>
+                                  )}
+                                  {proof.eventData.newKeyId && (
+                                    <div>
+                                      <span className="font-semibold text-gray-600">New Key:</span>
+                                      <span className="font-mono text-xs text-gray-700 ml-2">{proof.eventData.newKeyId}</span>
+                                    </div>
+                                  )}
+                                  {proof.eventData.transferMethod && (
+                                    <div>
+                                      <span className="font-semibold text-gray-600">Transfer Method:</span>
+                                      <span className="text-gray-700 ml-2">{proof.eventData.transferMethod}</span>
+                                    </div>
+                                  )}
+                                  {proof.eventData.organization && (
+                                    <div>
+                                      <span className="font-semibold text-gray-600">Organization:</span>
+                                      <span className="text-gray-700 ml-2">{proof.eventData.organization}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Signature */}
+                            {proof.signature && (
+                              <div className="mt-2 pt-2 border-t border-gray-200">
+                                <span className="font-semibold text-gray-600">Signature:</span>
+                                <div className="font-mono text-xs text-gray-700 break-all mt-1">{proof.signature}</div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {!modalDetails.check.valid && (
+                    <div className="space-y-2">
+                      <div>
+                        <span className="text-xs font-semibold text-red-900">Possible causes:</span>
+                        <ul className="list-disc list-inside text-xs text-red-800 mt-1 space-y-1">
+                          <li>Operations are pending witness approval</li>
+                          <li>Witness rejected the operation</li>
+                          <li>Witness proofs were not properly recorded</li>
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {modalDetails.title === 'Hash Chain Verification' && modalDetails.check.details && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                  <h4 className="font-semibold text-sm text-green-900 mb-2">Hash Chain Details</h4>
+                  <div className="bg-white rounded p-3">
+                    <p className="text-xs text-gray-700 mb-2">
+                      <span className="font-semibold">Total Entries:</span> {modalDetails.check.details.totalEntries}
+                    </p>
+                    {modalDetails.check.details.entries && modalDetails.check.details.entries.length > 0 && (
+                      <div className="mt-3 space-y-2 max-h-60 overflow-y-auto">
+                        <p className="text-xs font-semibold text-gray-700">Chain Entries:</p>
+                        {modalDetails.check.details.entries.map((entry: any, idx: number) => (
+                          <div key={idx} className="bg-gray-50 rounded p-2 text-xs">
+                            <div className="flex justify-between items-start">
+                              <span className="font-medium">Entry {entry.index}</span>
+                              <span className="text-gray-600">{entry.type}</span>
+                            </div>
+                            <div className="text-gray-600 mt-1">Hash: <span className="font-mono text-xs">{entry.hash}</span></div>
+                            <div className="text-gray-600">Time: {new Date(entry.timestamp).toLocaleString()}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {modalDetails.title === 'Controller Signatures Verification' && modalDetails.check.details && (
+                <div className={`border rounded-lg p-4 mb-6 ${modalDetails.check.valid ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                  <h4 className={`font-semibold text-sm mb-2 ${modalDetails.check.valid ? 'text-green-900' : 'text-red-900'}`}>
+                    Controller Signatures Details
+                  </h4>
+                  <div className="bg-white rounded p-3">
+                    <p className="text-xs text-gray-700 mb-2">
+                      <span className="font-semibold">Total Operations:</span> {modalDetails.check.details.totalOperations}
+                    </p>
+                    {modalDetails.check.details.signatures && modalDetails.check.details.signatures.length > 0 && (
+                      <div className="mt-3 space-y-2 max-h-60 overflow-y-auto">
+                        <p className="text-xs font-semibold text-gray-700">Signatures:</p>
+                        {modalDetails.check.details.signatures.map((sig: any, idx: number) => (
+                          <div key={idx} className="bg-gray-50 rounded p-2 text-xs">
+                            <div className="flex justify-between">
+                              <span className="font-medium">{sig.type}</span>
+                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                sig.status === 'Valid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                              }`}>{sig.status}</span>
+                            </div>
+                            <div className="text-gray-600 mt-1">Signature: <span className="font-mono text-xs">{sig.signature}</span></div>
+                            <div className="text-gray-600">Time: {new Date(sig.timestamp).toLocaleString()}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
