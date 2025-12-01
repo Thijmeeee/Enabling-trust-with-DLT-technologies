@@ -6,10 +6,11 @@ import CreateDPPForm from './components/dpp/CreateDPPForm';
 import WitnessDashboard from './components/dashboards/WitnessDashboard';
 import WatcherDashboard from './components/dashboards/WatcherDashboard';
 import ResolverDashboard from './components/dashboards/ResolverDashboard';
+import IntroductionPage from './components/IntroductionPage';
 import { RoleProvider, useRole, type UserRole } from './lib/utils/roleContext';
 import { enhancedDB } from './lib/data/enhancedDataStore';
 import { generateMixedTestData } from './lib/operations/bulkOperations';
-import { User, ChevronDown } from 'lucide-react';
+import { User, ChevronDown, HelpCircle } from 'lucide-react';
 
 type View = 'dashboard' | 'dpp-main' | 'dpp-component' | 'create-dpp';
 
@@ -19,6 +20,16 @@ function AppContent() {
   const [currentDID, setCurrentDID] = useState<string>('');
   const [isInitializing, setIsInitializing] = useState(true);
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
+  const [showIntro, setShowIntro] = useState(() => {
+    // Show intro on first visit (check localStorage)
+    const hasSeenIntro = localStorage.getItem('dpp_has_seen_intro');
+    return !hasSeenIntro;
+  });
+
+  const handleContinueFromIntro = () => {
+    localStorage.setItem('dpp_has_seen_intro', 'true');
+    setShowIntro(false);
+  };
 
   useEffect(() => {
     // Auto-initialize data on first load
@@ -100,8 +111,8 @@ function AppContent() {
 
   return (
     <div className="relative">
-      {/* Role selector dropdown */}
-      <div className="fixed top-4 left-4 z-50">
+      {/* Role selector dropdown and help button */}
+      <div className="fixed top-4 left-4 z-50 flex items-center gap-2">
         <div className="relative">
           <button
             onClick={() => setShowRoleDropdown(!showRoleDropdown)}
@@ -133,16 +144,32 @@ function AppContent() {
             </div>
           )}
         </div>
+        
+        {/* Help button */}
+        <button
+          onClick={() => setShowIntro(true)}
+          className="flex items-center justify-center w-10 h-10 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg shadow-sm transition-colors"
+          title="Show introduction"
+        >
+          <HelpCircle className="w-5 h-5 text-gray-600" />
+        </button>
       </div>
 
-      {isInitializing ? (
+      {/* Introduction Page */}
+      {showIntro && (
+        <IntroductionPage onContinue={handleContinueFromIntro} />
+      )}
+
+      {!showIntro && isInitializing && (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
           <div className="text-center">
             <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
             <p className="text-gray-600">Loading data...</p>
           </div>
         </div>
-      ) : (
+      )}
+      
+      {!showIntro && !isInitializing && (
         <>
           {view === 'dashboard' && currentRole === 'Witness' && (
             <WitnessDashboard />
