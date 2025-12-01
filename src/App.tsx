@@ -6,13 +6,14 @@ import CreateDPPForm from './components/dpp/CreateDPPForm';
 import WitnessDashboard from './components/dashboards/WitnessDashboard';
 import WatcherDashboard from './components/dashboards/WatcherDashboard';
 import ResolverDashboard from './components/dashboards/ResolverDashboard';
+import ManufacturerDashboard from './components/dashboards/ManufacturerDashboard';
 import IntroductionPage from './components/IntroductionPage';
 import { RoleProvider, useRole, type UserRole } from './lib/utils/roleContext';
 import { enhancedDB } from './lib/data/enhancedDataStore';
 import { generateMixedTestData } from './lib/operations/bulkOperations';
-import { User, ChevronDown, HelpCircle } from 'lucide-react';
+import { User, ChevronDown, HelpCircle, Wallet } from 'lucide-react';
 
-type View = 'dashboard' | 'dpp-main' | 'dpp-component' | 'create-dpp';
+type View = 'dashboard' | 'dpp-main' | 'dpp-component' | 'create-dpp' | 'manufacturer-wallet';
 
 function AppContent() {
   const { currentRole, setRole } = useRole();
@@ -20,14 +21,10 @@ function AppContent() {
   const [currentDID, setCurrentDID] = useState<string>('');
   const [isInitializing, setIsInitializing] = useState(true);
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
-  const [showIntro, setShowIntro] = useState(() => {
-    // Show intro on first visit (check localStorage)
-    const hasSeenIntro = localStorage.getItem('dpp_has_seen_intro');
-    return !hasSeenIntro;
-  });
+  // Always show intro on reload
+  const [showIntro, setShowIntro] = useState(true);
 
   const handleContinueFromIntro = () => {
-    localStorage.setItem('dpp_has_seen_intro', 'true');
     setShowIntro(false);
   };
 
@@ -101,7 +98,8 @@ function AppContent() {
 
   const roles = [
     { value: 'Operator' as const, label: 'Operator' },
-    { value: 'Manufacturer' as const, label: 'Manufacturer' },
+    { value: 'Manufacturer A' as const, label: 'Manufacturer A' },
+    { value: 'Manufacturer B' as const, label: 'Manufacturer B' },
     { value: 'Recycler' as const, label: 'Recycler' },
     { value: 'Supervisor' as const, label: 'Supervisor' },
     { value: 'Witness' as const, label: 'Witness' },
@@ -153,6 +151,21 @@ function AppContent() {
         >
           <HelpCircle className="w-5 h-5 text-gray-600" />
         </button>
+
+        {/* Manufacturer Wallet Button */}
+        {(currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B') && (
+          <button
+            onClick={() => setView('manufacturer-wallet')}
+            className={`flex items-center justify-center w-10 h-10 border border-gray-300 rounded-lg shadow-sm transition-colors ${
+              view === 'manufacturer-wallet' 
+                ? 'bg-blue-50 border-blue-200 text-blue-600' 
+                : 'bg-white hover:bg-gray-50 text-gray-600'
+            }`}
+            title="Open Manufacturer Wallet"
+          >
+            <Wallet className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
       {/* Introduction Page */}
@@ -182,11 +195,19 @@ function AppContent() {
           {view === 'dashboard' && currentRole === 'Resolver' && (
             <ResolverDashboard />
           )}
+
+          {view === 'manufacturer-wallet' && (currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B') && (
+            <ManufacturerDashboard 
+              onNavigate={handleSelectDPP} 
+              onCreateDPP={handleCreateDPP}
+              onBack={handleBack}
+            />
+          )}
           
           {view === 'dashboard' && currentRole !== 'Witness' && currentRole !== 'Watcher' && currentRole !== 'Resolver' && (
             <EnhancedDashboard 
               onNavigate={handleSelectDPP} 
-              onCreateDPP={currentRole === 'Manufacturer' ? handleCreateDPP : undefined}
+              onCreateDPP={(currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B') ? handleCreateDPP : undefined}
             />
           )}
           
@@ -194,7 +215,7 @@ function AppContent() {
             <>
               <EnhancedDashboard 
                 onNavigate={handleSelectDPP} 
-                onCreateDPP={currentRole === 'Manufacturer' ? handleCreateDPP : undefined}
+                onCreateDPP={(currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B') ? handleCreateDPP : undefined}
               />
               <CreateDPPForm onClose={handleBack} onComplete={handleDPPCreated} />
             </>

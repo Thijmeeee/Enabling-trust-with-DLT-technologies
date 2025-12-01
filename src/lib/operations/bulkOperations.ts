@@ -28,9 +28,17 @@ export async function generateBulkTestData(input: BulkDPPInput): Promise<void> {
   
   const baseTimestamp = Date.now();
   
+  const manufacturers = [
+    { name: 'Manufacturer A', did: 'did:webvh:glass-solutions.com:organizations:manufacturer', domain: 'glass-solutions.com' },
+    { name: 'Manufacturer B', did: 'did:webvh:frame-masters.com:organizations:manufacturer', domain: 'frame-masters.com' }
+  ];
+
   for (let i = 0; i < input.count; i++) {
     const uniqueId = `${baseTimestamp + i}-${Math.random().toString(36).substr(2, 9)}`;
-    const did = `did:webvh:example.com:products:${input.productType}-${uniqueId}`;
+    
+    // Assign to a manufacturer (distribute evenly)
+    const manufacturer = manufacturers[i % manufacturers.length];
+    const did = `did:webvh:${manufacturer.domain}:products:${input.productType}-${uniqueId}`;
     
     // Generate metadata from schema
     const metadata: Record<string, any> = {
@@ -95,7 +103,8 @@ export async function generateBulkTestData(input: BulkDPPInput): Promise<void> {
         if (!compSchema) continue;
         
         for (let j = 0; j < slot.minQuantity; j++) {
-          const compDid = `did:webvh:example.com:products:${allowedType}-${uniqueId}-${j}`;
+          // Use manufacturer domain for component DIDs too, or a supplier subdomain
+          const compDid = `did:webvh:${manufacturer.domain}:products:${allowedType}-${uniqueId}-${j}`;
           const compMetadata: Record<string, any> = { productType: allowedType };
           
           // Add image URLs for component types
@@ -133,8 +142,8 @@ export async function generateBulkTestData(input: BulkDPPInput): Promise<void> {
             model: `${compSchema.name}-${i + 1}-${j + 1}`,
             parent_did: did,
             lifecycle_status: 'active',
-            owner: `did:webvh:example.com:organizations:${allowedType}-supplier`,
-            custodian: `did:webvh:example.com:organizations:${input.productType}-manufacturer`,
+            owner: `did:webvh:${manufacturer.domain}:organizations:${allowedType}-supplier`,
+            custodian: manufacturer.did,
             metadata: compMetadata,
             version: 1,
             previous_version_id: null,
@@ -159,7 +168,7 @@ export async function generateBulkTestData(input: BulkDPPInput): Promise<void> {
               {
                 id: `${compDid}#dpp-service`,
                 type: 'DPPService',
-                serviceEndpoint: `https://example.com/dpp/${compDid.split(':').pop()}`,
+                serviceEndpoint: `https://${manufacturer.domain}/dpp/${compDid.split(':').pop()}`,
               },
             ],
             proof: { 
@@ -197,7 +206,7 @@ export async function generateBulkTestData(input: BulkDPPInput): Promise<void> {
       model: `${schema.name}-${i + 1}`,
       parent_did: null,
       lifecycle_status: 'active',
-      owner: `did:webvh:example.com:organizations:${input.productType}-manufacturer`,
+      owner: manufacturer.did,
       custodian: null,
       metadata,
       version: 1,
@@ -221,7 +230,7 @@ export async function generateBulkTestData(input: BulkDPPInput): Promise<void> {
         {
           id: `${did}#dpp-service`,
           type: 'DPPService',
-          serviceEndpoint: `https://example.com/dpp/${did.split(':').pop()}`,
+          serviceEndpoint: `https://${manufacturer.domain}/dpp/${did.split(':').pop()}`,
         },
       ],
       proof: { 
@@ -260,7 +269,7 @@ export async function generateBulkTestData(input: BulkDPPInput): Promise<void> {
       await enhancedDB.insertCredential({
         dpp_id: mainDpp.id,
         credential_id: `urn:uuid:${uniqueId}-${credDef.type}`,
-        issuer: `did:webvh:example.com:organizations:${credDef.issuerTypes[0]}`,
+        issuer: `did:webvh:${manufacturer.domain}:organizations:${credDef.issuerTypes[0]}`,
         credential_type: credDef.type,
         credential_data: credData,
         issued_date: new Date(Date.now() - i * 86400000).toISOString(),
