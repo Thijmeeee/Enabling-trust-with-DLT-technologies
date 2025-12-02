@@ -41,10 +41,11 @@ import DoPerformanceView from '../DoPerformanceView';
 import DoPerformanceEditor from '../DoPerformanceEditor';
 import AttestationDetailsModal from '../modals/AttestationDetailsModal';
 
-export default function MainDPPView({ did, onBack, onNavigate }: {
+export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
   did: string;
   onBack: () => void;
   onNavigate: (did: string) => void;
+  backLabel?: string;
 }) {
   const { currentRole } = useRole();
   const [data, setData] = useState<any>(null);
@@ -81,7 +82,7 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
   // Helper to get product features based on type and metadata
   const getProductFeatures = (dpp: any) => {
     const features = [];
-    
+
     // Window-specific features
     if (dpp.type === 'Window' || dpp.type === 'window') {
       if (dpp.metadata?.glazing_type || dpp.metadata?.glass?.glazing_type) {
@@ -89,16 +90,16 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
       } else {
         features.push('Triple glazing for maximum insulation');
       }
-      
+
       if (dpp.metadata?.u_value || dpp.metadata?.glass?.u_value) {
         features.push(`U-value ${dpp.metadata?.u_value || dpp.metadata?.glass?.u_value} W/m²K - Excellent thermal performance`);
       } else {
         features.push('U-value 0.8 W/m²K - Excellent thermal performance');
       }
-      
+
       features.push('Suitable for residential and commercial buildings');
       features.push('10-year manufacturer warranty');
-      
+
       if (dpp.metadata?.energy_rating) {
         features.push(`Energy rating: ${dpp.metadata.energy_rating}`);
       } else {
@@ -112,7 +113,7 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
       features.push('Verified by independent witnesses');
       features.push('Blockchain-anchored authenticity');
     }
-    
+
     return features;
   };
 
@@ -120,22 +121,22 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
   const getKeySpecs = (component: any) => {
     const specs = [];
     const metadata = component.metadata || {};
-    
+
     // Glass panel specs
     if (metadata.glazing_type) specs.push(metadata.glazing_type);
     if (metadata.u_value) specs.push(`U-value ${metadata.u_value}`);
     if (metadata.thickness) specs.push(`${metadata.thickness}mm`);
-    
+
     // Frame specs
     if (metadata.material) specs.push(metadata.material);
     if (metadata.thermal_break !== undefined) specs.push(metadata.thermal_break ? 'Thermal break' : 'No thermal break');
-    
+
     // General specs
     if (metadata.dimensions) {
       specs.push(`${metadata.dimensions.width}×${metadata.dimensions.height}mm`);
     }
     if (metadata.weight) specs.push(`${metadata.weight}kg`);
-    
+
     return specs.slice(0, 3); // Max 3 key specs
   };
 
@@ -185,8 +186,8 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
           if (didEventTypes.includes(att.attestation_type) && (att.approval_status === 'pending' || att.approval_status === 'rejected')) return;
           const eventTimestamp = (att.attestation_data && (att.attestation_data as any).timestamp) || att.timestamp;
           const desc = didEventTypes.includes(att.attestation_type)
-            ? ({'did_creation':'DID Created & Registered','key_rotation':'Cryptographic Key Rotated','ownership_change':'Ownership Transferred','did_update':'DID Document Updated','did_lifecycle_update':'DID Lifecycle Stage Change'} as any)[att.attestation_type] || att.attestation_type
-            : (['assembly','installation','maintenance','disposal','manufacturing'].includes(att.attestation_type) ? `Product Lifecycle: ${att.attestation_type}` : att.attestation_type.replace(/_/g,' '));
+            ? ({ 'did_creation': 'DID Created & Registered', 'key_rotation': 'Cryptographic Key Rotated', 'ownership_change': 'Ownership Transferred', 'did_update': 'DID Document Updated', 'did_lifecycle_update': 'DID Lifecycle Stage Change' } as any)[att.attestation_type] || att.attestation_type
+            : (['assembly', 'installation', 'maintenance', 'disposal', 'manufacturing'].includes(att.attestation_type) ? `Product Lifecycle: ${att.attestation_type}` : att.attestation_type.replace(/_/g, ' '));
           allEvents.push({
             id: `attestation-${att.id}`,
             timestamp: eventTimestamp,
@@ -207,11 +208,11 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
         }
 
         // Sort descending (newest first) and take top 3
-        const sorted = allEvents.slice().sort((a,b) => {
+        const sorted = allEvents.slice().sort((a, b) => {
           const ta = a?.timestamp ? new Date(a.timestamp).getTime() : 0;
           const tb = b?.timestamp ? new Date(b.timestamp).getTime() : 0;
           return tb - ta;
-        }).slice(0,3);
+        }).slice(0, 3);
         setRecentEvents(sorted);
       } catch (err) {
         console.error('Error building recentEvents:', err);
@@ -222,7 +223,7 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
 
         const trust = await calculateTrustScore(dppData.dpp.id);
         setTrustScore(trust);
-        
+
         // Load pending DID events awaiting witness approval
         await loadPendingApprovals(did);
       }
@@ -232,14 +233,14 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
       setLoading(false);
     }
   }
-  
+
   async function loadPendingApprovals(didValue: string) {
     try {
       const { enhancedDB } = await import('../../lib/data/enhancedDataStore');
       const attestations = await enhancedDB.getAttestationsByDID(didValue);
-      
+
       console.log('MainDPPView: All attestations for DID:', attestations);
-      
+
       // Filter for pending DID events
       const pending = attestations.filter(att => {
         const didEventTypes = ['key_rotation', 'ownership_change', 'did_update'];
@@ -247,7 +248,7 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
         console.log('MainDPPView: Checking attestation', att.id, 'type:', att.attestation_type, 'status:', att.approval_status, 'isPending:', isPending);
         return isPending;
       });
-      
+
       console.log('MainDPPView: Pending approvals found:', pending.length, pending);
       setPendingApprovals(pending);
     } catch (error) {
@@ -280,7 +281,7 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
 
   async function handleSaveDoP(dop: DeclarationOfPerformance) {
     if (!data?.dpp) return;
-    
+
     const { updateDPP } = await import('../../lib/data/enhancedAdapter');
     const updatedDPP = await updateDPP(data.dpp.id, {
       metadata: {
@@ -288,7 +289,7 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
         declarationOfPerformance: dop,
       },
     });
-    
+
     console.log('DoP saved successfully:', updatedDPP);
     setEditingDoP(false);
     await loadData();
@@ -329,7 +330,7 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
             className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"
           >
             <ArrowLeft className="w-5 h-5" />
-            Back to Dashboard
+            {backLabel || 'Back to Dashboard'}
           </button>
 
           <div className="flex items-start justify-between">
@@ -339,7 +340,7 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
               </div>
               <div className="flex-1">
                 <h1 className="text-3xl font-bold text-gray-900 mb-3">{dpp.model}</h1>
-                
+
                 {/* Prominent DID Display */}
                 <div className="bg-gradient-to-r from-blue-50 via-purple-50 to-blue-50 border-2 border-blue-500 rounded-lg p-4 mb-3 shadow-sm">
                   <div className="flex items-center gap-2 mb-2">
@@ -350,11 +351,10 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <span className={`px-4 py-1.5 bg-gradient-to-r text-sm font-semibold rounded-full border ${
-                    dpp.type === 'main' 
-                      ? 'from-blue-100 to-blue-200 text-blue-800 border-blue-300'
-                      : 'from-purple-100 to-purple-200 text-purple-800 border-purple-300'
-                  }`}>
+                  <span className={`px-4 py-1.5 bg-gradient-to-r text-sm font-semibold rounded-full border ${dpp.type === 'main'
+                    ? 'from-blue-100 to-blue-200 text-blue-800 border-blue-300'
+                    : 'from-purple-100 to-purple-200 text-purple-800 border-purple-300'
+                    }`}>
                     {dpp.type === 'main' ? 'Main Product' : 'Component'}
                   </span>
                   <span className="text-sm text-gray-700 font-medium capitalize px-3 py-1 bg-gray-100 rounded-full">{dpp.lifecycle_status}</span>
@@ -387,11 +387,10 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`px-4 py-2 border-b-2 transition-colors relative ${
-                  activeTab === tab.id
-                    ? 'border-blue-600 text-blue-600 font-medium'
-                    : 'border-transparent text-gray-600 hover:text-gray-900'
-                }`}
+                className={`px-4 py-2 border-b-2 transition-colors relative ${activeTab === tab.id
+                  ? 'border-blue-600 text-blue-600 font-medium'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+                  }`}
               >
                 {tab.label}
                 {tab.id === 'events' && pendingApprovals.length > 0 && (
@@ -473,9 +472,9 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
                                 return { icon: Shield, color: 'green' };
                               }
                             };
-                            
+
                             const { icon: Icon, color } = getIconAndColor(perf.characteristic);
-                            
+
                             return (
                               <div key={idx} className={`border-l-4 border-${color}-500 pl-4 py-2`}>
                                 <div className="flex items-start gap-3">
@@ -544,7 +543,7 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
                     <ChevronDown className="w-5 h-5 text-gray-600" />
                   )}
                 </button>
-                
+
                 {showTechnicalDetails && (
                   <div className="border-t border-gray-200 p-6">
                     {dop ? (
@@ -579,8 +578,8 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
                   <div className="flex-shrink-0 relative group">
                     <div className="w-96 h-96 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center overflow-hidden">
                       {dpp.metadata?.image_url ? (
-                        <img 
-                          src={dpp.metadata.image_url} 
+                        <img
+                          src={dpp.metadata.image_url}
                           alt={dpp.model}
                           className="w-full h-full object-cover"
                         />
@@ -596,7 +595,7 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
                       )}
                     </div>
                   </div>
-                  
+
                   {/* Product Details - Enhanced */}
                   <div className="flex-1 p-8">
                     <div className="flex items-start justify-between mb-4">
@@ -612,7 +611,7 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
                         </div>
                       </div>
                     </div>
-                    
+
                     {/* Key Product Features */}
                     <div className="mb-6">
                       <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Key Features</h3>
@@ -625,7 +624,7 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
                         ))}
                       </div>
                     </div>
-                    
+
                     {/* Technical Specs Grid */}
                     <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-200">
                       {dpp.metadata?.dimensions && (
@@ -687,7 +686,7 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
                       <div className="absolute right-0 top-full mt-2 w-80 bg-gray-900 text-white text-sm rounded-lg shadow-xl p-4 z-10">
                         <p className="font-semibold mb-2">What does this score mean?</p>
                         <p className="text-xs leading-relaxed">
-                          This score shows how complete and verifiable the product information is. 
+                          This score shows how complete and verifiable the product information is.
                           A higher score means more transparency and reliability.
                         </p>
                       </div>
@@ -701,12 +700,12 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
                       <div className="flex items-center gap-3 mb-3">
                         <CheckCircle className="w-6 h-6 text-blue-600" />
                         <span className="text-lg font-semibold text-gray-900">
-                          {trustScore.score >= 80 ? 'Fully Verified Product' : 
-                           trustScore.score >= 60 ? 'Verified Product' : 
-                           'Partially Verified'}
+                          {trustScore.score >= 80 ? 'Fully Verified Product' :
+                            trustScore.score >= 60 ? 'Verified Product' :
+                              'Partially Verified'}
                         </span>
                       </div>
-                      
+
                       {/* Progress Bar */}
                       <div className="mb-3">
                         <div className="flex items-center justify-between mb-1">
@@ -731,7 +730,7 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
                           <div className="text-xs text-gray-600">DID document validated and registered</div>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-start gap-3">
                         {trustScore.breakdown.credentials >= 20 ? (
                           <CheckCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
@@ -745,7 +744,7 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
                           </div>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-start gap-3">
                         {trustScore.breakdown.credentials >= 15 ? (
                           <CheckCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
@@ -759,7 +758,7 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
                           <div className="text-xs text-gray-600">Verifiable documents available</div>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-start gap-3">
                         {trustScore.breakdown.anchoring >= 20 ? (
                           <CheckCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
@@ -824,33 +823,33 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
                 metrics.aggregatedSustainability.avgRecycledContent > 0 ||
                 metrics.aggregatedSustainability.avgRecyclability > 0
               ) && (
-                <div className="bg-white rounded-lg border border-gray-200 p-6">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Aggregated Sustainability</h2>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <div className="text-sm text-gray-600">Total CO₂ Footprint</div>
-                      <div className="text-2xl font-bold text-gray-900">
-                        {metrics.aggregatedSustainability.totalCO2Footprint.toFixed(1)}
-                        <span className="text-sm text-gray-600 ml-1">kg</span>
+                  <div className="bg-white rounded-lg border border-gray-200 p-6">
+                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Aggregated Sustainability</h2>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <div className="text-sm text-gray-600">Total CO₂ Footprint</div>
+                        <div className="text-2xl font-bold text-gray-900">
+                          {metrics.aggregatedSustainability.totalCO2Footprint.toFixed(1)}
+                          <span className="text-sm text-gray-600 ml-1">kg</span>
+                        </div>
                       </div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600">Avg Recycled Content</div>
-                      <div className="text-2xl font-bold text-gray-900">
-                        {metrics.aggregatedSustainability.avgRecycledContent.toFixed(0)}
-                        <span className="text-sm text-gray-600 ml-1">%</span>
+                      <div>
+                        <div className="text-sm text-gray-600">Avg Recycled Content</div>
+                        <div className="text-2xl font-bold text-gray-900">
+                          {metrics.aggregatedSustainability.avgRecycledContent.toFixed(0)}
+                          <span className="text-sm text-gray-600 ml-1">%</span>
+                        </div>
                       </div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600">Avg Recyclability</div>
-                      <div className="text-2xl font-bold text-gray-900">
-                        {metrics.aggregatedSustainability.avgRecyclability.toFixed(0)}
-                        <span className="text-sm text-gray-600 ml-1">%</span>
+                      <div>
+                        <div className="text-sm text-gray-600">Avg Recyclability</div>
+                        <div className="text-2xl font-bold text-gray-900">
+                          {metrics.aggregatedSustainability.avgRecyclability.toFixed(0)}
+                          <span className="text-sm text-gray-600 ml-1">%</span>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
             </div>
 
             {/* Right column: Components/Parent (top) + Recent Events (bottom) */}
@@ -869,7 +868,7 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
                         const productType = childDpp.metadata?.productType || 'unknown';
                         const schema = getSchemaForType(productType);
                         const color = schema?.color || '#10B981';
-                        
+
                         console.log('Rendering child button:', childDpp.did, childDpp.model);
                         return (
                           <button
@@ -937,9 +936,9 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
                             {event.description ? String(event.description) : (event.attestation_type ? event.attestation_type.replace(/_/g, ' ') : 'Unknown Event')}
                           </span>
                           <span className="text-xs text-gray-500">
-                            {event.timestamp ? new Date(event.timestamp).toLocaleString('nl-NL', { 
-                              day: '2-digit', 
-                              month: '2-digit', 
+                            {event.timestamp ? new Date(event.timestamp).toLocaleString('nl-NL', {
+                              day: '2-digit',
+                              month: '2-digit',
                               year: 'numeric',
                               hour: '2-digit',
                               minute: '2-digit'
@@ -969,28 +968,28 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
                   const color = schema?.color || '#10B981';
                   const ComponentIcon = getComponentIcon(productType);
                   const keySpecs = getKeySpecs(childDpp);
-                  
+
                   return (
-                    <div 
-                      key={childDpp.id} 
-                      className="group border-2 rounded-xl overflow-hidden transition-all hover:shadow-lg" 
-                      style={{ 
+                    <div
+                      key={childDpp.id}
+                      className="group border-2 rounded-xl overflow-hidden transition-all hover:shadow-lg"
+                      style={{
                         borderColor: `${color}40`,
                         backgroundColor: 'white'
                       }}
                     >
                       {/* Visual Header with Icon */}
-                      <div 
+                      <div
                         className="h-32 flex items-center justify-center relative overflow-hidden"
-                        style={{ 
+                        style={{
                           background: `linear-gradient(135deg, ${color}15 0%, ${color}05 100%)`
                         }}
                       >
-                        <ComponentIcon 
-                          className="w-16 h-16 transition-transform group-hover:scale-110" 
+                        <ComponentIcon
+                          className="w-16 h-16 transition-transform group-hover:scale-110"
                           style={{ color, opacity: 0.6 }}
                         />
-                        <div 
+                        <div
                           className="absolute top-3 right-3 px-2 py-1 rounded-full text-xs font-semibold"
                           style={{
                             backgroundColor: `${color}20`,
@@ -1000,18 +999,18 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
                           {schema?.name || 'Component'}
                         </div>
                       </div>
-                      
+
                       {/* Content */}
                       <div className="p-4">
                         <h3 className="font-bold text-gray-900 text-lg mb-2">{childDpp.model}</h3>
-                        
+
                         {/* Key Specs */}
                         {keySpecs.length > 0 && (
                           <div className="mb-3 space-y-1.5">
                             {keySpecs.map((spec, idx) => (
                               <div key={idx} className="flex items-center gap-2 text-sm">
-                                <div 
-                                  className="w-1.5 h-1.5 rounded-full" 
+                                <div
+                                  className="w-1.5 h-1.5 rounded-full"
                                   style={{ backgroundColor: color }}
                                 ></div>
                                 <span className="text-gray-700 font-medium">{spec}</span>
@@ -1019,19 +1018,19 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
                             ))}
                           </div>
                         )}
-                        
+
                         {/* DID */}
                         <div className="mb-3 p-2 bg-gray-50 rounded border border-gray-200">
                           <div className="text-xs text-gray-500 mb-0.5">DID</div>
                           <p className="text-xs text-gray-700 font-mono truncate">{childDpp.did}</p>
                         </div>
-                        
+
                         {/* Meta Info */}
                         <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
                           <span className="capitalize">{childDpp.lifecycle_status}</span>
                           <span>v{childDpp.version || '1.0'}</span>
                         </div>
-                        
+
                         {/* Action Button */}
                         <button
                           onClick={() => onNavigate(childDpp.did)}
@@ -1054,15 +1053,15 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
 
         {activeTab === 'lifecycle' && (
           <div className="space-y-6">
-            <WindowLifecycleVisualization 
-              dpp={dpp} 
-              events={data.events || []} 
+            <WindowLifecycleVisualization
+              dpp={dpp}
+              events={data.events || []}
             />
           </div>
         )}
 
         {activeTab === 'did-operations' && (
-          <DIDOperationsPanel 
+          <DIDOperationsPanel
             dpp={dpp}
             onUpdate={loadData}
           />
@@ -1105,8 +1104,8 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
                 </div>
               </div>
             )}
-            
-            <LifecycleControls 
+
+            <LifecycleControls
               dppId={dpp.id}
               did={did}
               onEventCreated={handleEventCreated}
@@ -1117,7 +1116,7 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
       </div>
 
       {showQR && <QRCodeDisplay did={did} onClose={() => setShowQR(false)} />}
-      
+
       {editingDoP && data?.dpp && (
         <DoPerformanceEditor
           initialData={getDoP(data.dpp)}

@@ -23,6 +23,8 @@ function AppContent() {
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   // Always show intro on reload
   const [showIntro, setShowIntro] = useState(true);
+  // Track where the user came from when viewing a DPP
+  const [returnView, setReturnView] = useState<View>('dashboard');
 
   const handleContinueFromIntro = () => {
     setShowIntro(false);
@@ -31,16 +33,16 @@ function AppContent() {
   useEffect(() => {
     // Auto-initialize data on first load
     let cancelled = false;
-    
+
     const initData = async () => {
       setIsInitializing(true);
-      
+
       // Check if data already exists
       const existing = await enhancedDB.getAllDPPs();
-      
+
       // Prevent double initialization in StrictMode
       if (cancelled) return;
-      
+
       if (existing.length === 0) {
         console.log('No data found, generating test data...');
         try {
@@ -54,20 +56,35 @@ function AppContent() {
       } else {
         console.log('Existing data found:', existing.length, 'DPPs');
       }
-      
+
       setIsInitializing(false);
     };
-    
+
     initData();
-    
+
     return () => {
       cancelled = true;
     };
   }, []);
 
-  function handleSelectDPP(did: string) {
-    console.log('handleSelectDPP called with DID:', did);
+  // Handle role switching - reset view if on manufacturer-wallet and switching to non-manufacturer role
+  useEffect(() => {
+    const isManufacturer = currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B';
+    if (view === 'manufacturer-wallet' && !isManufacturer) {
+      console.log('Role switched to non-manufacturer, resetting view to dashboard');
+      setView('dashboard');
+      setReturnView('dashboard');
+    }
+  }, [currentRole, view]);
+
+  function handleSelectDPP(did: string, fromView?: View) {
+    console.log('handleSelectDPP called with DID:', did, 'from view:', fromView);
     setCurrentDID(did);
+
+    // Track where we came from
+    if (fromView) {
+      setReturnView(fromView);
+    }
 
     enhancedDB.getDPPByDID(did).then((dpp) => {
       console.log('DPP found:', dpp);
@@ -84,14 +101,15 @@ function AppContent() {
   }
 
   function handleBack() {
-    setView('dashboard');
+    console.log('handleBack called, returning to:', returnView);
+    setView(returnView);
     setCurrentDID('');
   }
-  
+
   function handleCreateDPP() {
     setView('create-dpp');
   }
-  
+
   function handleDPPCreated() {
     setView('dashboard');
   }
@@ -122,7 +140,7 @@ function AppContent() {
             </span>
             <ChevronDown className="w-4 h-4" />
           </button>
-          
+
           {showRoleDropdown && (
             <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
               {roles.map((role) => (
@@ -132,9 +150,8 @@ function AppContent() {
                     setRole(role.value);
                     setShowRoleDropdown(false);
                   }}
-                  className={`w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors ${
-                    currentRole === role.value ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'
-                  }`}
+                  className={`w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors ${currentRole === role.value ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'
+                    }`}
                 >
                   {role.label}
                 </button>
@@ -142,7 +159,7 @@ function AppContent() {
             </div>
           )}
         </div>
-        
+
         {/* Help button */}
         <button
           onClick={() => setShowIntro(true)}
@@ -156,11 +173,10 @@ function AppContent() {
         {(currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B') && (
           <button
             onClick={() => setView('manufacturer-wallet')}
-            className={`flex items-center justify-center w-10 h-10 border border-gray-300 rounded-lg shadow-sm transition-colors ${
-              view === 'manufacturer-wallet' 
-                ? 'bg-blue-50 border-blue-200 text-blue-600' 
-                : 'bg-white hover:bg-gray-50 text-gray-600'
-            }`}
+            className={`flex items-center justify-center w-10 h-10 border border-gray-300 rounded-lg shadow-sm transition-colors ${view === 'manufacturer-wallet'
+              ? 'bg-blue-50 border-blue-200 text-blue-600'
+              : 'bg-white hover:bg-gray-50 text-gray-600'
+              }`}
             title="Open Manufacturer Wallet"
           >
             <Wallet className="w-5 h-5" />
@@ -181,52 +197,62 @@ function AppContent() {
           </div>
         </div>
       )}
-      
+
       {!showIntro && !isInitializing && (
         <>
           {view === 'dashboard' && currentRole === 'Witness' && (
             <WitnessDashboard />
           )}
-          
+
           {view === 'dashboard' && currentRole === 'Watcher' && (
             <WatcherDashboard />
           )}
-          
+
           {view === 'dashboard' && currentRole === 'Resolver' && (
             <ResolverDashboard />
           )}
 
           {view === 'manufacturer-wallet' && (currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B') && (
-            <ManufacturerDashboard 
-              onNavigate={handleSelectDPP} 
+            <ManufacturerDashboard
+              onNavigate={handleSelectDPP}
               onCreateDPP={handleCreateDPP}
               onBack={handleBack}
             />
           )}
-          
+
           {view === 'dashboard' && currentRole !== 'Witness' && currentRole !== 'Watcher' && currentRole !== 'Resolver' && (
-            <EnhancedDashboard 
-              onNavigate={handleSelectDPP} 
+            <EnhancedDashboard
+              onNavigate={handleSelectDPP}
               onCreateDPP={(currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B') ? handleCreateDPP : undefined}
             />
           )}
-          
+
           {view === 'create-dpp' && (
             <>
-              <EnhancedDashboard 
-                onNavigate={handleSelectDPP} 
+              <EnhancedDashboard
+                onNavigate={handleSelectDPP}
                 onCreateDPP={(currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B') ? handleCreateDPP : undefined}
               />
               <CreateDPPForm onClose={handleBack} onComplete={handleDPPCreated} />
             </>
           )}
-          
+
           {view === 'dpp-main' && (
-            <MainDPPView did={currentDID} onBack={handleBack} onNavigate={handleSelectDPP} />
+            <MainDPPView
+              did={currentDID}
+              onBack={handleBack}
+              onNavigate={(did) => handleSelectDPP(did, returnView)}
+              backLabel={returnView === 'manufacturer-wallet' ? 'Back to Wallet' : 'Back to Dashboard'}
+            />
           )}
 
           {view === 'dpp-component' && (
-            <MainDPPView did={currentDID} onBack={handleBack} onNavigate={handleSelectDPP} />
+            <MainDPPView
+              did={currentDID}
+              onBack={handleBack}
+              onNavigate={(did) => handleSelectDPP(did, returnView)}
+              backLabel={returnView === 'manufacturer-wallet' ? 'Back to Wallet' : 'Back to Dashboard'}
+            />
           )}
         </>
       )}
