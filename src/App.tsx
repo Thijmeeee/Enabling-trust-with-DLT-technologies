@@ -217,6 +217,7 @@ function AppContent() {
               onNavigate={handleSelectDPP}
               onCreateDPP={handleCreateDPP}
               onBack={handleBack}
+              onClose={() => { setView('dashboard'); setReturnView('dashboard'); setCurrentDID(''); }}
             />
           )}
 

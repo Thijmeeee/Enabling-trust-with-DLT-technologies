@@ -19,12 +19,13 @@ import type { DPP } from '../../lib/data/localData';
 import { useRole } from '../../lib/utils/roleContext';
 
 interface ManufacturerDashboardProps {
-  onNavigate: (did: string) => void;
+  onNavigate: (did: string, fromView?: string) => void;
   onCreateDPP?: () => void;
   onBack: () => void;
+  onClose?: () => void;
 }
 
-export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP }: ManufacturerDashboardProps) {
+export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP, onClose }: ManufacturerDashboardProps) {
   const { currentRoleDID } = useRole();
   const [products, setProducts] = useState<DPP[]>([]);
   const [loading, setLoading] = useState(true);
@@ -142,7 +143,7 @@ export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP 
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-3">
               <button 
-                onClick={onBack}
+                onClick={onClose ? onClose : onBack}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors mr-2"
                 title="Back to Dashboard"
               >
@@ -329,7 +330,7 @@ export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP 
                     <div key={dpp.id} className="group relative">
                       <DPPCard 
                         dpp={dpp} 
-                        onClick={() => onNavigate(dpp.did)} 
+                        onClick={() => onNavigate(dpp.did, 'manufacturer-wallet')} 
                         viewMode="list" 
                       />
                     </div>

@@ -136,7 +136,7 @@ function PlayersStep() {
   return (
     <div className="max-w-4xl mx-auto">
       <div className="text-center mb-10">
-        <h2 className="text-3xl font-bold text-gray-900 mb-4">The Players</h2>
+        <h2 className="text-3xl font-bold text-gray-900 mb-4">Stakeholders</h2>
         <p className="text-xl text-gray-600">Who is involved in the product lifecycle?</p>
       </div>
 
