@@ -409,26 +409,12 @@ export async function importDPPsFromJSON(jsonData: string): Promise<{ success: n
 export async function generateMixedTestData(): Promise<void> {
   console.log('Generating mixed test data...');
   
-  // Windows with full components
+  // Windows with full components (50 windows × 3 = 150 DPPs total)
   await generateBulkTestData({
     productType: 'window',
     count: 50,
     generateComponents: true,
   });
   
-  // Standalone glass panels
-  await generateBulkTestData({
-    productType: 'glass',
-    count: 20,
-    generateComponents: false,
-  });
-  
-  // Standalone frames
-  await generateBulkTestData({
-    productType: 'frame',
-    count: 20,
-    generateComponents: false,
-  });
-  
-  console.log('Mixed test data generated!');
+  console.log('Mixed test data generated! (150 DPPs: 50 windows + 50 glass + 50 frames)');
 }
