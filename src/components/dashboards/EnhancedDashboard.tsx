@@ -106,7 +106,7 @@ export default function EnhancedDashboard({
             <div>
               <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
                 <Package className="w-8 h-8 text-blue-600" />
-                Enhanced DPP Dashboard
+                 Product DPP Dashboard
               </h1>
             </div>
             
