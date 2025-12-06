@@ -20,20 +20,24 @@ export default function WindowLifecycleVisualization({ dpp, events }: {
 }) {
   const [expandedStage, setExpandedStage] = useState<string | null>(null);
   
-  // Calculate progress
+  // Check if product is at end of life (supports both 'disposed' and 'end_of_life')
+  const isEndOfLife = dpp.lifecycle_status === 'disposed' || dpp.lifecycle_status === 'end_of_life';
+
+  // Calculate progress - if end of life, all 5 stages are complete
   const completedStages = () => {
+    if (isEndOfLife) return 5; // All stages completed when recycled
+    
     let count = 0;
     if (dpp.created_at) count++; // Manufacturing
     if (events.some((e: any) => e.event_type === 'assembly')) count++; // Assembly
     if (events.some((e: any) => e.event_type === 'installation')) count++; // Installation
     if (events.some((e: any) => e.event_type === 'maintenance')) count++; // Maintenance
-    if (dpp.lifecycle_status === 'disposed') count++; // End of Life
     return count;
   };
 
   // Determine current lifecycle stage based on DPP status and events
   const determineCurrentStage = () => {
-    if (dpp.lifecycle_status === 'disposed') return 'end-of-life';
+    if (isEndOfLife) return 'end-of-life';
     if (events.some((e: any) => e.event_type === 'maintenance')) return 'maintenance';
     if (events.some((e: any) => e.event_type === 'installation')) return 'installation';
     if (events.some((e: any) => e.event_type === 'assembly')) return 'assembly';
@@ -65,7 +69,7 @@ export default function WindowLifecycleVisualization({ dpp, events }: {
       id: 'assembly',
       title: 'Assembly',
       description: 'Window assembled from components',
-      status: currentStage === 'manufacturing' ? 'current' : 'completed',
+      status: isEndOfLife ? 'completed' : (currentStage === 'manufacturing' ? 'current' : 'completed'),
       icon: Wrench,
       didEvents: ['Assembly Verified', 'Quality Check', 'Witness Attestation'],
       timestamp: events.find((e: any) => e.event_type === 'assembly')?.timestamp || dpp.created_at,
@@ -82,8 +86,9 @@ export default function WindowLifecycleVisualization({ dpp, events }: {
       id: 'installation',
       title: 'Installation',
       description: 'Window installed at location',
-      status: currentStage === 'manufacturing' || currentStage === 'assembly' ? 'future' : 
-              currentStage === 'installation' ? 'current' : 'completed',
+      status: isEndOfLife ? 'completed' : 
+              (currentStage === 'manufacturing' || currentStage === 'assembly' ? 'future' : 
+              currentStage === 'installation' ? 'current' : 'completed'),
       icon: Home,
       didEvents: ['Location Updated', 'Custodian Changed', 'Installation Verified'],
       timestamp: events.find((e: any) => e.event_type === 'installation')?.timestamp,
@@ -102,7 +107,7 @@ export default function WindowLifecycleVisualization({ dpp, events }: {
       id: 'maintenance',
       title: 'Operation & Maintenance',
       description: 'Active use with maintenance tracking',
-      status: currentStage === 'end-of-life' ? 'completed' : 
+      status: isEndOfLife ? 'completed' : 
               currentStage === 'maintenance' ? 'current' : 
               currentStage === 'installation' || currentStage === 'manufacturing' || currentStage === 'assembly' ? 'future' : 'current',
       icon: Wrench,
@@ -122,13 +127,13 @@ export default function WindowLifecycleVisualization({ dpp, events }: {
       id: 'end-of-life',
       title: 'End of Life & Recycling',
       description: 'Decommissioning and material recovery',
-      status: dpp.lifecycle_status === 'disposed' ? 'completed' : 'future',
+      status: isEndOfLife ? 'completed' : 'future',
       icon: Recycle,
       didEvents: ['Decommission Recorded', 'Materials Catalogued', 'Recycling Verified'],
-      timestamp: dpp.lifecycle_status === 'disposed' ? dpp.updated_at : undefined,
+      timestamp: isEndOfLife ? dpp.updated_at : undefined,
       owner: dpp.owner,
       custodian: 'Recycling Facility',
-      details: dpp.lifecycle_status === 'disposed' ? {
+      details: isEndOfLife ? {
         decommissionDate: dpp.updated_at,
         materials: {
           glass: dpp.metadata?.glass?.material || 'Glass',

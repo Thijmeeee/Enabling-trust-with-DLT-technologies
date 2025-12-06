@@ -7,13 +7,18 @@ import WitnessDashboard from './components/dashboards/WitnessDashboard';
 import WatcherDashboard from './components/dashboards/WatcherDashboard';
 import ResolverDashboard from './components/dashboards/ResolverDashboard';
 import ManufacturerDashboard from './components/dashboards/ManufacturerDashboard';
+import ManufacturerSimpleDashboard from './components/dashboards/ManufacturerSimpleDashboard';
+import SupervisorDashboard from './components/dashboards/SupervisorDashboard';
+import RecyclerDashboard from './components/dashboards/RecyclerDashboard';
+import ConsumerView from './components/dashboards/ConsumerView';
+import WindowRegistrationWizard from './components/dashboards/WindowRegistrationWizard';
 import IntroductionPage from './components/IntroductionPage';
 import { RoleProvider, useRole, type UserRole } from './lib/utils/roleContext';
 import { enhancedDB } from './lib/data/enhancedDataStore';
 import { generateMixedTestData } from './lib/operations/bulkOperations';
-import { User, ChevronDown, HelpCircle, Wallet } from 'lucide-react';
+import { User, ChevronDown, HelpCircle, Wallet, ToggleLeft, ToggleRight } from 'lucide-react';
 
-type View = 'dashboard' | 'dpp-main' | 'dpp-component' | 'create-dpp' | 'manufacturer-wallet';
+type View = 'dashboard' | 'dpp-main' | 'dpp-component' | 'create-dpp' | 'manufacturer-wallet' | 'register-wizard';
 
 function AppContent() {
   const { currentRole, setRole } = useRole();
@@ -25,6 +30,8 @@ function AppContent() {
   const [showIntro, setShowIntro] = useState(true);
   // Track where the user came from when viewing a DPP
   const [returnView, setReturnView] = useState<View>('dashboard');
+  // Dashboard mode: 'role' = simplified role-based view, 'classic' = full enhanced dashboard
+  const [dashboardMode, setDashboardMode] = useState<'role' | 'classic'>('role');
 
   const handleContinueFromIntro = () => {
     setShowIntro(false);
@@ -115,11 +122,11 @@ function AppContent() {
   }
 
   const roles = [
-    { value: 'Operator' as const, label: 'Operator' },
     { value: 'Manufacturer A' as const, label: 'Manufacturer A' },
     { value: 'Manufacturer B' as const, label: 'Manufacturer B' },
-    { value: 'Recycler' as const, label: 'Recycler' },
     { value: 'Supervisor' as const, label: 'Supervisor' },
+    { value: 'Recycler' as const, label: 'Recycler' },
+    { value: 'Consumer' as const, label: 'Consumer' },
     { value: 'Witness' as const, label: 'Witness' },
     { value: 'Watcher' as const, label: 'Watcher' },
     { value: 'Resolver' as const, label: 'Resolver' },
@@ -169,6 +176,26 @@ function AppContent() {
           <HelpCircle className="w-5 h-5 text-gray-600" />
         </button>
 
+        {/* Dashboard Mode Toggle */}
+        <button
+          onClick={() => setDashboardMode(dashboardMode === 'role' ? 'classic' : 'role')}
+          className={`flex items-center gap-2 px-3 py-2 border rounded-lg shadow-sm transition-colors ${
+            dashboardMode === 'classic' 
+              ? 'bg-purple-50 border-purple-200 text-purple-700' 
+              : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
+          }`}
+          title={dashboardMode === 'role' ? 'Switch to Classic View' : 'Switch to Role View'}
+        >
+          {dashboardMode === 'role' ? (
+            <ToggleLeft className="w-5 h-5" />
+          ) : (
+            <ToggleRight className="w-5 h-5" />
+          )}
+          <span className="text-xs font-medium">
+            {dashboardMode === 'role' ? 'Role' : 'Classic'}
+          </span>
+        </button>
+
         {/* Manufacturer Wallet Button */}
         {(currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B') && (
           <button
@@ -200,6 +227,15 @@ function AppContent() {
 
       {!showIntro && !isInitializing && (
         <>
+          {/* Registration Wizard */}
+          {view === 'register-wizard' && (
+            <WindowRegistrationWizard
+              onClose={() => setView('dashboard')}
+              onComplete={() => setView('dashboard')}
+            />
+          )}
+
+          {/* Specialized Role Dashboards (always shown regardless of mode) */}
           {view === 'dashboard' && currentRole === 'Witness' && (
             <WitnessDashboard />
           )}
@@ -212,6 +248,7 @@ function AppContent() {
             <ResolverDashboard />
           )}
 
+          {/* Manufacturer Wallet */}
           {view === 'manufacturer-wallet' && (currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B') && (
             <ManufacturerDashboard
               onNavigate={handleSelectDPP}
@@ -221,7 +258,39 @@ function AppContent() {
             />
           )}
 
-          {view === 'dashboard' && currentRole !== 'Witness' && currentRole !== 'Watcher' && currentRole !== 'Resolver' && (
+          {/* Role-Based Dashboards (when dashboardMode === 'role') */}
+          {view === 'dashboard' && dashboardMode === 'role' && (currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B') && (
+            <ManufacturerSimpleDashboard
+              onRegisterWindow={() => setView('register-wizard')}
+              onNavigate={handleSelectDPP}
+            />
+          )}
+
+          {view === 'dashboard' && dashboardMode === 'role' && currentRole === 'Supervisor' && (
+            <SupervisorDashboard
+              onNavigate={handleSelectDPP}
+            />
+          )}
+
+          {view === 'dashboard' && dashboardMode === 'role' && currentRole === 'Recycler' && (
+            <RecyclerDashboard
+              onNavigate={handleSelectDPP}
+            />
+          )}
+
+          {view === 'dashboard' && dashboardMode === 'role' && currentRole === 'Consumer' && (
+            <ConsumerView
+              onNavigate={handleSelectDPP}
+            />
+          )}
+
+          {/* Classic Dashboard (when dashboardMode === 'classic') */}
+          {view === 'dashboard' && (
+            dashboardMode === 'classic' && 
+            currentRole !== 'Witness' && 
+            currentRole !== 'Watcher' && 
+            currentRole !== 'Resolver'
+          ) && (
             <EnhancedDashboard
               onNavigate={handleSelectDPP}
               onCreateDPP={(currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B') ? handleCreateDPP : undefined}

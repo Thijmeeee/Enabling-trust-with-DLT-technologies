@@ -307,7 +307,7 @@ export default function WatcherDashboard() {
     });
 
     // Check lifecycle status
-    if (dpp.lifecycle_status === 'disposed' || dpp.lifecycle_status === 'recycled') {
+    if (dpp.lifecycle_status === 'disposed' || dpp.lifecycle_status === 'recycled' || dpp.lifecycle_status === 'end_of_life') {
       score -= 5;
     }
 

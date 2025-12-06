@@ -936,7 +936,7 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                             {event.description ? String(event.description) : (event.attestation_type ? event.attestation_type.replace(/_/g, ' ') : 'Unknown Event')}
                           </span>
                           <span className="text-xs text-gray-500">
-                            {event.timestamp ? new Date(event.timestamp).toLocaleString('nl-NL', {
+                            {event.timestamp ? new Date(event.timestamp).toLocaleString('en-US', {
                               day: '2-digit',
                               month: '2-digit',
                               year: 'numeric',
