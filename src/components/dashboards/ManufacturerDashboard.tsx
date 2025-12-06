@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { 
-  Search, 
-  Package, 
-  Box, 
-  RefreshCw, 
+import {
+  Search,
+  Package,
+  Box,
+  RefreshCw,
   Wallet,
   TrendingUp,
   ArrowLeft,
@@ -46,16 +46,16 @@ export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP,
     setLoading(true);
     // Fetch all DPPs and filter client-side to ensure we catch all manufacturer items
     const allDpps = await enhancedDB.getAllDPPs();
-    
+
     // Filter for items owned by the current user
-    const myProducts = allDpps.filter(dpp => 
+    const myProducts = allDpps.filter(dpp =>
       dpp.owner === currentRoleDID || dpp.custodian === currentRoleDID
     );
-    
+
     // Calculate stats
     const active = myProducts.filter(p => p.lifecycle_status === 'active').length;
     const recycled = myProducts.filter(p => p.lifecycle_status === 'recycled').length;
-    
+
     setProducts(myProducts);
     setStats({
       total: myProducts.length,
@@ -78,7 +78,7 @@ export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP,
         // generateMixedTestData doesn't clear, but we can manually delete the DB or 
         // just append. Wait, we need to clear.
         // Let's try to delete the database using indexedDB API directly as a fallback
-        
+
         const req = indexedDB.deleteDatabase('dpp-enhanced-db');
         req.onsuccess = async () => {
           console.log('Database deleted successfully');
@@ -106,24 +106,24 @@ export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP,
   const filteredProducts = products.filter(p => {
     const matchesSearch = p.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.did.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     const type = p.metadata.productType as string || 'Other';
     const matchesType = selectedTypes.length === 0 || selectedTypes.includes(type);
-    
+
     const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(p.lifecycle_status);
-    
+
     return matchesSearch && matchesType && matchesStatus;
   });
 
   const toggleType = (type: string) => {
-    setSelectedTypes(prev => 
+    setSelectedTypes(prev =>
       prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
     );
     setCurrentPage(1);
   };
 
   const toggleStatus = (status: string) => {
-    setSelectedStatuses(prev => 
+    setSelectedStatuses(prev =>
       prev.includes(status) ? prev.filter(s => s !== status) : [...prev, status]
     );
     setCurrentPage(1);
@@ -141,8 +141,8 @@ export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP,
       <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-3">
-              <button 
+            <div className="flex items-center gap-3 ml-72">
+              <button
                 onClick={onClose ? onClose : onBack}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors mr-2"
                 title="Back to Dashboard"
@@ -157,7 +157,7 @@ export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP,
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <button 
+              <button
                 onClick={handleResetData}
                 className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
                 title="Reset all data and regenerate with new DIDs"
@@ -166,7 +166,7 @@ export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP,
                 <span className="hidden sm:inline">Reset Data</span>
               </button>
               {onCreateDPP && (
-                <button 
+                <button
                   onClick={onCreateDPP}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
                 >
@@ -218,11 +218,11 @@ export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP,
 
         {/* Main Content Layout */}
         <div className="flex flex-col lg:flex-row gap-8">
-          
+
           {/* Sidebar Filters */}
           <div className="w-full lg:w-64 flex-shrink-0 space-y-8">
             {/* Search (Mobile only, or keep in sidebar?) - Keeping main search above, this is filter sidebar */}
-            
+
             <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
               <div className="flex items-center gap-2 mb-4 text-gray-900 font-semibold">
                 <Filter className="w-4 h-4" />
@@ -235,15 +235,14 @@ export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP,
                 <div className="space-y-2">
                   {availableTypes.map(type => (
                     <label key={type} className="flex items-center gap-3 cursor-pointer group">
-                      <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
-                        selectedTypes.includes(type) 
-                          ? 'bg-blue-600 border-blue-600 text-white' 
+                      <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${selectedTypes.includes(type)
+                          ? 'bg-blue-600 border-blue-600 text-white'
                           : 'border-gray-300 group-hover:border-blue-400 bg-white'
-                      }`}>
+                        }`}>
                         {selectedTypes.includes(type) && <Check className="w-3 h-3" />}
                       </div>
-                      <input 
-                        type="checkbox" 
+                      <input
+                        type="checkbox"
                         className="hidden"
                         checked={selectedTypes.includes(type)}
                         onChange={() => toggleType(type)}
@@ -263,15 +262,14 @@ export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP,
                 <div className="space-y-2">
                   {availableStatuses.map(status => (
                     <label key={status} className="flex items-center gap-3 cursor-pointer group">
-                      <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
-                        selectedStatuses.includes(status) 
-                          ? 'bg-blue-600 border-blue-600 text-white' 
+                      <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${selectedStatuses.includes(status)
+                          ? 'bg-blue-600 border-blue-600 text-white'
                           : 'border-gray-300 group-hover:border-blue-400 bg-white'
-                      }`}>
+                        }`}>
                         {selectedStatuses.includes(status) && <Check className="w-3 h-3" />}
                       </div>
-                      <input 
-                        type="checkbox" 
+                      <input
+                        type="checkbox"
                         className="hidden"
                         checked={selectedStatuses.includes(status)}
                         onChange={() => toggleStatus(status)}
@@ -328,10 +326,10 @@ export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP,
                 <div className="flex flex-col gap-3">
                   {paginatedProducts.map((dpp) => (
                     <div key={dpp.id} className="group relative">
-                      <DPPCard 
-                        dpp={dpp} 
-                        onClick={() => onNavigate(dpp.did, 'manufacturer-wallet')} 
-                        viewMode="list" 
+                      <DPPCard
+                        dpp={dpp}
+                        onClick={() => onNavigate(dpp.did, 'manufacturer-wallet')}
+                        viewMode="list"
                       />
                     </div>
                   ))}
