@@ -33,7 +33,7 @@ graph TD
         FE[React Frontend]
     end
 
-    subgraph "Service Layer (Railway Container)"
+    subgraph "Service Layer Railway Container"
         API[Express API Server]
         DB[(SQLite + Volume)]
         Batch[Batch Processor]
@@ -41,7 +41,7 @@ graph TD
         Crypto[Signature Verifier]
     end
 
-    subgraph "Trust Layer (Ethereum Sepolia)"
+    subgraph "Trust Layer Ethereum Sepolia"
         Alchemy[Alchemy RPC]
         Contract[WitnessAnchorRegistry]
     end
@@ -51,13 +51,13 @@ graph TD
     FE -->|2. Sign with Ed25519| FE
     FE -->|3. POST /api/events| API
     API -->|4. Verify Signature| Crypto
-    Crypto -->|5. Valid?| API
+    Crypto -->|5. Valid| API
     API -->|6. Store Event| DB
     
     %% Anchor Flow
     Batch -->|7. Query Pending| DB
     Batch -->|8. Build Merkle Tree| Batch
-    Batch -->|9. anchor(root)| Alchemy
+    Batch -->|9. anchor root| Alchemy
     Alchemy -->|10. Transaction| Contract
     Batch -->|11. Store Proofs| DB
 
