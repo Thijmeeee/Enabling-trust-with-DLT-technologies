@@ -1662,7 +1662,7 @@ generateDemoData().catch(console.error);
 
 ## 9. Pre-Implementation Checklist: Manual Setup Required
 
-**⚠️ IMPORTANT**: Before you begin implementation or hand this plan to Claude Opus 4.5, you must complete the following manual setup steps. These require external account creation and credential management that cannot be automated.
+**⚠️ IMPORTANT**: You must complete the following manual setup steps, before coding this out. These require external account creation and credential management that cannot be automated.
 
 ### 9.1 Create Alchemy Account & Get RPC URL
 
