@@ -86,50 +86,44 @@ graph TD
 ## 2. Project Structure
 
 ```
-dpp-production/
-├── frontend/                    # React application
+Enabling-trust-with-DLT-technologies/  # Root (Current Frontend)
+├── src/                         # Existing React app
+│   ├── lib/
+│   │   └── api/
+│   │       └── client.ts        # [NEW] API client
+│   ├── components/
+│   │   ├── TrustValidationTab.tsx
+│   │   ├── DIDEventsLog.tsx
+│   │   └── DIDOperationsPanel.tsx
+│   └── utils/
+│       └── merkle.ts            # [NEW] Client-side verification
+├── public/                      # Existing static assets
+├── backend/                     # [NEW] Node.js API
 │   ├── src/
-│   │   ├── lib/
-│   │   │   └── api/
-│   │   │       └── client.ts    # API client with React Query
-│   │   ├── components/
-│   │   │   ├── TrustValidationTab.tsx  # Proof verification UI
-│   │   │   ├── DIDEventsLog.tsx        # Event list with anchored status
-│   │   │   └── DIDOperationsPanel.tsx  # DID log viewer
-│   │   └── utils/
-│   │       └── merkle.ts        # Client-side proof verification
-│   ├── package.json
-│   └── vite.config.ts
-│
-├── backend/                     # Node.js API
-│   ├── src/
-│   │   ├── server.ts            # Express app with CORS
-│   │   ├── database.ts          # SQLite with persistence
-│   │   ├── did-resolver.ts      # did:webvh compliant resolver
-│   │   ├── batch-processor.ts   # Merkle tree & anchoring
-│   │   ├── crypto.ts            # Ed25519 signature verification
-│   │   └── contract-abi.ts      # Smart contract ABI
+│   │   ├── server.ts
+│   │   ├── database.ts
+│   │   ├── did-resolver.ts
+│   │   ├── batch-processor.ts
+│   │   ├── crypto.ts
+│   │   └── contract-abi.ts
 │   ├── package.json
 │   └── tsconfig.json
-│
-├── contracts/                   # Smart Contracts
+├── contracts/                   # [NEW] Smart Contracts
 │   ├── contracts/
 │   │   └── WitnessAnchorRegistry.sol
 │   ├── scripts/
 │   │   └── deploy.ts
 │   ├── test/
-│   │   └── WitnessAnchorRegistry.test.ts
-│   ├── hardhat.config.ts
-│   └── package.json
-│
-├── scripts/                     # Utilities
-│   └── generate-demo-data.ts
-│
-├── deployment/                  # Deployment configs
+│   └── hardhat.config.ts
+├── deployment/                  # [NEW] Deployment configs
 │   ├── Dockerfile
 │   ├── railway.json
 │   └── .env.example
-│
+├── scripts/                     # [NEW] Utilities
+│   └── generate-demo-data.ts
+├── index.html                   # Existing file
+├── package.json                 # Existing frontend package.json
+├── vite.config.ts               # Existing vite config
 └── README.md
 ```
 
