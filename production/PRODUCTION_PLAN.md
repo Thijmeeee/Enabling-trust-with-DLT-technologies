@@ -28,44 +28,44 @@ This document provides a **complete, production-ready implementation plan** for 
 
 ```mermaid
 graph TD
-    subgraph "User Layer"
-        User([User / Manufacturer])
-        FE[React Frontend]
+    %% --- User Layer ---
+    subgraph Users ["Users"]
+        Manufacturer([Manufacturer])
+        Verifier([Customer / Verifier])
     end
 
-    subgraph "Service Layer Railway Container"
-        API[Express API Server]
-        DB[(SQLite + Volume)]
-        Batch[Batch Processor]
-        Resolver[DID Resolver]
-        Crypto[Signature Verifier]
+    %% --- Production Layer ---
+    subgraph Production ["Production Environment (Railway)"]
+        ReactSPA[("Frontend App (React)")]
+        NodeAPI[("Backend API (Node.js)")]
+        SQLite[("Database (SQLite)")]
     end
 
-    subgraph "Trust Layer Ethereum Sepolia"
-        Alchemy[Alchemy RPC]
-        Contract[WitnessAnchorRegistry]
+    %% --- Storage Layer ---
+    subgraph Storage ["Storage & Distribution"]
+        BlobStorage[("Identity Storage (S3/Blob)")]
+        CDN[("CDN (CloudFront/Front Door)")]
     end
 
-    %% Write Flow
-    User -->|1. Create Event| FE
-    FE -->|2. Sign with Ed25519| FE
-    FE -->|3. POST /api/events| API
-    API -->|4. Verify Signature| Crypto
-    Crypto -->|5. Valid| API
-    API -->|6. Store Event| DB
+    %% --- Trust Layer ---
+    subgraph Blockchain ["Trust Layer"]
+        Alchemy[("Alchemy Node")]
+        Sepolia[("Ethereum Sepolia")]
+    end
+
+    %% --- Relations ---
+    Manufacturer -->|1. Registers Event| ReactSPA
+    Verifier -->|Scans QR| ReactSPA
+
+    ReactSPA -->|2. Sends Data| NodeAPI
+    NodeAPI -->|3. Stores Data| SQLite
     
-    %% Anchor Flow
-    Batch -->|7. Query Pending| DB
-    Batch -->|8. Build Merkle Tree| Batch
-    Batch -->|9. anchor root| Alchemy
-    Alchemy -->|10. Transaction| Contract
-    Batch -->|11. Store Proofs| DB
+    NodeAPI -->|4. Uploads Logs| BlobStorage
+    BlobStorage -.->|Cache| CDN
+    Verifier -.->|5. Verifies DID| CDN
 
-    %% Read/Verify Flow
-    FE -.->|12. GET /api/events| API
-    API -.->|13. Fetch| DB
-    FE -.->|14. Verify Proof| FE
-    FE -.->|15. Check On-Chain| Alchemy
+    NodeAPI -->|6. Sends Batch| Alchemy
+    Alchemy -->|7. Anchors| Sepolia
 ```
 
 ### 1.3 Data Flow: Event Lifecycle
