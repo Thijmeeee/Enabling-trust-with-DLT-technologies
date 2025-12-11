@@ -22,7 +22,7 @@ This document provides a **complete, production-ready implementation plan** for 
 | **Backend** | Node.js + Express | Efficiently handles thousands of events via "Batch Anchoring", reducing blockchain interaction by 99%. |
 | **Database** | SQLite + Volume | Lightweight, file-based persistence perfectly suits the single-container architecture, minimizing cloud complexity. |
 | **Trust Anchor** | Ethereum Sepolia | The industry-standard testnet provides immutable proof at zero gas cost for the pilot phase. |
-| **Identity Storage** | AWS S3 + CloudFront | Decouples public DID logs from the API server, ensuring high availability and global caching. |
+| **Identity Storage** | Azure Blob Storage | Decouples public DID logs from the API server, ensuring high availability and global caching. Suitable for students (no CC required credits). |
 
 ### 1.2 Complete Interaction Diagram
 
@@ -43,8 +43,8 @@ graph TD
 
     %% --- Storage Layer ---
     subgraph Storage ["Storage & Distribution"]
-        BlobStorage[("Identity Storage (AWS S3)")]
-        CDN[("CDN (CloudFront)")]
+        BlobStorage[("Identity Storage (Azure Blob)")]
+        CDN[("CDN (Azure Front Door)")]
     end
 
     %% --- Trust Layer ---
@@ -106,6 +106,7 @@ Enabling-trust-with-DLT-technologies/  # Root (Current Frontend)
 │   │   ├── batch-processor.ts
 │   │   ├── crypto.ts
 │   │   └── contract-abi.ts
+│   │   ├── storage.ts           # [NEW] AWS S3 Client
 │   ├── package.json
 │   └── tsconfig.json
 ├── contracts/                   # [NEW] Smart Contracts
@@ -482,13 +483,50 @@ export function createLeafHash(event: {
 }
 ```
 
-### 4.4 DID Resolver (did:webvh Compliant)
+
+### 4.4 Azure Blob Storage Service
+
+**File:** `backend/src/storage.ts`
+
+```typescript
+import { BlobServiceClient } from "@azure/storage-blob";
+
+// Connection string is simpler for students than IAM roles
+const blobServiceClient = BlobServiceClient.fromConnectionString(
+  process.env.AZURE_STORAGE_CONNECTION_STRING || ""
+);
+
+export async function uploadToStorage(key: string, body: string, contentType: string) {
+  const containerName = process.env.AZURE_CONTAINER_NAME || "did-logs";
+  const containerClient = blobServiceClient.getContainerClient(containerName);
+
+  // Ensure container exists (create if not)
+  await containerClient.createIfNotExists({
+    access: 'blob' // Public read access for blobs
+  });
+
+  const blockBlobClient = containerClient.getBlockBlobClient(key);
+
+  try {
+    await blockBlobClient.upload(body, body.length, {
+      blobHTTPHeaders: { blobContentType: contentType }
+    });
+    console.log(`✅ Uploaded ${key} to Azure Blob Storage`);
+  } catch (error) {
+    console.error(`❌ Failed to upload ${key} to Azure:`, error);
+    // Don't throw, we want to continue even if storage fails (local DB is primary)
+  }
+}
+```
+
+### 4.5 DID Resolver (did:webvh Compliant)
 
 **File:** `backend/src/did-resolver.ts`
 
 ```typescript
 import { getDB } from './database';
 import { sha256Hash } from './crypto';
+import { uploadToStorage } from './storage';
 
 interface DIDLogEntry {
   versionId: number;
@@ -632,6 +670,10 @@ export async function createDIDLogEntry(
       Date.now()
     ]
   );
+  
+  // Update public log
+  const logContent = await resolveDID(scid);
+  await uploadToStorage(`.well-known/did/${scid}/did.jsonl`, logContent, 'application/jsonl');
 }
 
 /**
@@ -690,6 +732,10 @@ export async function updateDIDLog(
       Date.now()
     ]
   );
+  
+  // Update public log
+  const logContent = await resolveDID(did.split(':').pop()!);
+  await uploadToStorage(`.well-known/did/${did.split(':').pop()!}/did.jsonl`, logContent, 'application/jsonl');
 }
 ```
 
@@ -1422,6 +1468,10 @@ FRONTEND_URL=https://your-app.railway.app
 
 # Optional
 ETHERSCAN_API_KEY=... # For contract verification
+
+# Azure Blob Storage
+AZURE_STORAGE_CONNECTION_STRING=...
+AZURE_CONTAINER_NAME=dpp-identities
 ```
 
 ### 6.2 Dockerfile with Persistence
@@ -1798,6 +1848,11 @@ FRONTEND_URL=https://your-app.railway.app
 # ============ OPTIONAL ============
 # From step 9.6: Etherscan API key for verification
 ETHERSCAN_API_KEY=YOUR_ETHERSCAN_API_KEY_HERE
+
+# ============ STORAGE ============
+# From Step 9.9
+AZURE_STORAGE_CONNECTION_STRING=YOUR_AZURE_CONNECTION_STRING_HERE
+AZURE_CONTAINER_NAME=dpp-identities
 ```
 
 **⚠️ Security**:
@@ -1824,6 +1879,57 @@ Before proceeding to implementation, verify you have:
 - [ ] ✅ `.gitignore` includes `deployment/.env`
 
 **Estimated Time**: 30-45 minutes for all steps
+
+---
+
+### 9.9 Create Azure Storage Account
+
+**Purpose**: Hosting the public `did.jsonl` files. Azure is often more accessible for students (Education credits).
+
+**Steps**:
+1.  **Create Azure Account**: Go to [portal.azure.com](https://portal.azure.com).
+    *   *Tip*: Use your school email for "Azure for Students" (No Credit Card required).
+2.  **Create Storage Account**:
+    *   Search for **Storage accounts** -> **Create**.
+    *   Resource Group: Create new (e.g., `DPP-Resources`).
+    *   Storage account name: `dppstorageunique123` (lowercase, numbers only).
+    *   Region: `West Europe` (or closest to you).
+    *   Redundancy: `LRS` (Locally-redundant storage) is cheapest.
+    *   Click **Review + create** -> **Create**.
+3.  **Enable Public Access**:
+    *   Go to the new resource.
+    *   Settings -> Configuration -> Allow Blob public access = **Enabled**.
+    *   Save.
+4.  **Create Container**:
+    *   Data storage -> **Containers** -> **+ Container**.
+    *   Name: `dpp-identities`.
+    *   Public access level: **Blob** (anonymous read access for blobs only).
+    *   Create.
+5.  **Get Connection String**:
+    *   Security + networking -> **Access keys**.
+    *   Show keys -> Copy **Connection string** (Key 1).
+6.  **Save to `.env`**:
+    *   `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_CONTAINER_NAME`.
+
+---
+
+### 9.10 Setup Azure CDN (Optional but Recommended)
+
+**Purpose**: Serve `did.jsonl` files over HTTPS with high performance, essential for a `did:webvh` production setup.
+
+**Steps**:
+1.  **Create CDN Profile**:
+    *   Search for **Front Door and CDN profiles**.
+    *   Create New -> **Azure CDN Standard from Microsoft** (Cheapest/Student friendly).
+    *   Name: `dpp-cdn-profile`.
+2.  **Add Endpoint**:
+    *   Name: `dpp-identity-gateway` (Your URL will be `dpp-identity-gateway.azureedge.net`).
+    *   Origin type: **Storage**.
+    *   Origin hostname: Select your `dppstorageunique123` account.
+3.  **Enable Caching**:
+    *   Query string caching: **Ignore query strings**.
+4.  **Verify**:
+    *   The file `https://dpp-identity-gateway.azureedge.net/dpp-identities/did.jsonl` should now be accessible.
 
 ---
 
@@ -1905,10 +2011,10 @@ API_URL=https://your-app.railway.app npx ts-node scripts/generate-demo-data.ts
 | Service | Tier | Cost (Est.) |
 |---------|------|-------------|
 | **Railway** | Starter Plan + Volume | ~€5.00 / mo |
-| **AWS S3** | Standard (Low Traffic) | ~€1.00 / mo |
+| **Azure Blob** | Standard / Student | ~€0.20 / mo (or Free w/ Student) |
 | **Alchemy** | Free Tier (300M CU) | €0.00 |
 | **Sepolia ETH** | Testnet Faucet | €0.00 |
-| **Total** | | **~€6.00 / mo** |
+| **Total** | | **~€5.20 / mo** |
 
 ---
 
@@ -1923,3 +2029,85 @@ API_URL=https://your-app.railway.app npx ts-node scripts/generate-demo-data.ts
 - [ ] Etherscan links work for all transactions
 - [ ] Demo data (300 DIDs) visible in dashboard
 - [ ] Zero cost deployment on Railway
+
+---
+
+## 14. Phased Implementation Roadmap
+
+This section outlines the step-by-step phases to implement this plan. Each phase builds upon the previous one to ensure a stable and verifiable rollout.
+
+### Phase 1: Foundation & Smart Contract
+**Goal**: Set up the project structure and deploy the "Truth" (Smart Contract) to Sepolia.
+
+1.  **Project Restructure**:
+    *   Create root `backend/` and `contracts/` directories.
+    *   Initialize `package.json` for backend and Hardhat.
+    *   Setup `tsconfig.json` for strict TypeScript.
+2.  **Smart Contract**:
+    *   Implement `contracts/contracts/WitnessAnchorRegistry.sol`.
+    *   Create `contracts/scripts/deploy.ts`.
+    *   Configure `hardhat.config.ts`.
+3.  **Verification**:
+    *   Compile contract.
+    *   Deploy to Sepolia Testnet.
+    *   Save `CONTRACT_ADDRESS` to `.env`.
+
+### Phase 2: Backend Core & Database
+**Goal**: Build the API server and persistent storage layer.
+
+1.  **Dependencies**: Install `express`, `sqlite3`, `ethers` (v6), `@noble/ed25519`.
+2.  **Database**:
+    *   Implement `src/database.ts` with SQLite.
+    *   Create tables: `identities`, `events`, `batches`, `witness_proofs`.
+3.  **Server Setup**:
+    *   Implement `src/server.ts` basic structure (Health check).
+    *   Add CORS and security middleware.
+4.  **Verification**:
+    *   Start server locally.
+    *   Check `/health` endpoint.
+    *   Verify `dpp.sqlite` file creation.
+
+### Phase 3: Identity & Cloud Storage (Azure)
+**Goal**: Implement `did:webvh` logic and connect to Azure Blob Storage.
+
+1.  **Azure Integration**:
+    *   Install `@azure/storage-blob`.
+    *   Implement `src/storage.ts` (The code added in Production Plan).
+2.  **DID Resolver**:
+    *   Implement `src/did-resolver.ts`.
+    *   Add `resolveDID`, `createDIDLogEntry`, `updateDIDLog`.
+    *   **Crucial**: Ensure `uploadToStorage` is called on every update.
+3.  **Verification**:
+    *   Mock a DID creation.
+    *   Verify `did.jsonl` appears in your Azure Blob Container.
+
+### Phase 4: Event Engine & Anchoring
+**Goal**: Handle massive event volume and anchor to Ethereum.
+
+1.  **Crypto Utilities**:
+    *   Implement `src/crypto.ts` (Ed25519, SHA256).
+2.  **Batch Processing**:
+    *   Implement `src/batch-processor.ts`.
+    *   Logic: Fetch unanchored events -> Build Merkle Tree -> Call Smart Contract.
+3.  **API Endpoints**:
+    *   `POST /api/events` (Receive & Sign).
+    *   `POST /api/batch` (Trigger Anchor).
+    *   `GET /api/proofs/:id` (Get Merkle Proof).
+4.  **Verification**:
+    *   Post 10 dummy events.
+    *   Trigger Batch.
+    *   Check Etherscan for transaction.
+    *   Verify local API returns valid Merkle proof.
+
+### Phase 5: Frontend Integration & Polish
+**Goal**: Connect the existing React frontend to the new Backend.
+
+1.  **API Client**:
+    *   Create `frontend/src/lib/api/client.ts`.
+2.  **Component Updates**:
+    *   Update `DIDEventsLog.tsx` to fetch from `/api/events`.
+    *   Update `TrustValidationTab.tsx` to show "Anchored" status (Green checkmark).
+    *   Add "Verify on Etherscan" link using the `tx_hash`.
+3.  **Final Polish**:
+    *   Add Client-Side Merkle Verification (`merkle.ts`).
+    *   Ensure UI handles loading states/errors gracefully.
