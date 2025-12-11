@@ -16,13 +16,13 @@ This document provides a **complete, production-ready implementation plan** for 
 
 ### 1.1 System Components Overview
 
-| System | Technology | Role & Purpose |
-|--------|------------|----------------|
-| **Frontend Application** | React + Vite + TypeScript | **The Interface**: Users view DPPs, scan QR codes, and log lifecycle events. Verifies proofs client-side. |
-| **Backend API** | Node.js + Express + TypeScript | **The Orchestrator**: Validates signatures, stores events, resolves DIDs, and triggers batch anchoring. |
-| **Persistent Database** | SQLite (with Railway Volume) | **The State**: Stores identities, events, batches, and Merkle proofs. Persisted across container restarts. |
-| **Trust Anchor** | Ethereum Sepolia Testnet | **The Truth**: Immutable storage for Merkle roots. Provides cryptographic proof of event existence. |
-| **Blockchain Gateway** | Alchemy RPC (Free Tier) | **The Bridge**: Connects backend to Ethereum without running a full node. |
+| System | Technology | Selection Rationale (Why?) |
+|--------|------------|----------------------------|
+| **Frontend** | React + Vite | Enables client-side verification directly in the user's browser, ensuring a zero-trust model. |
+| **Backend** | Node.js + Express | Efficiently handles thousands of events via "Batch Anchoring", reducing blockchain interaction by 99%. |
+| **Database** | SQLite + Volume | Lightweight, file-based persistence perfectly suits the single-container architecture, minimizing cloud complexity. |
+| **Trust Anchor** | Ethereum Sepolia | The industry-standard testnet provides immutable proof at zero gas cost for the pilot phase. |
+| **Identity Storage** | AWS S3 + CloudFront | Decouples public DID logs from the API server, ensuring high availability and global caching. |
 
 ### 1.2 Complete Interaction Diagram
 
@@ -43,8 +43,8 @@ graph TD
 
     %% --- Storage Layer ---
     subgraph Storage ["Storage & Distribution"]
-        BlobStorage[("Identity Storage (S3/Blob)")]
-        CDN[("CDN (CloudFront/Front Door)")]
+        BlobStorage[("Identity Storage (AWS S3)")]
+        CDN[("CDN (CloudFront)")]
     end
 
     %% --- Trust Layer ---
@@ -1902,12 +1902,13 @@ API_URL=https://your-app.railway.app npx ts-node scripts/generate-demo-data.ts
 
 ## 12. Cost Analysis
 
-| Service | Tier | Cost |
-|---------|------|------|
-| Railway | Free ($5 credit) | €0 |
-| Alchemy | Free (300M CU/mo) | €0 |
-| Sepolia ETH | Testnet Faucet | €0 |
-| **Total** | | **€0** |
+| Service | Tier | Cost (Est.) |
+|---------|------|-------------|
+| **Railway** | Starter Plan + Volume | ~€5.00 / mo |
+| **AWS S3** | Standard (Low Traffic) | ~€1.00 / mo |
+| **Alchemy** | Free Tier (300M CU) | €0.00 |
+| **Sepolia ETH** | Testnet Faucet | €0.00 |
+| **Total** | | **~€6.00 / mo** |
 
 ---
 
