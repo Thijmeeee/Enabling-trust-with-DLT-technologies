@@ -156,7 +156,7 @@ stateDiagram-v2
     Draft --> Created: Manufacturer Signs
     Created --> Active: First Scan/Transport
     Active --> Updated: Event Added
-    Updated --> Updated
+    Updated --> Updated: Event Added
     Active --> EndOfLife: Recycled/Disposed
     EndOfLife --> [*]
 
@@ -169,23 +169,66 @@ stateDiagram-v2
 
 ---
 
-## 4. Security & Privacy
+## 4. Pre-Requisites & Manual Setup (IMPORTANT)
 
-### 4.1 Data Minimization
-- **No PII**: The system stores *product* data, not *user* data.
-- **Hashed Links**: Events are linked via cryptographic hashes, not predictable IDs.
+**⚠️ You must complete these manual steps before deployment. These involve creating external accounts that cannot be automated.**
 
-### 4.2 Repo Hygiene & IP Protection
-- **Problem**: The VM IP `51.XX.XX.XX` was previously exposed in git.
-- **Solution**:
-    1. Use `BFG Repo-Cleaner` to strip the IP from git history.
-    2. Use `.env` files for all sensitive configuration.
-    3. **Action**: `git filter-branch --replace-text ...` before public release.
+### 4.1 Create Alchemy Account & Get RPC URL
+**Purpose**: Alchemy provides the connection to Ethereum Sepolia testnet without running your own node.
+1. Go to [alchemy.com](https://www.alchemy.com/)
+2. Sign up for a free account
+3. Create a new App:
+   - **Chain**: Ethereum
+   - **Network**: Sepolia
+   - **Name**: `DPP-Production`
+4. Copy the **HTTPS URL** (looks like `https://eth-sepolia.g.alchemy.com/v2/YOUR_API_KEY`)
+5. Save this as `ALCHEMY_SEPOLIA_URL` for your `.env` file.
 
-### 4.3 Cohesion Check
-- **Verification**: The *Identity Layer* signs data. The *Trust Layer* anchors it.
-- **Check**: Does the Trust Layer verify the Identity signature before anchoring?
-- **Logic**: Yes. The `batch-processor` (see Code Ref) calls `verifyEventSignature()` before including any event in the Merkle Tree. This prevents garbage data from being anchored.
+### 4.2 Create Ethereum Wallet (Deployer)
+**Purpose**: You need a wallet with Sepolia ETH to deploy the smart contract.
+1. Install [MetaMask](https://metamask.io/)
+2. Create a new wallet and switch to **Sepolia Testnet**
+3. Export your **Private Key** (Settings -> Security -> Export Private Key)
+   - ⚠️ **NEVER share this or commit it to git!**
+4. Save this as `DEPLOYER_PRIVATE_KEY` for your `.env` file.
+
+### 4.3 Get Sepolia Test ETH
+**Purpose**: Pay for gas fees (free on testnet).
+1. Use a Faucet:
+   - [Alchemy Sepolia Faucet](https://sepoliafaucet.com/)
+   - [Google Cloud Web3 Faucet](https://cloud.google.com/application/web3/faucet/ethereum/sepolia)
+2. Get at least **0.05 SepoliaETH**.
+
+### 4.4 Create Relayer Wallet (Operational)
+**Purpose**: A separate wallet for the backend to send daily anchor transactions.
+1. Create a second account in MetaMask named `DPP-Relayer`
+2. Export its Private Key.
+3. Save as `RELAYER_PRIVATE_KEY` for your `.env` file.
+4. Send **0.02 SepoliaETH** from your Deployer wallet to this Relayer wallet.
+
+### 4.5 Configure DNS (Crucial for HTTPS)
+**Purpose**: Point your domain to the VM so Caddy can provision an SSL certificate.
+1. Log in to your Domain Registrar (e.g., TransIP, GoDaddy).
+2. Go to DNS Management.
+3. Add a new **A Record**:
+   - **Name**: `webvh` (creates `webvh.web3connect.nl`)
+   - **Value**: Your VM IP Address (e.g., `51.77.71.29`)
+   - **TTL**: 5 min / Automatic.
+4. Wait 5-10 minutes for propagation.
+
+### 4.6 Server Preparation (On VM)
+**Purpose**: Ensure the School VM is ready to run containers.
+1. SSH into your VM.
+2. Install Docker & Compose:
+   ```bash
+   sudo apt-get update
+   sudo apt-get install -y docker.io docker-compose
+   ```
+3. Verify installation:
+   ```bash
+   docker --version
+   docker-compose --version
+   ```
 
 ---
 
@@ -193,20 +236,15 @@ stateDiagram-v2
 
 **Motivation**: We use Docker to isolate our dependencies (Node.js version, Caddy version) from the host VM. This prevents "pollution" of the School VM and makes the system easy to start/stop/clean.
 
-### 5.1 Pre-Requisites
-1.  **Alchemy Account**: Get RPC URL (Sepolia).
-2.  **Wallet**: Private Key for `RELAYER`.
-3.  **VM Setup**: Install Docker & Docker Compose.
-
-### 5.2 Instructions
-detailed implementation logic is in **[PRODUCTION_CODE.md](./PRODUCTION_CODE.md)**.
+### 5.1 Instructions
+(Detailed implementation logic is in **[PRODUCTION_CODE.md](./PRODUCTION_CODE.md)**)
 
 1.  **Clone & Configure**:
     ```bash
     git clone <repo>
     cd deployment
     cp .env.example .env
-    # Edit .env with your keys
+    # Edit .env with the keys gathered in Section 4
     ```
 
 2.  **Build & Run**:
@@ -223,7 +261,8 @@ detailed implementation logic is in **[PRODUCTION_CODE.md](./PRODUCTION_CODE.md)
 
 ## 6. Pre-Implementation Checklist
 
-- [ ] **Repo Hygiene**: Run BFG to remove exposed IP from history.
-- [ ] **Infrastructure**: Install Docker/Compose on School VM.
-- [ ] **Keys**: Generate fresh Ed25519 keys for the Demo Manufacturer.
-- [ ] **Blockchain**: Fund Relayer Wallet with 0.1 SepoliaETH.
+- [ ] **Repo Hygiene**: Run BFG/Filter-Branch to remove exposed IPs from git history.
+- [ ] **Infrastructure**: Install Docker & Docker Compose on School VM.
+- [ ] **Accounts**: Alchemy App Created + RPC URL.
+- [ ] **Wallets**: Deployer & Relayer wallets created and funded (Sepolia ETH).
+- [ ] **Environment**: `.env` file created locally (do not commit!).
