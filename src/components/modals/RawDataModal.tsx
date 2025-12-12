@@ -30,7 +30,7 @@ export default function RawDataModal({ data, onClose }: RawDataModalProps) {
                     <div className="flex items-center gap-2">
                         <button
                             onClick={handleCopy}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg transition-colors text-sm font-medium"
+                            className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-gray-700 bg-opacity-20 dark:bg-opacity-100 hover:bg-opacity-30 dark:hover:bg-gray-600 rounded-lg transition-colors text-sm font-medium"
                         >
                             {copied ? (
                                 <>
@@ -60,7 +60,7 @@ export default function RawDataModal({ data, onClose }: RawDataModalProps) {
                             <FileJson className="w-4 h-4" />
                             <span className="font-medium">Complete Digital Product Passport Data Structure</span>
                         </div>
-                        <pre className="text-xs font-mono text-gray-800 overflow-x-auto">
+                        <pre className="text-xs font-mono text-gray-800 dark:text-gray-200 overflow-x-auto">
                             <code className="language-json">{jsonString}</code>
                         </pre>
                     </div>
@@ -68,7 +68,7 @@ export default function RawDataModal({ data, onClose }: RawDataModalProps) {
                     {/* Educational Note */}
                     <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
                         <h3 className="text-sm font-semibold text-blue-900 mb-2">About This Data</h3>
-                        <p className="text-xs text-blue-800 leading-relaxed">
+                        <p className="text-xs text-blue-800 dark:text-blue-200 leading-relaxed">
                             This is the complete, unprocessed data structure of the Digital Product Passport.
                             It includes all metadata, relationships, and verification information stored on the
                             distributed ledger. Use this view to verify data integrity and trace the complete

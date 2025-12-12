@@ -14,14 +14,16 @@ import ConsumerView from './components/dashboards/ConsumerView';
 import WindowRegistrationWizard from './components/dashboards/WindowRegistrationWizard';
 import IntroductionPage from './components/IntroductionPage';
 import { RoleProvider, useRole, type UserRole } from './lib/utils/roleContext';
+import { ThemeProvider, useTheme } from './lib/utils/ThemeContext';
 import { enhancedDB } from './lib/data/enhancedDataStore';
 import { generateMixedTestData } from './lib/operations/bulkOperations';
-import { User, ChevronDown, HelpCircle, Wallet, ToggleLeft, ToggleRight } from 'lucide-react';
+import { User, ChevronDown, HelpCircle, Wallet, ToggleLeft, ToggleRight, Moon, Sun } from 'lucide-react';
 
 type View = 'dashboard' | 'dpp-main' | 'dpp-component' | 'create-dpp' | 'manufacturer-wallet' | 'register-wizard';
 
 function AppContent() {
   const { currentRole, setRole } = useRole();
+  const { theme, toggleTheme } = useTheme();
   const [view, setView] = useState<View>('dashboard');
   const [currentDID, setCurrentDID] = useState<string>('');
   const [isInitializing, setIsInitializing] = useState(true);
@@ -133,23 +135,23 @@ function AppContent() {
   ];
 
   return (
-    <div className="relative">
+    <div className="relative bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors">
       {/* Role selector dropdown and help button */}
       <div className="fixed top-4 left-4 z-50 flex items-center gap-2">
         <div className="relative">
           <button
             onClick={() => setShowRoleDropdown(!showRoleDropdown)}
-            className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg shadow-sm transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm transition-colors"
           >
-            <User className="w-4 h-4" />
-            <span className="text-sm font-medium">
+            <User className="w-4 h-4 text-gray-700 dark:text-gray-300" />
+            <span className="text-sm font-medium text-gray-900 dark:text-white">
               {roles.find(r => r.value === currentRole)?.label}
             </span>
-            <ChevronDown className="w-4 h-4" />
+            <ChevronDown className="w-4 h-4 text-gray-700 dark:text-gray-300" />
           </button>
 
           {showRoleDropdown && (
-            <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+            <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
               {roles.map((role) => (
                 <button
                   key={role.value}
@@ -157,7 +159,7 @@ function AppContent() {
                     setRole(role.value);
                     setShowRoleDropdown(false);
                   }}
-                  className={`w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors ${currentRole === role.value ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'
+                  className={`w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${currentRole === role.value ? 'bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-700 dark:text-gray-300'
                     }`}
                 >
                   {role.label}
@@ -170,20 +172,19 @@ function AppContent() {
         {/* Help button */}
         <button
           onClick={() => setShowIntro(true)}
-          className="flex items-center justify-center w-10 h-10 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg shadow-sm transition-colors"
+          className="flex items-center justify-center w-10 h-10 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm transition-colors"
           title="Show introduction"
         >
-          <HelpCircle className="w-5 h-5 text-gray-600" />
+          <HelpCircle className="w-5 h-5 text-gray-600 dark:text-gray-300" />
         </button>
 
         {/* Dashboard Mode Toggle */}
         <button
           onClick={() => setDashboardMode(dashboardMode === 'role' ? 'classic' : 'role')}
-          className={`flex items-center gap-2 px-3 py-2 border rounded-lg shadow-sm transition-colors ${
-            dashboardMode === 'classic' 
-              ? 'bg-purple-50 border-purple-200 text-purple-700' 
-              : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
-          }`}
+          className={`flex items-center gap-2 px-3 py-2 border rounded-lg shadow-sm transition-colors ${dashboardMode === 'classic'
+            ? 'bg-purple-50 dark:bg-purple-900/50 border-purple-200 dark:border-purple-700 text-purple-700 dark:text-purple-300'
+            : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+            }`}
           title={dashboardMode === 'role' ? 'Switch to Classic View' : 'Switch to Role View'}
         >
           {dashboardMode === 'role' ? (
@@ -196,13 +197,26 @@ function AppContent() {
           </span>
         </button>
 
+        {/* Theme Toggle */}
+        <button
+          onClick={toggleTheme}
+          className="flex items-center justify-center w-10 h-10 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm transition-colors"
+          title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+        >
+          {theme === 'light' ? (
+            <Moon className="w-5 h-5 text-gray-600" />
+          ) : (
+            <Sun className="w-5 h-5 text-yellow-400" />
+          )}
+        </button>
+
         {/* Manufacturer Wallet Button */}
         {(currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B') && (
           <button
             onClick={() => setView('manufacturer-wallet')}
-            className={`flex items-center justify-center w-10 h-10 border border-gray-300 rounded-lg shadow-sm transition-colors ${view === 'manufacturer-wallet'
-              ? 'bg-blue-50 border-blue-200 text-blue-600'
-              : 'bg-white hover:bg-gray-50 text-gray-600'
+            className={`flex items-center justify-center w-10 h-10 border rounded-lg shadow-sm transition-colors ${view === 'manufacturer-wallet'
+              ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-200 dark:border-blue-700 text-blue-600 dark:text-blue-400'
+              : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300'
               }`}
             title="Open Manufacturer Wallet"
           >
@@ -286,16 +300,16 @@ function AppContent() {
 
           {/* Classic Dashboard (when dashboardMode === 'classic') */}
           {view === 'dashboard' && (
-            dashboardMode === 'classic' && 
-            currentRole !== 'Witness' && 
-            currentRole !== 'Watcher' && 
+            dashboardMode === 'classic' &&
+            currentRole !== 'Witness' &&
+            currentRole !== 'Watcher' &&
             currentRole !== 'Resolver'
           ) && (
-            <EnhancedDashboard
-              onNavigate={handleSelectDPP}
-              onCreateDPP={(currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B') ? handleCreateDPP : undefined}
-            />
-          )}
+              <EnhancedDashboard
+                onNavigate={handleSelectDPP}
+                onCreateDPP={(currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B') ? handleCreateDPP : undefined}
+              />
+            )}
 
           {view === 'create-dpp' && (
             <>
@@ -332,8 +346,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <RoleProvider>
-      <AppContent />
-    </RoleProvider>
+    <ThemeProvider>
+      <RoleProvider>
+        <AppContent />
+      </RoleProvider>
+    </ThemeProvider>
   );
 }

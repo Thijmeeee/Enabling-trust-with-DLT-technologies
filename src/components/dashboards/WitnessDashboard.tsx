@@ -40,12 +40,12 @@ export default function WitnessDashboard() {
   const [selectedEvent, setSelectedEvent] = useState<PendingDIDEvent | null>(null);
   const [expandedDPP, setExpandedDPP] = useState<string | null>(null);
   const [expandedComponents, setExpandedComponents] = useState<Set<string>>(new Set());
-  
+
   // Confirmation modal states
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'approve' | 'reject' | null>(null);
   const [eventToConfirm, setEventToConfirm] = useState<PendingDIDEvent | null>(null);
-  
+
   // Filter states
   const [searchText, setSearchText] = useState('');
   const [productTypeFilter, setProductTypeFilter] = useState<'all' | 'window' | 'glass' | 'frame'>('all');
@@ -61,12 +61,12 @@ export default function WitnessDashboard() {
   async function loadEvents() {
     // Get all DPPs and their attestations
     const allDPPs = await enhancedDB.getAllDPPs();
-    
+
     // Build parent-child relationships
     const dppMap = new Map(allDPPs.map(dpp => [dpp.id, dpp]));
     const didToDppMap = new Map(allDPPs.map(dpp => [dpp.did, dpp])); // DID -> DPP mapping
     const parentMap = new Map<string, string>(); // child DPP ID -> parent DPP ID
-    
+
     for (const dpp of allDPPs) {
       // Check both parent_did (DID string) and metadata.parent_dpp_id (numeric ID)
       if (dpp.type === 'component') {
@@ -83,12 +83,12 @@ export default function WitnessDashboard() {
         }
       }
     }
-    
+
     console.log('Parent Map:', Array.from(parentMap.entries()));
-    
+
     // Filter for DID events only
     const didEventTypes = ['did_creation', 'key_rotation', 'ownership_change', 'did_update', 'did_lifecycle_update'];
-    
+
     const events: PendingDIDEvent[] = [];
     const approved: PendingDIDEvent[] = [];
     const rejected: PendingDIDEvent[] = [];
@@ -98,7 +98,7 @@ export default function WitnessDashboard() {
 
     for (const dpp of allDPPs) {
       const attestations = await enhancedDB.getAttestationsByDID(dpp.did);
-      
+
       for (const att of attestations) {
         if (!didEventTypes.includes(att.attestation_type)) continue;
 
@@ -120,11 +120,11 @@ export default function WitnessDashboard() {
             }
           }
         }
-        
+
         // Determine the grouping DPP (parent for components, self for main products)
         let groupDppId = dpp.id;
         let groupDppModel = dpp.model;
-        
+
         if (dpp.type === 'component' && parentMap.has(dpp.id)) {
           const parentId = parentMap.get(dpp.id)!;
           const parentDpp = dppMap.get(parentId);
@@ -134,9 +134,9 @@ export default function WitnessDashboard() {
             console.log('Grouping component', dpp.model, 'under parent', parentDpp.model, 'Parent ID:', groupDppId);
           }
         }
-        
+
         console.log('Event for', dpp.model, '- Type:', dpp.type, '- GroupDppId:', groupDppId, '- isComponent:', dpp.type === 'component');
-        
+
         // Store DPP reference for later filtering
         const event: PendingDIDEvent = {
           id: att.id,
@@ -149,12 +149,12 @@ export default function WitnessDashboard() {
           productModel: dpp.model, // Keep original component name
           productType: dpp.type,
           dppId: groupDppId, // Group by parent
-          dppMetadata: { 
+          dppMetadata: {
             ...dpp.metadata,
             groupModel: groupDppModel, // Store parent name for display
             isComponent: dpp.type === 'component',
-            groupDppDid: dpp.type === 'component' && parentMap.has(dpp.id) 
-              ? dppMap.get(parentMap.get(dpp.id)!)?.did 
+            groupDppDid: dpp.type === 'component' && parentMap.has(dpp.id)
+              ? dppMap.get(parentMap.get(dpp.id)!)?.did
               : dpp.did, // Store parent DID for components, own DID for windows
           },
         };
@@ -295,7 +295,7 @@ export default function WitnessDashboard() {
     if (event.eventType === 'ownership_change') {
       const newOwner = event.data?.newOwner || event.data?.new_owner;
       const previousOwner = event.data?.previousOwner || event.data?.old_owner;
-      
+
       if (newOwner && event.dppId) {
         await enhancedDB.updateDPP(event.dppId, {
           owner: newOwner,
@@ -350,7 +350,7 @@ export default function WitnessDashboard() {
 
   function handleConfirm() {
     if (!eventToConfirm || !confirmAction) return;
-    
+
     if (confirmAction === 'approve') {
       handleApprove(eventToConfirm);
     } else {
@@ -376,35 +376,35 @@ export default function WitnessDashboard() {
   // Groepeer events per DPP met filters - ALLEEN parent/main DPPs als hoofdgroepen
   const groupedEvents = () => {
     const groups = new Map<string, GroupedEvents>();
-    
+
     console.log('=== GROUPING EVENTS ===');
     console.log('Total filtered events:', filteredEvents.length);
-    
+
     filteredEvents.forEach((event: any) => {
       // Gebruik altijd dppId als groepsleutel (voor components is dit de parent ID)
       const groupKey = event.dppId;
-      
+
       console.log('Processing event:', event.productModel, '- GroupKey:', groupKey, '- isComponent:', event.dppMetadata?.isComponent);
-      
+
       // Apply processed filter
       if (filter === 'all' && processedFilter !== 'all') {
         const isProcessed = event.status === 'approved' || event.status === 'rejected';
         if (processedFilter === 'processed' && !isProcessed) return;
         if (processedFilter === 'unprocessed' && isProcessed) return;
       }
-      
+
       // Apply search filter
       if (searchText) {
         const searchLower = searchText.toLowerCase();
-        const matchesSearch = 
+        const matchesSearch =
           event.productModel?.toLowerCase().includes(searchLower) ||
           event.did.toLowerCase().includes(searchLower) ||
           event.description.toLowerCase().includes(searchLower) ||
           event.dppMetadata?.groupModel?.toLowerCase().includes(searchLower);
-        
+
         if (!matchesSearch) return;
       }
-      
+
       // Bepaal component type voor filtering
       let componentType = 'window';
       if (event.dppMetadata?.isComponent) {
@@ -415,12 +415,12 @@ export default function WitnessDashboard() {
           componentType = 'frame';
         }
       }
-      
+
       // Apply product type filter
       if (productTypeFilter !== 'all' && productTypeFilter !== componentType) {
         return;
       }
-      
+
       // Create group if it doesn't exist (using parent/main DPP ID as key)
       if (!groups.has(groupKey)) {
         // Use groupModel for the group name (this is the parent name for components)
@@ -436,9 +436,9 @@ export default function WitnessDashboard() {
           components: [],
         });
       }
-      
+
       const group = groups.get(groupKey)!;
-      
+
       // If this is a component event, add to components array
       if (event.dppMetadata?.isComponent) {
         const componentName = event.productModel || 'Unknown Component';
@@ -455,92 +455,92 @@ export default function WitnessDashboard() {
         console.log('  → Added as main product event to group:', group.dppName);
       }
     });
-    
+
     console.log('=== FINAL GROUPS ===');
     console.log('Total groups:', groups.size);
     Array.from(groups.values()).forEach(g => {
       console.log('Group:', g.dppName, '(ID: ' + g.dppId + ') - Main events:', g.events.length, '- Components:', g.components?.length || 0);
       g.components?.forEach(c => console.log('  Component:', c.name, '- Events:', c.events.length));
     });
-    
+
     // Filter to show only window groups (main products with components)
     const validGroups = Array.from(groups.values()).filter(group => {
       // Only show groups that are windows (main products)
-      const isWindowGroup = group.dppName.toLowerCase().startsWith('window') && 
-                           !group.dppName.toLowerCase().includes('frame') && 
-                           !group.dppName.toLowerCase().includes('panel');
-      
-      console.log('Filtering group:', group.dppName, 
-        '- isWindow:', isWindowGroup, 
+      const isWindowGroup = group.dppName.toLowerCase().startsWith('window') &&
+        !group.dppName.toLowerCase().includes('frame') &&
+        !group.dppName.toLowerCase().includes('panel');
+
+      console.log('Filtering group:', group.dppName,
+        '- isWindow:', isWindowGroup,
         '- Keep?', isWindowGroup);
-      
+
       return isWindowGroup;
     });
-    
+
     console.log('Valid groups after filtering:', validGroups.length);
-    
+
     return validGroups;
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 pt-20">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6 pt-20 transition-colors">
       <div className="max-w-[1920px] mx-auto">
         {/* Header */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 mb-6 transition-colors">
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <div className="p-3 bg-emerald-100 rounded-lg">
-                  <FileCheck className="w-8 h-8 text-emerald-600" />
+                <div className="p-3 bg-emerald-100 dark:bg-emerald-900/50 rounded-lg">
+                  <FileCheck className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
                 </div>
                 <div>
-                  <h1 className="text-3xl font-bold text-gray-900">Witness Node Dashboard</h1>
-                  <p className="text-gray-600">Validate and sign DID events</p>
+                  <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Witness Node Dashboard</h1>
+                  <p className="text-gray-600 dark:text-gray-400">Validate and sign DID events</p>
                 </div>
               </div>
             </div>
             <div className="text-right">
-              <div className="text-sm text-gray-500">Your Witness DID</div>
-              <div className="text-xs font-mono text-gray-900 mt-1">{currentRoleDID}</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">Your Witness DID</div>
+              <div className="text-xs font-mono text-gray-900 dark:text-gray-200 mt-1">{currentRoleDID}</div>
             </div>
           </div>
         </div>
 
         {/* Statistics */}
         <div className="grid grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 transition-colors">
             <div className="flex items-center gap-3">
-              <Clock className="w-8 h-8 text-yellow-600" />
+              <Clock className="w-8 h-8 text-yellow-600 dark:text-yellow-400" />
               <div>
-                <div className="text-2xl font-bold text-gray-900">{pendingEvents.length}</div>
-                <div className="text-sm text-gray-600">Pending Events</div>
+                <div className="text-2xl font-bold text-gray-900 dark:text-white">{pendingEvents.length}</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Pending Events</div>
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 transition-colors">
             <div className="flex items-center gap-3">
-              <CheckCircle className="w-8 h-8 text-green-600" />
+              <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" />
               <div>
-                <div className="text-2xl font-bold text-gray-900">{approvedEvents.length}</div>
-                <div className="text-sm text-gray-600">Approved</div>
+                <div className="text-2xl font-bold text-gray-900 dark:text-white">{approvedEvents.length}</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Approved</div>
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 transition-colors">
             <div className="flex items-center gap-3">
-              <XCircle className="w-8 h-8 text-red-600" />
+              <XCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
               <div>
-                <div className="text-2xl font-bold text-gray-900">{rejectedEvents.length}</div>
-                <div className="text-sm text-gray-600">Rejected</div>
+                <div className="text-2xl font-bold text-gray-900 dark:text-white">{rejectedEvents.length}</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Rejected</div>
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 transition-colors">
             <div className="flex items-center gap-3">
-              <Activity className="w-8 h-8 text-blue-600" />
+              <Activity className="w-8 h-8 text-blue-600 dark:text-blue-400" />
               <div>
-                <div className="text-2xl font-bold text-gray-900">{pendingEvents.length + approvedEvents.length}</div>
-                <div className="text-sm text-gray-600">Total Validated</div>
+                <div className="text-2xl font-bold text-gray-900 dark:text-white">{pendingEvents.length + approvedEvents.length}</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Total Validated</div>
               </div>
             </div>
           </div>
@@ -562,28 +562,28 @@ export default function WitnessDashboard() {
               {searchText && (
                 <button
                   onClick={() => setSearchText('')}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                 >
                   <X className="w-5 h-5" />
                 </button>
               )}
             </div>
-            
+
             {/* Product Type Filter */}
             <div className="relative">
               <button
                 onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-                className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-300"
               >
                 <FilterIcon className="w-5 h-5 text-gray-500" />
                 <span className="text-sm font-medium text-gray-700">
-                  {productTypeFilter === 'all' ? 'All Products' : 
-                   productTypeFilter === 'window' ? 'Windows' :
-                   productTypeFilter === 'glass' ? 'Glass' : 'Frame'}
+                  {productTypeFilter === 'all' ? 'All Products' :
+                    productTypeFilter === 'window' ? 'Windows' :
+                      productTypeFilter === 'glass' ? 'Glass' : 'Frame'}
                 </span>
                 <ChevronDown className="w-4 h-4 text-gray-500" />
               </button>
-              
+
               {showFilterDropdown && (
                 <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden z-10">
                   <button
@@ -591,9 +591,8 @@ export default function WitnessDashboard() {
                       setProductTypeFilter('all');
                       setShowFilterDropdown(false);
                     }}
-                    className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors ${
-                      productTypeFilter === 'all' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
-                    }`}
+                    className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors ${productTypeFilter === 'all' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
+                      }`}
                   >
                     <Package className="w-5 h-5" />
                     <span className="font-medium">All Products</span>
@@ -603,9 +602,8 @@ export default function WitnessDashboard() {
                       setProductTypeFilter('window');
                       setShowFilterDropdown(false);
                     }}
-                    className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors ${
-                      productTypeFilter === 'window' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
-                    }`}
+                    className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors ${productTypeFilter === 'window' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
+                      }`}
                   >
                     <Maximize className="w-5 h-5" />
                     <span className="font-medium">Windows Only</span>
@@ -615,9 +613,8 @@ export default function WitnessDashboard() {
                       setProductTypeFilter('glass');
                       setShowFilterDropdown(false);
                     }}
-                    className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors ${
-                      productTypeFilter === 'glass' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
-                    }`}
+                    className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors ${productTypeFilter === 'glass' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
+                      }`}
                   >
                     <Square className="w-5 h-5" />
                     <span className="font-medium">Glass Only</span>
@@ -627,9 +624,8 @@ export default function WitnessDashboard() {
                       setProductTypeFilter('frame');
                       setShowFilterDropdown(false);
                     }}
-                    className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors ${
-                      productTypeFilter === 'frame' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
-                    }`}
+                    className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors ${productTypeFilter === 'frame' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
+                      }`}
                   >
                     <Package className="w-5 h-5" />
                     <span className="font-medium">Frame Only</span>
@@ -637,37 +633,34 @@ export default function WitnessDashboard() {
                 </div>
               )}
             </div>
-            
+
             {/* Processed Status Filter (only for 'all' tab) */}
             {filter === 'all' && (
               <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg">
                 <button
                   onClick={() => setProcessedFilter('all')}
-                  className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                    processedFilter === 'all' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-                  }`}
+                  className={`px-3 py-1 rounded text-sm font-medium transition-colors ${processedFilter === 'all' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                    }`}
                 >
                   All
                 </button>
                 <button
                   onClick={() => setProcessedFilter('processed')}
-                  className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                    processedFilter === 'processed' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-                  }`}
+                  className={`px-3 py-1 rounded text-sm font-medium transition-colors ${processedFilter === 'processed' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                    }`}
                 >
                   Processed
                 </button>
                 <button
                   onClick={() => setProcessedFilter('unprocessed')}
-                  className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                    processedFilter === 'unprocessed' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-                  }`}
+                  className={`px-3 py-1 rounded text-sm font-medium transition-colors ${processedFilter === 'unprocessed' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                    }`}
                 >
                   Unprocessed
                 </button>
               </div>
             )}
-            
+
             {/* Active Filters Count */}
             {(searchText || productTypeFilter !== 'all' || (filter === 'all' && processedFilter !== 'all')) && (
               <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm">
@@ -690,8 +683,8 @@ export default function WitnessDashboard() {
         </div>
 
         {/* Filter Tabs */}
-        <div className="bg-white rounded-lg border border-gray-200 mb-6">
-          <div className="flex border-b border-gray-200">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 mb-6 transition-colors">
+          <div className="flex border-b border-gray-200 dark:border-gray-700">
             {[
               { id: 'pending', label: 'Pending', count: pendingEvents.length, color: 'yellow' },
               { id: 'approved', label: 'Approved', count: approvedEvents.length, color: 'green' },
@@ -701,13 +694,12 @@ export default function WitnessDashboard() {
               <button
                 key={tab.id}
                 onClick={() => setFilter(tab.id as any)}
-                className={`flex-1 px-6 py-4 font-medium transition-colors ${
-                  filter === tab.id
-                    ? 'bg-gray-50 text-gray-900 border-b-2 border-blue-600'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`}
+                className={`flex-1 px-6 py-4 font-medium transition-colors ${filter === tab.id
+                    ? 'bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white border-b-2 border-blue-600'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700'
+                  }`}
               >
-                {tab.label} <span className={`ml-2 px-2 py-0.5 text-xs rounded-full bg-${tab.color}-100 text-${tab.color}-700`}>{tab.count}</span>
+                {tab.label} <span className={`ml-2 px-2 py-0.5 text-xs rounded-full bg-${tab.color}-100 dark:bg-${tab.color}-900/50 text-${tab.color}-700 dark:text-${tab.color}-300`}>{tab.count}</span>
               </button>
             ))}
           </div>
@@ -716,19 +708,19 @@ export default function WitnessDashboard() {
           <div className="p-6">
             {groupedEvents().length === 0 ? (
               <div className="text-center py-12">
-                <Shield className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500">No events to display</p>
+                <Shield className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+                <p className="text-gray-500 dark:text-gray-400">No events to display</p>
               </div>
             ) : (
               <div className="space-y-4">
                 {groupedEvents().map((group) => {
                   const totalEvents = group.events.length + (group.components?.reduce((sum, c) => sum + c.events.length, 0) || 0);
                   const isExpanded = expandedDPP === group.dppId;
-                  
+
                   return (
                     <div key={group.dppId} className="border border-gray-300 rounded-lg overflow-hidden">
                       {/* Window Header - Clickable */}
-                      <div 
+                      <div
                         className="bg-gradient-to-r from-blue-100 to-blue-50 px-4 py-3 cursor-pointer hover:from-blue-200 hover:to-blue-100 transition-colors"
                         onClick={() => setExpandedDPP(isExpanded ? null : group.dppId)}
                       >
@@ -738,7 +730,7 @@ export default function WitnessDashboard() {
                             <div>
                               <h3 className="font-semibold text-gray-900">{group.dppName}</h3>
                               <p className="text-sm text-gray-600">
-                                Main Product • {totalEvents} event{totalEvents !== 1 ? 's' : ''} 
+                                Main Product • {totalEvents} event{totalEvents !== 1 ? 's' : ''}
                                 {group.components && group.components.length > 0 && ` • ${group.components.length} component${group.components.length !== 1 ? 's' : ''}`}
                               </p>
                             </div>
@@ -755,7 +747,7 @@ export default function WitnessDashboard() {
                           </div>
                         </div>
                       </div>
-                      
+
                       {/* Window Content - Collapsible */}
                       {isExpanded && (
                         <>
@@ -765,13 +757,12 @@ export default function WitnessDashboard() {
                               {group.events.map((event) => (
                                 <div
                                   key={event.id}
-                                  className={`border-b border-gray-200 p-4 transition-all ${
-                                    event.status === 'pending'
+                                  className={`border-b border-gray-200 p-4 transition-all ${event.status === 'pending'
                                       ? 'bg-yellow-50'
                                       : event.status === 'approved'
-                                      ? 'bg-green-50'
-                                      : 'bg-red-50'
-                                  }`}
+                                        ? 'bg-green-50'
+                                        : 'bg-red-50'
+                                    }`}
                                 >
                                   <div className="flex items-start justify-between">
                                     <div className="flex-1">
@@ -786,7 +777,7 @@ export default function WitnessDashboard() {
                                           </p>
                                         </div>
                                       </div>
-                                      
+
                                       {selectedEvent?.id === event.id && (
                                         <div className="mt-3 p-3 bg-white rounded border border-gray-200">
                                           <div className="text-xs font-semibold text-gray-700 mb-2">Event Data:</div>
@@ -802,7 +793,7 @@ export default function WitnessDashboard() {
                                       >
                                         {selectedEvent?.id === event.id ? 'Hide' : 'Details'}
                                       </button>
-                                      
+
                                       {event.status === 'pending' && (
                                         <>
                                           <button
@@ -825,16 +816,16 @@ export default function WitnessDashboard() {
                               ))}
                             </div>
                           )}
-                          
+
                           {/* Component Sub-DPPs */}
                           {group.components && group.components.map((component) => {
                             const componentKey = `${group.dppId}-${component.name}`;
                             const isComponentExpanded = expandedComponents.has(componentKey);
-                            
+
                             return (
                               <div key={component.name} className="border-t border-gray-300">
                                 {/* Component Sub-DPP Header - Clickable */}
-                                <div 
+                                <div
                                   className="bg-gradient-to-r from-purple-50 to-purple-100 px-4 py-3 cursor-pointer hover:from-purple-100 hover:to-purple-200 transition-colors"
                                   onClick={() => {
                                     const newExpanded = new Set(expandedComponents);
@@ -868,20 +859,19 @@ export default function WitnessDashboard() {
                                     </div>
                                   </div>
                                 </div>
-                                
+
                                 {/* Component Events - Collapsible */}
                                 {isComponentExpanded && (
                                   <div className="bg-white">
                                     {component.events.map((event) => (
                                       <div
                                         key={event.id}
-                                        className={`border-t border-gray-200 p-4 transition-all ${
-                                          event.status === 'pending'
+                                        className={`border-t border-gray-200 p-4 transition-all ${event.status === 'pending'
                                             ? 'bg-yellow-50'
                                             : event.status === 'approved'
-                                            ? 'bg-green-50'
-                                            : 'bg-red-50'
-                                        }`}
+                                              ? 'bg-green-50'
+                                              : 'bg-red-50'
+                                          }`}
                                       >
                                         <div className="flex items-start justify-between">
                                           <div className="flex-1">
@@ -896,7 +886,7 @@ export default function WitnessDashboard() {
                                                 </p>
                                               </div>
                                             </div>
-                                            
+
                                             {selectedEvent?.id === event.id && (
                                               <div className="mt-3 p-3 bg-white rounded border border-gray-200">
                                                 <div className="text-xs font-semibold text-gray-700 mb-2">Event Data:</div>
@@ -912,7 +902,7 @@ export default function WitnessDashboard() {
                                             >
                                               {selectedEvent?.id === event.id ? 'Hide' : 'Details'}
                                             </button>
-                                            
+
                                             {event.status === 'pending' && (
                                               <>
                                                 <button
@@ -953,7 +943,7 @@ export default function WitnessDashboard() {
       {showConfirmModal && eventToConfirm && (() => {
         const eventType = eventToConfirm.eventType;
         const data = eventToConfirm.data;
-        
+
         // Helper function to extract and display DIDs nicely
         const formatDID = (did: string) => {
           if (!did) return { short: 'Unknown', full: 'Unknown' };
@@ -961,16 +951,16 @@ export default function WitnessDashboard() {
           const shortDid = did.split(':').pop() || did;
           return { short: shortDid, full: did };
         };
-        
+
         // Determine visual representation based on event type
         let visualContent = null;
-        
+
         if (eventType === 'ownership_change') {
           const oldOwner = data?.previousOwner || data?.old_owner || 'Unknown';
           const newOwner = data?.newOwner || data?.new_owner || 'Unknown';
           const oldOwnerFormatted = formatDID(oldOwner);
           const newOwnerFormatted = formatDID(newOwner);
-          
+
           visualContent = (
             <div className="py-8">
               <div className="flex items-center justify-center gap-8">
@@ -986,12 +976,12 @@ export default function WitnessDashboard() {
                     </p>
                   </div>
                 </div>
-                
+
                 <div className="flex flex-col items-center">
                   <ArrowRight className="w-12 h-12 text-green-500 animate-pulse" />
                   <p className="text-xs font-semibold text-gray-600 mt-2">TRANSFER</p>
                 </div>
-                
+
                 <div className="text-center flex-1">
                   <div className="w-24 h-24 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
                     <User className="w-12 h-12 text-white" />
@@ -1005,7 +995,7 @@ export default function WitnessDashboard() {
                   </div>
                 </div>
               </div>
-              
+
               {data?.transferMethod && (
                 <div className="mt-6 text-center">
                   <p className="text-sm text-gray-600">
@@ -1023,7 +1013,7 @@ export default function WitnessDashboard() {
         } else if (eventType === 'key_rotation') {
           const oldKey = data?.old_key || data?.previousKey || 'Unknown';
           const newKey = data?.new_key || data?.newKey || 'Unknown';
-          
+
           visualContent = (
             <div className="py-8">
               <div className="flex items-center justify-center gap-8">
@@ -1036,12 +1026,12 @@ export default function WitnessDashboard() {
                     <p className="text-xs font-mono text-gray-600 break-all">{oldKey.substring(0, 40)}...</p>
                   </div>
                 </div>
-                
+
                 <div className="flex flex-col items-center">
-                  <RefreshCw className="w-12 h-12 text-green-500 animate-spin" style={{animationDuration: '3s'}} />
+                  <RefreshCw className="w-12 h-12 text-green-500 animate-spin" style={{ animationDuration: '3s' }} />
                   <p className="text-xs font-semibold text-gray-600 mt-2">ROTATION</p>
                 </div>
-                
+
                 <div className="text-center flex-1">
                   <div className="w-24 h-24 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
                     <Key className="w-12 h-12 text-white" />
@@ -1052,7 +1042,7 @@ export default function WitnessDashboard() {
                   </div>
                 </div>
               </div>
-              
+
               {data?.reason && (
                 <div className="mt-6 text-center">
                   <p className="text-sm text-gray-600">
@@ -1066,7 +1056,7 @@ export default function WitnessDashboard() {
           const didFormatted = formatDID(eventToConfirm.did);
           const controller = data?.controller || data?.owner || 'Unknown';
           const controllerFormatted = formatDID(controller);
-          
+
           visualContent = (
             <div className="py-8">
               <div className="flex flex-col items-center">
@@ -1078,7 +1068,7 @@ export default function WitnessDashboard() {
                   <p className="text-xs font-semibold text-green-600 mb-2">DID IDENTIFIER</p>
                   <p className="text-sm font-mono text-gray-800 break-all">{didFormatted.full}</p>
                 </div>
-                
+
                 <div className="mt-6 bg-blue-50 rounded-lg p-4 border border-blue-200 max-w-xl w-full">
                   <div className="flex items-center gap-3">
                     <User className="w-8 h-8 text-blue-600" />
@@ -1088,7 +1078,7 @@ export default function WitnessDashboard() {
                     </div>
                   </div>
                 </div>
-                
+
                 {data?.publicKey && (
                   <div className="mt-4 bg-gray-50 rounded-lg p-4 border border-gray-200 max-w-xl w-full">
                     <p className="text-xs font-semibold text-gray-600 mb-2">PUBLIC KEY</p>
@@ -1101,7 +1091,7 @@ export default function WitnessDashboard() {
         } else if (eventType === 'did_update' || eventType === 'did_lifecycle_update') {
           const changes = data?.changes || data?.updates || {};
           const lifecycleStatus = data?.status || data?.lifecycle_status;
-          
+
           visualContent = (
             <div className="py-8">
               <div className="flex flex-col items-center">
@@ -1109,14 +1099,14 @@ export default function WitnessDashboard() {
                   <RefreshCw className="w-14 h-14 text-white" />
                 </div>
                 <p className="text-lg font-bold text-gray-800 mb-2">DID Document Update</p>
-                
+
                 {lifecycleStatus && (
                   <div className="mt-4 bg-blue-50 rounded-lg p-4 border-2 border-blue-200 max-w-xl w-full">
                     <p className="text-xs font-semibold text-blue-600 mb-2">LIFECYCLE STATUS</p>
                     <p className="text-2xl font-bold text-blue-700">{lifecycleStatus}</p>
                   </div>
                 )}
-                
+
                 {Object.keys(changes).length > 0 && (
                   <div className="mt-4 bg-white rounded-lg p-4 border border-gray-200 max-w-xl w-full">
                     <p className="text-xs font-semibold text-gray-600 mb-3">CHANGES</p>
@@ -1148,7 +1138,7 @@ export default function WitnessDashboard() {
             </div>
           );
         }
-        
+
         return (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[95vh] overflow-y-auto">
@@ -1168,12 +1158,12 @@ export default function WitnessDashboard() {
                 </h2>
                 <p className="text-sm text-gray-600 mt-1">Review the DID event details before confirming</p>
               </div>
-              
+
               <div className="p-6">
                 <div className="mb-6 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 rounded-xl border border-gray-200">
                   {visualContent}
                 </div>
-                
+
                 <div className="bg-gray-50 rounded-lg p-5 border border-gray-200">
                   <h3 className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
                     <Shield className="w-4 h-4" />
@@ -1184,24 +1174,24 @@ export default function WitnessDashboard() {
                       <span className="text-xs font-semibold text-gray-500 uppercase">Event Type</span>
                       <p className="text-sm font-semibold text-gray-900 mt-1">{eventToConfirm.description}</p>
                     </div>
-                    
+
                     <div>
                       <span className="text-xs font-semibold text-gray-500 uppercase">Product</span>
                       <p className="text-sm font-semibold text-gray-900 mt-1">{eventToConfirm.productModel}</p>
                     </div>
                   </div>
-                  
+
                   <div className="mb-4">
                     <span className="text-xs font-semibold text-gray-500 uppercase">DID</span>
                     <p className="text-xs font-mono text-gray-800 break-all mt-1 bg-white p-2 rounded border border-gray-200">{eventToConfirm.did}</p>
                   </div>
-                  
+
                   <div>
                     <span className="text-xs font-semibold text-gray-500 uppercase">Timestamp</span>
                     <p className="text-sm text-gray-900 mt-1">{new Date(eventToConfirm.timestamp).toLocaleString()}</p>
                   </div>
                 </div>
-                
+
                 <div className={`mt-6 p-4 rounded-lg border-2 ${confirmAction === 'approve' ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300'}`}>
                   <div className="flex items-start gap-3">
                     {confirmAction === 'approve' ? (
@@ -1214,7 +1204,7 @@ export default function WitnessDashboard() {
                         {confirmAction === 'approve' ? 'Approval Action' : 'Rejection Action'}
                       </p>
                       <p className={`text-sm ${confirmAction === 'approve' ? 'text-green-700' : 'text-red-700'}`}>
-                        {confirmAction === 'approve' 
+                        {confirmAction === 'approve'
                           ? 'By confirming, you validate this event as legitimate and sign it with your witness DID. This action cannot be undone.'
                           : 'By confirming, you mark this event as invalid and it will not be accepted in the DID log. This action cannot be undone.'}
                       </p>
@@ -1222,7 +1212,7 @@ export default function WitnessDashboard() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="p-6 bg-gray-100 rounded-b-lg flex justify-end gap-3 border-t border-gray-200">
                 <button
                   onClick={() => {
@@ -1236,11 +1226,10 @@ export default function WitnessDashboard() {
                 </button>
                 <button
                   onClick={handleConfirm}
-                  className={`px-6 py-2.5 text-white rounded-lg font-medium transition-colors shadow-lg ${
-                    confirmAction === 'approve'
+                  className={`px-6 py-2.5 text-white rounded-lg font-medium transition-colors shadow-lg ${confirmAction === 'approve'
                       ? 'bg-green-600 hover:bg-green-700'
                       : 'bg-red-600 hover:bg-red-700'
-                  }`}
+                    }`}
                 >
                   {confirmAction === 'approve' ? '✓ Confirm Approval' : '✗ Confirm Rejection'}
                 </button>

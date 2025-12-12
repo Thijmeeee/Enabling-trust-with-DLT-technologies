@@ -60,14 +60,14 @@ export default function ResolverDashboard() {
   async function loadRecentVerifications() {
     // Load recent verifications from localStorage or perform auto-verification
     const allDPPs = await enhancedDB.getAllDPPs();
-    
+
     // Verify all DPPs (main and components)
     const results: VerificationResult[] = [];
     for (const dpp of allDPPs) {
       const result = await verifyDID(dpp.did, dpp);
       results.push(result);
     }
-    
+
     setVerifications(results);
     updateStats(results);
   }
@@ -153,7 +153,7 @@ export default function ResolverDashboard() {
         timestamp: entry.timestamp,
         hash: entry.operationHash || 'N/A',
       });
-      
+
       // First entry should not have a previous hash requirement
       if (i === 0) {
         continue;
@@ -164,8 +164,8 @@ export default function ResolverDashboard() {
       entry; // Use entry to avoid unused warning
     }
 
-    return { 
-      valid: true, 
+    return {
+      valid: true,
       message: `Hash chain verified: ${history.length} entries`,
       details: {
         totalEntries: history.length,
@@ -176,15 +176,15 @@ export default function ResolverDashboard() {
 
   function verifyControllerSignatures(_history: any[], attestations: any[], _dpp: DPP): { valid: boolean; message: string; details?: any } {
     // Check if all operations have valid controller signatures
-    const operationsWithSignatures = attestations.filter(a => 
-      a.attestation_type === 'ownership_change' || 
+    const operationsWithSignatures = attestations.filter(a =>
+      a.attestation_type === 'ownership_change' ||
       a.attestation_type === 'key_rotation' ||
       a.attestation_type === 'did_creation'
     );
 
     if (operationsWithSignatures.length === 0) {
-      return { 
-        valid: true, 
+      return {
+        valid: true,
         message: 'No operations requiring controller signatures',
         details: { totalOperations: 0, signatures: [] }
       };
@@ -193,17 +193,17 @@ export default function ResolverDashboard() {
     // In a real implementation, verify cryptographic signatures
     // For now, check if signature field exists
     const hasSignatures = operationsWithSignatures.every(op => op.signature);
-    
+
     const signatureDetails = operationsWithSignatures.map(op => ({
       type: op.attestation_type,
       timestamp: op.timestamp,
       signature: op.signature ? op.signature.substring(0, 40) + '...' : 'Missing',
       status: op.signature ? 'Valid' : 'Invalid',
     }));
-    
+
     if (hasSignatures) {
-      return { 
-        valid: true, 
+      return {
+        valid: true,
         message: `${operationsWithSignatures.length} controller signatures verified`,
         details: {
           totalOperations: operationsWithSignatures.length,
@@ -211,8 +211,8 @@ export default function ResolverDashboard() {
         }
       };
     } else {
-      return { 
-        valid: false, 
+      return {
+        valid: false,
         message: 'Missing controller signatures on some operations',
         details: {
           totalOperations: operationsWithSignatures.length,
@@ -223,14 +223,14 @@ export default function ResolverDashboard() {
   }
 
   function verifyWitnessProofs(attestations: any[]): { valid: boolean; message: string; details?: any } {
-    const witnessRequired = attestations.filter(a => 
-      a.attestation_type === 'ownership_change' || 
+    const witnessRequired = attestations.filter(a =>
+      a.attestation_type === 'ownership_change' ||
       a.attestation_type === 'key_rotation'
     );
 
     if (witnessRequired.length === 0) {
-      return { 
-        valid: true, 
+      return {
+        valid: true,
         message: 'No operations requiring witness proofs',
         details: { totalOperations: 0, proofs: [] }
       };
@@ -251,8 +251,8 @@ export default function ResolverDashboard() {
     }));
 
     if (rejectedWitness.length > 0) {
-      return { 
-        valid: false, 
+      return {
+        valid: false,
         message: `${rejectedWitness.length} operations rejected by witness`,
         details: {
           totalOperations: witnessRequired.length,
@@ -265,8 +265,8 @@ export default function ResolverDashboard() {
     }
 
     if (pendingWitness.length > 0) {
-      return { 
-        valid: true, 
+      return {
+        valid: true,
         message: `${approvedByWitness.length} proofs verified, ${pendingWitness.length} pending (warning)`,
         details: {
           totalOperations: witnessRequired.length,
@@ -278,8 +278,8 @@ export default function ResolverDashboard() {
       };
     }
 
-    return { 
-      valid: true, 
+    return {
+      valid: true,
       message: `${approvedByWitness.length} witness proofs verified`,
       details: {
         totalOperations: witnessRequired.length,
@@ -295,14 +295,14 @@ export default function ResolverDashboard() {
     // Check if DID document is consistent with history
     // Verify that current owner matches last ownership change
     const ownershipChanges = history.filter(h => h.attestation_type === 'ownership_change' && h.approval_status === 'approved');
-    
+
     if (ownershipChanges.length > 0) {
       const lastOwnershipChange = ownershipChanges[ownershipChanges.length - 1];
       const expectedOwner = lastOwnershipChange.attestation_data?.newOwner;
-      
+
       if (expectedOwner && dpp.owner !== expectedOwner) {
-        return { 
-          valid: false, 
+        return {
+          valid: false,
           message: 'Owner mismatch: DID document does not match history',
           details: {
             currentOwner: dpp.owner,
@@ -359,10 +359,10 @@ export default function ResolverDashboard() {
 
   function groupVerificationsByDPP(): GroupedVerifications[] {
     const grouped: GroupedVerifications[] = [];
-    
+
     // Find all main products (type === 'main' and no parent_did)
     const mainVerifications = verifications.filter(v => v.dppType === 'main' || (!v.parentDid && v.dppType !== 'component'));
-    
+
     mainVerifications.forEach(mainVerification => {
       // Find all components that belong to this main product
       const components = verifications
@@ -377,7 +377,7 @@ export default function ResolverDashboard() {
       if (components.length > 0) {
         const hasInvalidComponent = components.some(c => c.verification.status === 'invalid');
         const hasWarningComponent = components.some(c => c.verification.status === 'warning');
-        
+
         if (hasInvalidComponent || mainVerification.status === 'invalid') {
           overallStatus = 'invalid';
         } else if (hasWarningComponent || mainVerification.status === 'warning') {
@@ -403,7 +403,7 @@ export default function ResolverDashboard() {
   }
 
   const groupedVerifications = groupVerificationsByDPP();
-  
+
   // Update stats based on grouped verifications (only count main products)
   useEffect(() => {
     const validCount = groupedVerifications.filter(g => g.verification.status === 'valid').length;
@@ -417,37 +417,37 @@ export default function ResolverDashboard() {
       warningDIDs: warningCount,
     });
   }, [groupedVerifications]);
-  
+
   // Apply filter - only show main products at top level, components shown within their parent
-  const filteredVerifications = filter === 'all' 
-    ? groupedVerifications 
+  const filteredVerifications = filter === 'all'
+    ? groupedVerifications
     : groupedVerifications.filter(group => {
-        // Use the overall status that includes component validation
-        return group.verification.status === filter;
-      });
+      // Use the overall status that includes component validation
+      return group.verification.status === filter;
+    });
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 pt-20">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6 pt-20 transition-colors">
       <div className="max-w-[1920px] mx-auto">
         {/* Header */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 mb-6 transition-colors">
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <div className="p-3 bg-purple-100 rounded-lg">
-                  <Search className="w-8 h-8 text-purple-600" />
+                <div className="p-3 bg-purple-100 dark:bg-purple-900/50 rounded-lg">
+                  <Search className="w-8 h-8 text-purple-600 dark:text-purple-400" />
                 </div>
                 <div>
-                  <h1 className="text-3xl font-bold text-gray-900">Resolver Dashboard</h1>
-                  <p className="text-gray-600">Reconstruct and verify DID history integrity</p>
+                  <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Resolver Dashboard</h1>
+                  <p className="text-gray-600 dark:text-gray-400">Reconstruct and verify DID history integrity</p>
                 </div>
               </div>
             </div>
 
             <div className="flex items-center gap-4">
               <div className="text-right">
-                <p className="text-sm text-gray-600">Resolver Node</p>
-                <p className="text-xs font-mono text-gray-500">{currentRoleDID}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Resolver Node</p>
+                <p className="text-xs font-mono text-gray-500 dark:text-gray-400">{currentRoleDID}</p>
               </div>
             </div>
           </div>
@@ -455,50 +455,50 @@ export default function ResolverDashboard() {
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 transition-colors">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Total Verifications</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.totalVerifications}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Total Verifications</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalVerifications}</p>
               </div>
-              <FileText className="w-8 h-8 text-blue-500" />
+              <FileText className="w-8 h-8 text-blue-500 dark:text-blue-400" />
             </div>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 transition-colors">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Valid DIDs</p>
-                <p className="text-2xl font-bold text-green-600">{stats.validDIDs}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Valid DIDs</p>
+                <p className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.validDIDs}</p>
               </div>
-              <CheckCircle className="w-8 h-8 text-green-500" />
+              <CheckCircle className="w-8 h-8 text-green-500 dark:text-green-400" />
             </div>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 transition-colors">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Invalid DIDs</p>
-                <p className="text-2xl font-bold text-red-600">{stats.invalidDIDs}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Invalid DIDs</p>
+                <p className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.invalidDIDs}</p>
               </div>
-              <XCircle className="w-8 h-8 text-red-500" />
+              <XCircle className="w-8 h-8 text-red-500 dark:text-red-400" />
             </div>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 transition-colors">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Warnings</p>
-                <p className="text-2xl font-bold text-yellow-600">{stats.warningDIDs}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Warnings</p>
+                <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.warningDIDs}</p>
               </div>
-              <AlertTriangle className="w-8 h-8 text-yellow-500" />
+              <AlertTriangle className="w-8 h-8 text-yellow-500 dark:text-yellow-400" />
             </div>
           </div>
         </div>
 
         {/* Search/Verify DID */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Verify DID</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-6 transition-colors">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Verify DID</h2>
           <div className="flex gap-3">
             <input
               type="text"
@@ -506,12 +506,12 @@ export default function ResolverDashboard() {
               onChange={(e) => setSearchDID(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleVerifyDID()}
               placeholder="Enter DID to verify (e.g., did:webvh:example.com:products:window-123)"
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
             />
             <button
               onClick={handleVerifyDID}
               disabled={loading || !searchDID.trim()}
-              className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
             >
               <Search className="w-4 h-4" />
               {loading ? 'Verifying...' : 'Verify'}
@@ -520,52 +520,48 @@ export default function ResolverDashboard() {
         </div>
 
         {/* Verifications List */}
-        <div className="bg-white rounded-lg border border-gray-200 mb-6">
-          <div className="p-4 border-b border-gray-200">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 mb-6 transition-colors">
+          <div className="p-4 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Verification History</h2>
-              
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Verification History</h2>
+
               {/* Filter Buttons */}
               <div className="flex gap-2">
                 <button
                   onClick={() => setFilter('all')}
-                  className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                    filter === 'all'
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
+                  className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${filter === 'all'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
                 >
                   All ({stats.totalVerifications})
                 </button>
                 <button
                   onClick={() => setFilter('valid')}
-                  className={`px-3 py-1.5 text-sm rounded-lg transition-colors flex items-center gap-1 ${
-                    filter === 'valid'
-                      ? 'bg-green-600 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
+                  className={`px-3 py-1.5 text-sm rounded-lg transition-colors flex items-center gap-1 ${filter === 'valid'
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
                 >
                   <CheckCircle className="w-3 h-3" />
                   Valid ({stats.validDIDs})
                 </button>
                 <button
                   onClick={() => setFilter('invalid')}
-                  className={`px-3 py-1.5 text-sm rounded-lg transition-colors flex items-center gap-1 ${
-                    filter === 'invalid'
-                      ? 'bg-red-600 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
+                  className={`px-3 py-1.5 text-sm rounded-lg transition-colors flex items-center gap-1 ${filter === 'invalid'
+                    ? 'bg-red-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
                 >
                   <XCircle className="w-3 h-3" />
                   Invalid ({stats.invalidDIDs})
                 </button>
                 <button
                   onClick={() => setFilter('warning')}
-                  className={`px-3 py-1.5 text-sm rounded-lg transition-colors flex items-center gap-1 ${
-                    filter === 'warning'
-                      ? 'bg-yellow-600 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
+                  className={`px-3 py-1.5 text-sm rounded-lg transition-colors flex items-center gap-1 ${filter === 'warning'
+                    ? 'bg-yellow-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
                 >
                   <AlertTriangle className="w-3 h-3" />
                   Warning ({stats.warningDIDs})
@@ -574,10 +570,10 @@ export default function ResolverDashboard() {
             </div>
           </div>
 
-          <div className="divide-y divide-gray-200">
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
             {filteredVerifications.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">
-                <Search className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+              <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+                <Search className="w-12 h-12 mx-auto mb-3 text-gray-400 dark:text-gray-500" />
                 <p>No verifications yet. Enter a DID above to verify.</p>
               </div>
             ) : (
@@ -585,44 +581,44 @@ export default function ResolverDashboard() {
                 <div key={group.dppId} className="p-4">
                   {/* Main DPP */}
                   <div
-                    className="flex items-center justify-between cursor-pointer hover:bg-gray-50 p-3 rounded-lg"
+                    className="flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-3 rounded-lg transition-colors"
                     onClick={() => setExpandedDPP(expandedDPP === group.dppId ? null : group.dppId)}
                   >
                     <div className="flex items-center gap-3 flex-1">
-                      <Package className="w-5 h-5 text-blue-600" />
+                      <Package className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                       <div className="flex-1">
                         <div className="flex items-center gap-3">
-                          <h3 className="font-semibold text-gray-900">{group.dppName}</h3>
+                          <h3 className="font-semibold text-gray-900 dark:text-white">{group.dppName}</h3>
                           {group.verification.status === 'valid' && (
-                            <span className="flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">
+                            <span className="flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300">
                               <CheckCircle className="w-3 h-3" />
                               Valid
                             </span>
                           )}
                           {group.verification.status === 'invalid' && (
-                            <span className="flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-red-100 text-red-700">
+                            <span className="flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300">
                               <XCircle className="w-3 h-3" />
                               Invalid
                             </span>
                           )}
                           {group.verification.status === 'warning' && (
-                            <span className="flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-700">
+                            <span className="flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300">
                               <AlertTriangle className="w-3 h-3" />
                               Warning
                             </span>
                           )}
                         </div>
-                        <p className="text-sm font-mono text-gray-500">{group.verification.did}</p>
-                        <p className="text-xs text-gray-400">
+                        <p className="text-sm font-mono text-gray-500 dark:text-gray-400">{group.verification.did}</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">
                           Verified: {new Date(group.verification.timestamp).toLocaleString()}
                         </p>
                       </div>
                     </div>
-                    <button className="p-1 hover:bg-gray-200 rounded">
+                    <button className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors">
                       {expandedDPP === group.dppId ? (
-                        <ChevronUp className="w-5 h-5 text-gray-600" />
+                        <ChevronUp className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                       ) : (
-                        <ChevronDown className="w-5 h-5 text-gray-600" />
+                        <ChevronDown className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                       )}
                     </button>
                   </div>
@@ -631,20 +627,20 @@ export default function ResolverDashboard() {
                   {expandedDPP === group.dppId && (
                     <div className="ml-8 mt-4 space-y-3">
                       {/* Verification Checks */}
-                      <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                        <h4 className="font-semibold text-sm text-gray-900 mb-3">Verification Checks</h4>
-                        
+                      <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 space-y-2 transition-colors">
+                        <h4 className="font-semibold text-sm text-gray-900 dark:text-white mb-3">Verification Checks</h4>
+
                         <div className="flex items-start gap-2">
                           {group.verification.checks.hashChain.valid ? (
-                            <CheckCircle className="w-4 h-4 text-green-600 mt-0.5" />
+                            <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400 mt-0.5" />
                           ) : (
-                            <XCircle className="w-4 h-4 text-red-600 mt-0.5" />
+                            <XCircle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5" />
                           )}
                           <div className="flex-1">
-                            <p className="text-sm font-medium text-gray-900">Hash Chain</p>
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">Hash Chain</p>
                             <button
                               onClick={() => openDetailsModal('Hash Chain Verification', group.verification.checks.hashChain, group.verification)}
-                              className="text-xs text-blue-600 hover:text-blue-800 hover:underline text-left"
+                              className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline text-left"
                             >
                               {group.verification.checks.hashChain.message}
                             </button>
@@ -916,7 +912,7 @@ export default function ResolverDashboard() {
                   <p className="text-sm text-red-800 mb-3">
                     The current owner in the DID document does not match the expected owner from the most recent approved ownership transfer in the history.
                   </p>
-                  
+
                   {modalDetails.check.details && (
                     <div className="bg-white rounded p-3 mb-3">
                       <div className="space-y-2 text-xs">
@@ -943,7 +939,7 @@ export default function ResolverDashboard() {
                       </div>
                     </div>
                   )}
-                  
+
                   <div className="space-y-2">
                     <div>
                       <span className="text-xs font-semibold text-red-900">Possible causes:</span>
@@ -976,11 +972,10 @@ export default function ResolverDashboard() {
                           <div key={idx} className="bg-gray-50 rounded p-3 text-xs space-y-2">
                             <div className="flex justify-between">
                               <span className="font-medium">{proof.type}</span>
-                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                proof.status === 'approved' ? 'bg-green-100 text-green-800' :
+                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${proof.status === 'approved' ? 'bg-green-100 text-green-800' :
                                 proof.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                                'bg-red-100 text-red-800'
-                              }`}>{proof.status}</span>
+                                  'bg-red-100 text-red-800'
+                                }`}>{proof.status}</span>
                             </div>
                             <div className="text-gray-600">
                               <span className="font-semibold">Witness:</span> <span className="font-mono text-xs">{proof.witness}</span>
@@ -988,7 +983,7 @@ export default function ResolverDashboard() {
                             <div className="text-gray-600">
                               <span className="font-semibold">Time:</span> {new Date(proof.timestamp).toLocaleString()}
                             </div>
-                            
+
                             {/* Event Data Details */}
                             {proof.eventData && Object.keys(proof.eventData).length > 0 && (
                               <div className="mt-2 pt-2 border-t border-gray-200">
@@ -1033,7 +1028,7 @@ export default function ResolverDashboard() {
                                 </div>
                               </div>
                             )}
-                            
+
                             {/* Signature */}
                             {proof.signature && (
                               <div className="mt-2 pt-2 border-t border-gray-200">
@@ -1103,9 +1098,8 @@ export default function ResolverDashboard() {
                           <div key={idx} className="bg-gray-50 rounded p-2 text-xs">
                             <div className="flex justify-between">
                               <span className="font-medium">{sig.type}</span>
-                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                sig.status === 'Valid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                              }`}>{sig.status}</span>
+                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${sig.status === 'Valid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                }`}>{sig.status}</span>
                             </div>
                             <div className="text-gray-600 mt-1">Signature: <span className="font-mono text-xs">{sig.signature}</span></div>
                             <div className="text-gray-600">Time: {new Date(sig.timestamp).toLocaleString()}</div>

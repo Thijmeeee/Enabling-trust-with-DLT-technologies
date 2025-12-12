@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { 
-  Shield, 
-  Eye, 
-  Search, 
-  Factory, 
-  Wrench, 
-  UserCheck, 
-  Recycle, 
+import {
+  Shield,
+  Eye,
+  Search,
+  Factory,
+  Wrench,
+  UserCheck,
+  Recycle,
   FileCheck,
   ArrowRight,
   ArrowLeft,
@@ -42,22 +42,21 @@ export default function IntroductionPage({ onContinue }: IntroductionPageProps) 
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800 flex flex-col transition-colors">
       {/* Header with Progress and Skip */}
       <div className="px-6 py-8 flex justify-between items-center max-w-6xl mx-auto w-full">
         <div className="flex gap-2">
-            {steps.map((_, idx) => (
-                <div 
-                  key={idx} 
-                  className={`h-2 w-12 rounded-full transition-all duration-300 ${
-                    idx <= currentStep ? 'bg-blue-600' : 'bg-gray-200'
-                  }`} 
-                />
-            ))}
+          {steps.map((_, idx) => (
+            <div
+              key={idx}
+              className={`h-2 w-12 rounded-full transition-all duration-300 ${idx <= currentStep ? 'bg-blue-600' : 'bg-gray-200'
+                }`}
+            />
+          ))}
         </div>
-        <button 
-          onClick={onContinue} 
-          className="text-gray-500 hover:text-gray-800 font-medium flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+        <button
+          onClick={onContinue}
+          className="text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 font-medium flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
         >
           Skip Intro <X className="w-4 h-4" />
         </button>
@@ -66,32 +65,31 @@ export default function IntroductionPage({ onContinue }: IntroductionPageProps) 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col items-center justify-center px-6 pb-6">
         <div className="max-w-5xl w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {steps[currentStep].component}
+          {steps[currentStep].component}
         </div>
       </div>
 
       {/* Navigation Footer */}
-      <div className="p-6 border-t border-gray-100 bg-white/80 backdrop-blur-sm sticky bottom-0">
+      <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm sticky bottom-0 transition-colors">
         <div className="max-w-5xl mx-auto flex justify-between items-center">
-            <button
-                onClick={handleBack}
-                disabled={currentStep === 0}
-                className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-colors ${
-                    currentStep === 0 
-                      ? 'text-gray-300 cursor-not-allowed' 
-                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                }`}
-            >
-                <ArrowLeft className="w-5 h-5" /> Back
-            </button>
+          <button
+            onClick={handleBack}
+            disabled={currentStep === 0}
+            className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-colors ${currentStep === 0
+                ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
+              }`}
+          >
+            <ArrowLeft className="w-5 h-5" /> Back
+          </button>
 
-            <button
-                onClick={handleNext}
-                className="flex items-center gap-2 px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-105"
-            >
-                {currentStep === steps.length - 1 ? 'Get Started' : 'Next Step'}
-                <ArrowRight className="w-5 h-5" />
-            </button>
+          <button
+            onClick={handleNext}
+            className="flex items-center gap-2 px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-105"
+          >
+            {currentStep === steps.length - 1 ? 'Get Started' : 'Next Step'}
+            <ArrowRight className="w-5 h-5" />
+          </button>
         </div>
       </div>
     </div>
@@ -104,27 +102,27 @@ function WelcomeStep() {
       <div className="inline-flex items-center justify-center w-24 h-24 bg-blue-600 rounded-3xl mb-8 shadow-xl shadow-blue-200">
         <FileCheck className="w-12 h-12 text-white" />
       </div>
-      
-      <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
+
+      <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">
         Digital Product Passport
       </h1>
-      
-      <p className="text-xl text-gray-600 mb-12 leading-relaxed">
+
+      <p className="text-xl text-gray-600 dark:text-gray-300 mb-12 leading-relaxed">
         Building trust in the circular economy through transparent, verifiable product data.
       </p>
 
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 text-left">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-3">
-          <span className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-600 text-sm">1</span>
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-8 text-left transition-colors">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-3">
+          <span className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 text-sm">1</span>
           Why Does This System Exist?
         </h2>
-        <p className="text-gray-700 leading-relaxed mb-4 text-lg">
-          In a circular economy, products like windows move through many hands—from 
+        <p className="text-gray-700 dark:text-gray-300 leading-relaxed mb-4 text-lg">
+          In a circular economy, products like windows move through many hands—from
           manufacturers to installers to recyclers. The challenge is: <strong>How do you trust the data?</strong>
         </p>
         <p className="text-gray-700 leading-relaxed text-lg">
-          This system gives every product a <strong>Digital Product Passport</strong> (technically known as a <strong>DID</strong>). 
-          Think of it as an unforgeable birth certificate that travels with the product 
+          This system gives every product a <strong>Digital Product Passport</strong> (technically known as a <strong>DID</strong>).
+          Think of it as an unforgeable birth certificate that travels with the product
           forever, recording every significant event along the way.
         </p>
       </div>
@@ -261,7 +259,7 @@ function ValueStep() {
   return (
     <div className="max-w-3xl mx-auto text-center">
       <h2 className="text-3xl font-bold text-gray-900 mb-8">Why Does This Matter?</h2>
-      
+
       <div className="bg-gradient-to-br from-blue-600 to-purple-700 rounded-3xl p-10 text-white shadow-xl mb-10">
         <div className="grid md:grid-cols-3 gap-8">
           <div>

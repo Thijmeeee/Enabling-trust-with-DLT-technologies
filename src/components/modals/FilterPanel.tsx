@@ -32,21 +32,21 @@ export function FilterPanel({ onFilterChange, stats }: FilterPanelProps) {
     sortBy: 'date',
     sortOrder: 'desc',
   });
-  
+
   const [showAdvanced, setShowAdvanced] = useState(false);
-  
+
   useEffect(() => {
     const debounce = setTimeout(() => {
       onFilterChange(filters);
     }, 300);
-    
+
     return () => clearTimeout(debounce);
   }, [filters, onFilterChange]);
-  
+
   const updateFilter = (key: keyof FilterState, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }));
   };
-  
+
   const clearFilters = () => {
     setFilters({
       text: '',
@@ -59,29 +59,29 @@ export function FilterPanel({ onFilterChange, stats }: FilterPanelProps) {
       sortOrder: 'desc',
     });
   };
-  
-  const activeFilterCount = Object.entries(filters).filter(([key, value]) => 
+
+  const activeFilterCount = Object.entries(filters).filter(([key, value]) =>
     key !== 'text' && key !== 'sortBy' && key !== 'sortOrder' && value && value !== 'all'
   ).length;
-  
+
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 space-y-4">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 space-y-4 transition-colors">
       {/* Search Bar */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500" />
         <input
           type="text"
           value={filters.text}
           onChange={(e) => updateFilter('text', e.target.value)}
           placeholder="Search by model, dimensions, batch number..."
-          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
         />
       </div>
-      
+
       {/* Quick Filters */}
       <div className="flex flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-gray-700">Type:</span>
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Type:</span>
           {['all', 'main', 'component'].map((type) => (
             <button
               key={type}
@@ -91,38 +91,35 @@ export function FilterPanel({ onFilterChange, stats }: FilterPanelProps) {
                   updateFilter('componentSubType', '');
                 }
               }}
-              className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                filters.type === type
+              className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${filters.type === type
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
             >
               {type === 'all' ? 'All' : type === 'main' ? 'Main' : 'Component'}
             </button>
           ))}
         </div>
-        
+
         {/* Component Sub-Type Filter (only visible when type is 'component') */}
         {filters.type === 'component' && (
-          <div className="flex items-center gap-2 pl-4 border-l border-gray-300">
+          <div className="flex items-center gap-2 pl-4 border-l border-gray-300 dark:border-gray-600">
             <button
               onClick={() => updateFilter('componentSubType', 'glass')}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                filters.componentSubType === 'glass'
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium transition-colors ${filters.componentSubType === 'glass'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
             >
               <Square className="w-3.5 h-3.5" />
               Glass
             </button>
             <button
               onClick={() => updateFilter('componentSubType', 'frame')}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                filters.componentSubType === 'frame'
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium transition-colors ${filters.componentSubType === 'frame'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
             >
               <Maximize className="w-3.5 h-3.5" />
               Frame
@@ -130,17 +127,17 @@ export function FilterPanel({ onFilterChange, stats }: FilterPanelProps) {
             {filters.componentSubType && (
               <button
                 onClick={() => updateFilter('componentSubType', '')}
-                className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 hover:text-gray-800"
+                className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
               >
                 <X className="w-3 h-3" />
               </button>
             )}
           </div>
         )}
-        
+
         <button
           onClick={() => setShowAdvanced(!showAdvanced)}
-          className="ml-auto flex items-center gap-1 px-3 py-1 text-sm font-medium text-gray-700 hover:text-gray-900"
+          className="ml-auto flex items-center gap-1 px-3 py-1 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
         >
           <Filter className="w-4 h-4" />
           Advanced
@@ -151,31 +148,31 @@ export function FilterPanel({ onFilterChange, stats }: FilterPanelProps) {
           )}
           <ChevronDown className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
         </button>
-        
+
         {activeFilterCount > 0 && (
           <button
             onClick={clearFilters}
-            className="flex items-center gap-1 px-3 py-1 text-sm text-red-600 hover:text-red-700"
+            className="flex items-center gap-1 px-3 py-1 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
           >
             <X className="w-4 h-4" />
             Remove filters
           </button>
         )}
       </div>
-      
+
       {/* Advanced Filters */}
       {showAdvanced && (
-        <div className="space-y-4 pt-4 border-t border-gray-200">
+        <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Product Type */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Product Type
               </label>
               <select
                 value={filters.productType}
                 onChange={(e) => updateFilter('productType', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-colors"
               >
                 <option value="">All types</option>
                 {Object.keys(PRODUCT_SCHEMAS).map((type) => (
@@ -186,16 +183,16 @@ export function FilterPanel({ onFilterChange, stats }: FilterPanelProps) {
                 ))}
               </select>
             </div>
-            
+
             {/* Lifecycle Status */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Lifecycle Status
               </label>
               <select
                 value={filters.status}
                 onChange={(e) => updateFilter('status', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-colors"
               >
                 <option value="">All Status</option>
                 <option value="active">Active</option>
@@ -208,10 +205,10 @@ export function FilterPanel({ onFilterChange, stats }: FilterPanelProps) {
                 <option value="end_of_life">End of Life</option>
               </select>
             </div>
-            
+
             {/* Owner */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Owner
               </label>
               <input
@@ -219,7 +216,7 @@ export function FilterPanel({ onFilterChange, stats }: FilterPanelProps) {
                 value={filters.owner}
                 onChange={(e) => updateFilter('owner', e.target.value)}
                 placeholder="Filter by owner DID..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
               />
             </div>
           </div>
@@ -227,13 +224,13 @@ export function FilterPanel({ onFilterChange, stats }: FilterPanelProps) {
           {/* Sort Options */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Sort By
               </label>
               <select
                 value={filters.sortBy}
                 onChange={(e) => updateFilter('sortBy', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-colors"
               >
                 <option value="date">Date Created</option>
                 <option value="name">Product Name</option>
@@ -241,15 +238,15 @@ export function FilterPanel({ onFilterChange, stats }: FilterPanelProps) {
                 <option value="warranty">Warranty Status</option>
               </select>
             </div>
-            
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Sort Order
               </label>
               <select
                 value={filters.sortOrder}
                 onChange={(e) => updateFilter('sortOrder', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-colors"
               >
                 <option value="desc">Newest First</option>
                 <option value="asc">Oldest First</option>

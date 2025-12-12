@@ -136,30 +136,30 @@ export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP,
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-12">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-12 transition-colors">
       {/* Top Navigation / Header */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-30 transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-3 ml-72">
               <button
                 onClick={onClose ? onClose : onBack}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors mr-2"
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors mr-2"
                 title="Back to Dashboard"
               >
-                <ArrowLeft className="w-5 h-5 text-gray-600" />
+                <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-300" />
               </button>
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Wallet className="w-6 h-6 text-blue-600" />
+              <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                <Wallet className="w-6 h-6 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">Manufacturer Wallet</h1>
+                <h1 className="text-xl font-bold text-gray-900 dark:text-white">Manufacturer Wallet</h1>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <button
                 onClick={handleResetData}
-                className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors border border-red-200 dark:border-red-700"
                 title="Reset all data and regenerate with new DIDs"
               >
                 <Trash2 className="w-4 h-4" />
@@ -182,37 +182,37 @@ export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP,
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Stats Overview */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 shadow-sm transition-colors">
             <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-blue-50 rounded-lg">
-                <Package className="w-6 h-6 text-blue-600" />
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/50 rounded-lg">
+                <Package className="w-6 h-6 text-blue-600 dark:text-blue-400" />
               </div>
-              <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-full">Total Assets</span>
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-full">Total Assets</span>
             </div>
-            <div className="text-3xl font-bold text-gray-900">{stats.total}</div>
-            <p className="text-sm text-gray-500 mt-1">Registered products</p>
+            <div className="text-3xl font-bold text-gray-900 dark:text-white">{stats.total}</div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Registered products</p>
           </div>
 
-          <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 shadow-sm transition-colors">
             <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-green-50 rounded-lg">
-                <TrendingUp className="w-6 h-6 text-green-600" />
+              <div className="p-3 bg-green-50 dark:bg-green-900/50 rounded-lg">
+                <TrendingUp className="w-6 h-6 text-green-600 dark:text-green-400" />
               </div>
-              <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">Active</span>
+              <span className="text-xs font-medium text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/50 px-2 py-1 rounded-full">Active</span>
             </div>
-            <div className="text-3xl font-bold text-gray-900">{stats.active}</div>
-            <p className="text-sm text-gray-500 mt-1">Currently in circulation</p>
+            <div className="text-3xl font-bold text-gray-900 dark:text-white">{stats.active}</div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Currently in circulation</p>
           </div>
 
-          <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 shadow-sm transition-colors">
             <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-purple-50 rounded-lg">
-                <RefreshCw className="w-6 h-6 text-purple-600" />
+              <div className="p-3 bg-purple-50 dark:bg-purple-900/50 rounded-lg">
+                <RefreshCw className="w-6 h-6 text-purple-600 dark:text-purple-400" />
               </div>
-              <span className="text-xs font-medium text-purple-600 bg-purple-50 px-2 py-1 rounded-full">Recycled</span>
+              <span className="text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/50 px-2 py-1 rounded-full">Recycled</span>
             </div>
-            <div className="text-3xl font-bold text-gray-900">{stats.recycled}</div>
-            <p className="text-sm text-gray-500 mt-1">Processed end-of-life</p>
+            <div className="text-3xl font-bold text-gray-900 dark:text-white">{stats.recycled}</div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Processed end-of-life</p>
           </div>
         </div>
 
@@ -223,21 +223,21 @@ export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP,
           <div className="w-full lg:w-64 flex-shrink-0 space-y-8">
             {/* Search (Mobile only, or keep in sidebar?) - Keeping main search above, this is filter sidebar */}
 
-            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-              <div className="flex items-center gap-2 mb-4 text-gray-900 font-semibold">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm transition-colors">
+              <div className="flex items-center gap-2 mb-4 text-gray-900 dark:text-white font-semibold">
                 <Filter className="w-4 h-4" />
                 Filters
               </div>
 
               {/* Product Type Filter */}
               <div className="mb-6">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Product Type</h3>
+                <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Product Type</h3>
                 <div className="space-y-2">
                   {availableTypes.map(type => (
                     <label key={type} className="flex items-center gap-3 cursor-pointer group">
                       <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${selectedTypes.includes(type)
-                          ? 'bg-blue-600 border-blue-600 text-white'
-                          : 'border-gray-300 group-hover:border-blue-400 bg-white'
+                        ? 'bg-blue-600 border-blue-600 text-white'
+                        : 'border-gray-300 dark:border-gray-600 group-hover:border-blue-400 bg-white dark:bg-gray-700'
                         }`}>
                         {selectedTypes.includes(type) && <Check className="w-3 h-3" />}
                       </div>
@@ -247,8 +247,8 @@ export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP,
                         checked={selectedTypes.includes(type)}
                         onChange={() => toggleType(type)}
                       />
-                      <span className="text-sm text-gray-700 group-hover:text-gray-900 capitalize">{type}</span>
-                      <span className="ml-auto text-xs text-gray-400">
+                      <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white capitalize">{type}</span>
+                      <span className="ml-auto text-xs text-gray-400 dark:text-gray-500">
                         {products.filter(p => (p.metadata.productType as string || 'Other') === type).length}
                       </span>
                     </label>
@@ -258,13 +258,13 @@ export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP,
 
               {/* Status Filter */}
               <div>
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Status</h3>
+                <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Status</h3>
                 <div className="space-y-2">
                   {availableStatuses.map(status => (
                     <label key={status} className="flex items-center gap-3 cursor-pointer group">
                       <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${selectedStatuses.includes(status)
-                          ? 'bg-blue-600 border-blue-600 text-white'
-                          : 'border-gray-300 group-hover:border-blue-400 bg-white'
+                        ? 'bg-blue-600 border-blue-600 text-white'
+                        : 'border-gray-300 dark:border-gray-600 group-hover:border-blue-400 bg-white dark:bg-gray-700'
                         }`}>
                         {selectedStatuses.includes(status) && <Check className="w-3 h-3" />}
                       </div>
@@ -274,8 +274,8 @@ export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP,
                         checked={selectedStatuses.includes(status)}
                         onChange={() => toggleStatus(status)}
                       />
-                      <span className="text-sm text-gray-700 group-hover:text-gray-900 capitalize">{status}</span>
-                      <span className="ml-auto text-xs text-gray-400">
+                      <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white capitalize">{status}</span>
+                      <span className="ml-auto text-xs text-gray-400 dark:text-gray-500">
                         {products.filter(p => p.lifecycle_status === status).length}
                       </span>
                     </label>
@@ -289,13 +289,13 @@ export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP,
           <div className="flex-1">
             {/* Search Bar */}
             <div className="relative mb-6">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500" />
               <input
                 type="text"
                 placeholder="Search by Model or DID..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
               />
             </div>
 
@@ -304,19 +304,19 @@ export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP,
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
               </div>
             ) : filteredProducts.length === 0 ? (
-              <div className="text-center py-16 bg-white rounded-xl border border-gray-200 border-dashed">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-50 rounded-full mb-4">
-                  <Box className="w-8 h-8 text-gray-400" />
+              <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 border-dashed transition-colors">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-50 dark:bg-gray-700 rounded-full mb-4">
+                  <Box className="w-8 h-8 text-gray-400 dark:text-gray-500" />
                 </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-1">No products found</h3>
-                <p className="text-gray-500 mb-6">Try adjusting your filters or search terms.</p>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">No products found</h3>
+                <p className="text-gray-500 dark:text-gray-400 mb-6">Try adjusting your filters or search terms.</p>
                 <button
                   onClick={() => {
                     setSearchTerm('');
                     setSelectedTypes([]);
                     setSelectedStatuses([]);
                   }}
-                  className="text-blue-600 hover:text-blue-700 font-medium"
+                  className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
                 >
                   Clear all filters
                 </button>
@@ -337,8 +337,8 @@ export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP,
 
                 {/* Pagination Controls */}
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-between border-t border-gray-200 mt-6 pt-6">
-                    <div className="text-sm text-gray-500">
+                  <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-700 mt-6 pt-6">
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
                       Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
                       <span className="font-medium">
                         {Math.min(currentPage * itemsPerPage, filteredProducts.length)}
@@ -349,7 +349,7 @@ export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP,
                       <button
                         onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                         disabled={currentPage === 1}
-                        className="flex items-center gap-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center gap-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         <ChevronLeft className="w-4 h-4" />
                         Previous
@@ -357,7 +357,7 @@ export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP,
                       <button
                         onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                         disabled={currentPage === totalPages}
-                        className="flex items-center gap-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center gap-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         Next
                         <ChevronRight className="w-4 h-4" />

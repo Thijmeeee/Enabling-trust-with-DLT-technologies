@@ -331,12 +331,12 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
   const dpp = data.dpp;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b border-gray-200">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 transition-colors">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <button
             onClick={onBack}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"
+            className="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white mb-4 transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
             {backLabel || 'Back to Dashboard'}
@@ -348,15 +348,15 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                 <Package className="w-8 h-8 text-white" />
               </div>
               <div className="flex-1">
-                <h1 className="text-3xl font-bold text-gray-900 mb-3">{dpp.model}</h1>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-3">{dpp.model}</h1>
 
                 {/* Prominent DID Display */}
-                <div className="bg-gradient-to-r from-blue-50 via-purple-50 to-blue-50 border-2 border-blue-500 rounded-lg p-4 mb-3 shadow-sm">
+                <div className="bg-gradient-to-r from-blue-50 via-purple-50 to-blue-50 dark:from-blue-900/30 dark:via-purple-900/30 dark:to-blue-900/30 border-2 border-blue-500 dark:border-blue-600 rounded-lg p-4 mb-3 shadow-sm transition-colors">
                   <div className="flex items-center gap-2 mb-2">
-                    <Link2 className="w-5 h-5 text-blue-600" />
-                    <span className="text-sm font-bold text-blue-900 uppercase tracking-wide">DID:webvh Identifier</span>
+                    <Link2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    <span className="text-sm font-bold text-blue-900 dark:text-blue-300 uppercase tracking-wide">DID:webvh Identifier</span>
                   </div>
-                  <p className="text-base text-gray-900 font-mono break-all leading-relaxed">{dpp.did}</p>
+                  <p className="text-base text-gray-900 dark:text-gray-100 font-mono break-all leading-relaxed">{dpp.did}</p>
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -366,8 +366,8 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                     }`}>
                     {dpp.type === 'main' ? 'Main Product' : 'Component'}
                   </span>
-                  <span className="text-sm text-gray-700 font-medium capitalize px-3 py-1 bg-gray-100 rounded-full">{dpp.lifecycle_status}</span>
-                  <span className="text-sm text-gray-700 font-medium px-3 py-1 bg-gray-100 rounded-full">Version {dpp.version}</span>
+                  <span className="text-sm text-gray-700 dark:text-gray-300 font-medium capitalize px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-full transition-colors">{dpp.lifecycle_status}</span>
+                  <span className="text-sm text-gray-700 dark:text-gray-300 font-medium px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-full transition-colors">Version {dpp.version}</span>
                 </div>
               </div>
             </div>
@@ -376,7 +376,7 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
               {canSeeAdvancedFeatures() && (
                 <button
                   onClick={() => setShowRawData(true)}
-                  className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2"
+                  className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 text-gray-900 dark:text-white transition-colors"
                 >
                   <FileJson className="w-4 h-4" />
                   View Raw Data
@@ -384,7 +384,7 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
               )}
               <button
                 onClick={() => setShowQR(true)}
-                className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2"
+                className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 text-gray-900 dark:text-white transition-colors"
               >
                 <QrCode className="w-4 h-4" />
                 QR Code
@@ -392,7 +392,7 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
             </div>
           </div>
 
-          <div className="flex gap-2 mt-6 border-b border-gray-200">
+          <div className="flex gap-2 mt-6 border-b border-gray-200 dark:border-gray-700">
             {[
               { id: 'overview', label: 'Overview', showFor: ['main', 'component'] },
               { id: 'specifications', label: 'Specifications', showFor: ['main', 'component'] },
@@ -406,8 +406,8 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
                 className={`px-4 py-2 border-b-2 transition-colors relative ${activeTab === tab.id
-                  ? 'border-blue-600 text-blue-600 font-medium'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
+                  ? 'border-blue-600 text-blue-600 dark:text-blue-400 font-medium'
+                  : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                   }`}
               >
                 {tab.label}
@@ -429,37 +429,37 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
           return (
             <div className="space-y-6">
               {/* Product Overview Section */}
-              <div className="bg-white rounded-lg border-2 border-blue-200 shadow-sm p-6">
+              <div className="bg-white dark:bg-gray-800 rounded-lg border-2 border-blue-200 dark:border-blue-700 shadow-sm p-6 transition-colors">
                 <div className="flex items-center gap-3 mb-6">
-                  <Package className="w-6 h-6 text-blue-600" />
-                  <h2 className="text-2xl font-bold text-gray-900">Product Overview</h2>
+                  <Package className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Product Overview</h2>
                 </div>
 
                 {/* Basic Info Grid */}
-                <div className="grid grid-cols-2 gap-4 mb-6 p-4 bg-blue-50 rounded-lg">
+                <div className="grid grid-cols-2 gap-4 mb-6 p-4 bg-blue-50 dark:bg-blue-900/30 rounded-lg transition-colors">
                   <div>
-                    <div className="text-sm text-gray-600 mb-1">Type</div>
-                    <div className="font-semibold text-gray-900">
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Type</div>
+                    <div className="font-semibold text-gray-900 dark:text-white">
                       {dpp.metadata?.productType || dpp.type}
                     </div>
                   </div>
                   {dpp.metadata?.dimensions && (
                     <div>
-                      <div className="text-sm text-gray-600 mb-1">Dimensions</div>
-                      <div className="font-semibold text-gray-900">
+                      <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Dimensions</div>
+                      <div className="font-semibold text-gray-900 dark:text-white">
                         {dpp.metadata.dimensions.width}mm × {dpp.metadata.dimensions.height}mm (W × H)
                       </div>
                     </div>
                   )}
                   {dpp.metadata?.weight && (
                     <div>
-                      <div className="text-sm text-gray-600 mb-1">Weight</div>
-                      <div className="font-semibold text-gray-900">{dpp.metadata.weight} kg</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Weight</div>
+                      <div className="font-semibold text-gray-900 dark:text-white">{dpp.metadata.weight} kg</div>
                     </div>
                   )}
                   <div>
-                    <div className="text-sm text-gray-600 mb-1">Suitable for</div>
-                    <div className="font-semibold text-gray-900">Residential & Commercial Buildings</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Suitable for</div>
+                    <div className="font-semibold text-gray-900 dark:text-white">Residential & Commercial Buildings</div>
                   </div>
                 </div>
 
@@ -467,8 +467,8 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                 {dop && (
                   <>
                     <div className="flex items-center gap-3 mb-4 mt-6">
-                      <Award className="w-6 h-6 text-blue-600" />
-                      <h3 className="text-xl font-bold text-gray-900">Performance</h3>
+                      <Award className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                      <h3 className="text-xl font-bold text-gray-900 dark:text-white">Performance</h3>
                     </div>
 
                     <div className="space-y-4">
@@ -496,16 +496,16 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                             return (
                               <div key={idx} className={`border-l-4 border-${color}-500 pl-4 py-2`}>
                                 <div className="flex items-start gap-3">
-                                  <Icon className={`w-5 h-5 text-${color}-600 flex-shrink-0 mt-0.5`} />
+                                  <Icon className={`w-5 h-5 text-${color}-600 dark:text-${color}-400 flex-shrink-0 mt-0.5`} />
                                   <div className="flex-1">
-                                    <div className="font-semibold text-gray-900 mb-1">
+                                    <div className="font-semibold text-gray-900 dark:text-white mb-1">
                                       {perf.characteristic}
                                     </div>
-                                    <div className="text-sm text-gray-700">
+                                    <div className="text-sm text-gray-700 dark:text-gray-300">
                                       {perf.performance} {perf.unit && `(${perf.unit})`}
                                     </div>
                                     {perf.classification && (
-                                      <div className="text-xs text-gray-600 mt-1">
+                                      <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                                         Classification: {perf.classification}
                                       </div>
                                     )}
@@ -521,20 +521,20 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                     {/* Certifications */}
                     <div className="mt-6">
                       <div className="flex items-center gap-3 mb-4">
-                        <FileCheck className="w-6 h-6 text-blue-600" />
-                        <h3 className="text-xl font-bold text-gray-900">Certifications</h3>
+                        <FileCheck className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Certifications</h3>
                       </div>
-                      <div className="space-y-2 bg-green-50 p-4 rounded-lg">
-                        <div className="flex items-center gap-2 text-green-700">
+                      <div className="space-y-2 bg-green-50 dark:bg-green-900/30 p-4 rounded-lg transition-colors">
+                        <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
                           <CheckCircle className="w-5 h-5" />
                           <span className="font-medium">CE Marking {new Date(dop.ceMarking.year).getFullYear()}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-green-700">
+                        <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
                           <CheckCircle className="w-5 h-5" />
                           <span className="font-medium">EU Construction Products Regulation (CPR 305/2011)</span>
                         </div>
                         {dop.notifiedBody && (
-                          <div className="flex items-center gap-2 text-green-700">
+                          <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
                             <CheckCircle className="w-5 h-5" />
                             <span className="font-medium">Tested by: {dop.notifiedBody.name}</span>
                           </div>
@@ -546,33 +546,33 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
               </div>
 
               {/* Technical Details - Collapsible */}
-              <div className="bg-white rounded-lg border border-gray-200">
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors">
                 <button
                   onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
-                  className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                  className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                 >
                   <div className="flex items-center gap-3">
-                    <FileCheck className="w-5 h-5 text-gray-600" />
-                    <span className="font-semibold text-gray-900">Technical Specifications</span>
+                    <FileCheck className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                    <span className="font-semibold text-gray-900 dark:text-white">Technical Specifications</span>
                   </div>
                   {showTechnicalDetails ? (
-                    <ChevronUp className="w-5 h-5 text-gray-600" />
+                    <ChevronUp className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                   ) : (
-                    <ChevronDown className="w-5 h-5 text-gray-600" />
+                    <ChevronDown className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                   )}
                 </button>
 
                 {showTechnicalDetails && (
-                  <div className="border-t border-gray-200 p-6">
+                  <div className="border-t border-gray-200 dark:border-gray-700 p-6">
                     {dop ? (
                       <DoPerformanceView dop={dop} onEdit={canEdit ? () => setEditingDoP(true) : undefined} />
                     ) : (
                       <div className="text-center py-8">
-                        <p className="text-gray-500 mb-4">No Declaration of Performance available for this product.</p>
+                        <p className="text-gray-500 dark:text-gray-400 mb-4">No Declaration of Performance available for this product.</p>
                         {canEdit && (
                           <button
                             onClick={() => setEditingDoP(true)}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                           >
                             Create DoP
                           </button>
@@ -590,11 +590,11 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
           <div className="grid grid-cols-3 gap-6">
             {/* Product Visual - Larger and more prominent */}
             <div className="col-span-3 mb-4">
-              <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm overflow-hidden">
+              <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden transition-colors">
                 <div className="flex items-start gap-0">
                   {/* Product Image - Much larger */}
                   <div className="flex-shrink-0 relative group">
-                    <div className="w-96 h-96 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center overflow-hidden">
+                    <div className="w-96 h-96 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-900/30 dark:via-indigo-900/30 dark:to-purple-900/30 flex items-center justify-center overflow-hidden">
                       {dpp.metadata?.image_url ? (
                         <img
                           src={dpp.metadata.image_url}
@@ -604,11 +604,11 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                       ) : (
                         <div className="text-center p-8">
                           <div className="relative inline-block">
-                            <ImageIcon className="w-32 h-32 text-blue-300 mx-auto mb-4" />
-                            <div className="absolute inset-0 bg-blue-400 opacity-20 blur-2xl"></div>
+                            <ImageIcon className="w-32 h-32 text-blue-300 dark:text-blue-600 mx-auto mb-4" />
+                            <div className="absolute inset-0 bg-blue-400 dark:bg-blue-600 opacity-20 blur-2xl"></div>
                           </div>
-                          <p className="text-lg font-semibold text-gray-600 mb-2">Product Visual</p>
-                          <p className="text-sm text-gray-500">{dpp.type}</p>
+                          <p className="text-lg font-semibold text-gray-600 dark:text-gray-300 mb-2">Product Visual</p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">{dpp.type}</p>
                         </div>
                       )}
                     </div>
@@ -618,12 +618,12 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                   <div className="flex-1 p-8">
                     <div className="flex items-start justify-between mb-4">
                       <div>
-                        <h2 className="text-3xl font-bold text-gray-900 mb-2">{dpp.model}</h2>
+                        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">{dpp.model}</h2>
                         <div className="flex items-center gap-3">
-                          <span className="px-3 py-1 bg-blue-100 text-blue-700 text-sm font-semibold rounded-full">
+                          <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-sm font-semibold rounded-full">
                             {dpp.type}
                           </span>
-                          <span className="px-3 py-1 bg-green-100 text-green-700 text-sm font-semibold rounded-full capitalize">
+                          <span className="px-3 py-1 bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 text-sm font-semibold rounded-full capitalize">
                             {dpp.lifecycle_status}
                           </span>
                         </div>
@@ -632,46 +632,46 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
 
                     {/* Key Product Features */}
                     <div className="mb-6">
-                      <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Key Features</h3>
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-3">Key Features</h3>
                       <div className="space-y-2.5">
                         {getProductFeatures(dpp).map((feature, idx) => (
                           <div key={idx} className="flex items-start gap-3">
-                            <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                            <span className="text-gray-700 leading-relaxed">{feature}</span>
+                            <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                            <span className="text-gray-700 dark:text-gray-300 leading-relaxed">{feature}</span>
                           </div>
                         ))}
                       </div>
                     </div>
 
                     {/* Technical Specs Grid */}
-                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-200">
+                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                       {dpp.metadata?.dimensions && (
-                        <div className="bg-gray-50 rounded-lg p-3">
-                          <div className="text-xs text-gray-500 font-medium mb-1">Dimensions</div>
-                          <div className="text-sm font-semibold text-gray-900">
+                        <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                          <div className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">Dimensions</div>
+                          <div className="text-sm font-semibold text-gray-900 dark:text-white">
                             {dpp.metadata.dimensions.width} × {dpp.metadata.dimensions.height} mm
                           </div>
                         </div>
                       )}
                       {dpp.metadata?.weight && (
-                        <div className="bg-gray-50 rounded-lg p-3">
-                          <div className="text-xs text-gray-500 font-medium mb-1">Weight</div>
-                          <div className="text-sm font-semibold text-gray-900">{dpp.metadata.weight} kg</div>
+                        <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                          <div className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">Weight</div>
+                          <div className="text-sm font-semibold text-gray-900 dark:text-white">{dpp.metadata.weight} kg</div>
                         </div>
                       )}
                       {dpp.metadata?.batch && (
                         <ProtectedField field="operations" label="Batch Number" value={dpp.metadata.batch}>
-                          <div className="bg-purple-50 rounded-lg p-3">
-                            <div className="text-xs text-purple-600 font-medium mb-1">Batch Number</div>
-                            <div className="text-sm font-semibold text-purple-900">{dpp.metadata.batch}</div>
+                          <div className="bg-purple-50 dark:bg-purple-900/30 rounded-lg p-3">
+                            <div className="text-xs text-purple-600 dark:text-purple-400 font-medium mb-1">Batch Number</div>
+                            <div className="text-sm font-semibold text-purple-900 dark:text-purple-300">{dpp.metadata.batch}</div>
                           </div>
                         </ProtectedField>
                       )}
                       {dpp.created_at && (
                         <ProtectedField field="operations" label="Production Date" value={new Date(dpp.created_at).toLocaleDateString()}>
-                          <div className="bg-gray-50 rounded-lg p-3">
-                            <div className="text-xs text-gray-500 font-medium mb-1">Production Date</div>
-                            <div className="text-sm font-semibold text-gray-900">
+                          <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                            <div className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">Production Date</div>
+                            <div className="text-sm font-semibold text-gray-900 dark:text-white">
                               {new Date(dpp.created_at).toLocaleDateString()}
                             </div>
                           </div>
@@ -686,17 +686,17 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
             {/* Left column: Trust Score (top) + Product Information (bottom) */}
             <div className="col-span-2 space-y-6">
               {/* Trust Score */}
-              <div className="bg-white rounded-lg border border-gray-200 p-6">
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 transition-colors">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                    <Shield className="w-5 h-5 text-blue-600" />
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                    <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                     Verification Status
                   </h2>
                   <div className="relative">
                     <button
                       onMouseEnter={() => setShowTrustTooltip(true)}
                       onMouseLeave={() => setShowTrustTooltip(false)}
-                      className="p-1.5 hover:bg-gray-100 rounded-full transition-colors"
+                      className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
                     >
                       <Info className="w-5 h-5 text-gray-400" />
                     </button>

@@ -54,17 +54,17 @@ export default function WatcherDashboard() {
     const allDPPs = await enhancedDB.getAllDPPs();
     const allAlerts = await localDB.getAlerts();
     const watcherAlerts = allAlerts.filter(a => a.watcher_did === currentRoleDID);
-    
+
     // Calculate integrity scores for each DPP with verification
     const monitored: MonitoredDPP[] = await Promise.all(
       allDPPs.map(async (dpp) => {
         const dppAlerts = watcherAlerts.filter(a => a.dpp_id === dpp.id);
-        
+
         // Perform continuous verification (Watcher's core function)
         await performContinuousVerification(dpp, dppAlerts);
-        
+
         const integrityScore = calculateIntegrityScore(dpp, dppAlerts);
-        
+
         return {
           ...dpp,
           integrityScore,
@@ -99,19 +99,19 @@ export default function WatcherDashboard() {
     if (!history.success) return;
 
     const attestations = await enhancedDB.getAttestationsByDID(dpp.did);
-    
+
     // 1. Recompute hashes across all entries
     const hashChainValid = verifyHashChainContinuous(history.operations, existingAlerts, dpp);
-    
+
     // 2. Validate controller signatures
     const controllerProofsValid = verifyControllerProofs(attestations, existingAlerts, dpp);
-    
+
     // 3. Validate witness proofs
     const witnessProofsValid = verifyWitnessProofs(attestations, existingAlerts, dpp);
-    
+
     // 4. Compare resulting state with expected (e.g., keys, owner)
     const stateConsistent = verifyStateConsistency(dpp, history.operations, existingAlerts);
-    
+
     // Log any new inconsistencies as alerts
     if (!hashChainValid || !controllerProofsValid || !witnessProofsValid || !stateConsistent) {
       console.log(`Watcher detected inconsistencies in ${dpp.did}`);
@@ -121,20 +121,20 @@ export default function WatcherDashboard() {
   function verifyHashChainContinuous(operations: any[], existingAlerts: WatcherAlert[], dpp: DPP): boolean {
     // Check if hash chain is intact
     if (operations.length === 0) return true;
-    
+
     // In a real implementation: recompute hash for each entry and verify chain
     // For now: check if entries are sequential
     for (let i = 1; i < operations.length; i++) {
       const current = operations[i];
       const previous = operations[i - 1];
-      
+
       // Check if timestamps are sequential
       if (new Date(current.timestamp) < new Date(previous.timestamp)) {
         // Create alert if not already exists
-        const alertExists = existingAlerts.some(a => 
+        const alertExists = existingAlerts.some(a =>
           a.alert_type === 'hash_chain_broken' && a.status === 'active'
         );
-        
+
         if (!alertExists) {
           localDB.insertAlert({
             watcher_id: currentRoleDID,
@@ -151,28 +151,28 @@ export default function WatcherDashboard() {
             detected_at: new Date().toISOString(),
           });
         }
-        
+
         return false;
       }
     }
-    
+
     return true;
   }
 
   function verifyControllerProofs(attestations: any[], existingAlerts: WatcherAlert[], dpp: DPP): boolean {
     // Validate all controller signatures
-    const criticalOps = attestations.filter(a => 
-      a.attestation_type === 'ownership_change' || 
+    const criticalOps = attestations.filter(a =>
+      a.attestation_type === 'ownership_change' ||
       a.attestation_type === 'key_rotation' ||
       a.attestation_type === 'did_creation'
     );
-    
+
     for (const attestation of criticalOps) {
       if (!attestation.signature || attestation.signature.startsWith('pending-')) {
-        const alertExists = existingAlerts.some(a => 
+        const alertExists = existingAlerts.some(a =>
           a.alert_type === 'missing_controller_signature' && a.status === 'active'
         );
-        
+
         if (!alertExists && attestation.approval_status === 'approved') {
           localDB.insertAlert({
             watcher_id: currentRoleDID,
@@ -189,27 +189,27 @@ export default function WatcherDashboard() {
             detected_at: new Date().toISOString(),
           });
         }
-        
+
         return false;
       }
     }
-    
+
     return true;
   }
 
   function verifyWitnessProofs(attestations: any[], existingAlerts: WatcherAlert[], dpp: DPP): boolean {
     // Validate witness attestations
-    const witnessRequired = attestations.filter(a => 
-      a.attestation_type === 'ownership_change' || 
+    const witnessRequired = attestations.filter(a =>
+      a.attestation_type === 'ownership_change' ||
       a.attestation_type === 'key_rotation'
     );
-    
+
     for (const attestation of witnessRequired) {
       if (attestation.approval_status === 'rejected') {
-        const alertExists = existingAlerts.some(a => 
+        const alertExists = existingAlerts.some(a =>
           a.alert_type === 'rejected_by_witness' && a.status === 'active'
         );
-        
+
         if (!alertExists) {
           localDB.insertAlert({
             watcher_id: currentRoleDID,
@@ -227,12 +227,12 @@ export default function WatcherDashboard() {
           });
         }
       }
-      
+
       if (!attestation.witness_did && attestation.approval_status === 'approved') {
-        const alertExists = existingAlerts.some(a => 
+        const alertExists = existingAlerts.some(a =>
           a.alert_type === 'missing_witness_proof' && a.status === 'active'
         );
-        
+
         if (!alertExists) {
           localDB.insertAlert({
             watcher_id: currentRoleDID,
@@ -249,29 +249,29 @@ export default function WatcherDashboard() {
             detected_at: new Date().toISOString(),
           });
         }
-        
+
         return false;
       }
     }
-    
+
     return true;
   }
 
   function verifyStateConsistency(dpp: DPP, operations: any[], existingAlerts: WatcherAlert[]): boolean {
     // Compare current state with expected state from history
-    const ownershipChanges = operations.filter(op => 
+    const ownershipChanges = operations.filter(op =>
       op.attestation_type === 'ownership_change' && op.approval_status === 'approved'
     );
-    
+
     if (ownershipChanges.length > 0) {
       const lastOwnershipChange = ownershipChanges[ownershipChanges.length - 1];
       const expectedOwner = lastOwnershipChange.attestation_data?.newOwner;
-      
+
       if (expectedOwner && dpp.owner !== expectedOwner) {
-        const alertExists = existingAlerts.some(a => 
+        const alertExists = existingAlerts.some(a =>
           a.alert_type === 'state_mismatch' && a.status === 'active'
         );
-        
+
         if (!alertExists) {
           localDB.insertAlert({
             watcher_id: currentRoleDID,
@@ -288,16 +288,16 @@ export default function WatcherDashboard() {
             detected_at: new Date().toISOString(),
           });
         }
-        
+
         return false;
       }
     }
-    
+
     return true;
   }
   function calculateIntegrityScore(dpp: DPP, alerts: WatcherAlert[]): number {
     let score = 100;
-    
+
     // Reduce score based on active alerts
     const activeAlerts = alerts.filter(a => a.status === 'active');
     activeAlerts.forEach(alert => {
@@ -316,19 +316,19 @@ export default function WatcherDashboard() {
 
   async function createAlert() {
     if (!alertModalDPP || !alertForm.description.trim()) return;
-    
+
     // Check if there's already an active alert of this type for this DPP
-    const existingAlert = alerts.find(a => 
-      a.dpp_id === alertModalDPP.id && 
-      a.alert_type === alertForm.type && 
+    const existingAlert = alerts.find(a =>
+      a.dpp_id === alertModalDPP.id &&
+      a.alert_type === alertForm.type &&
       a.status === 'active'
     );
-    
+
     if (existingAlert) {
       alert('An active alert of this type already exists for this product.');
       return;
     }
-    
+
     await localDB.insertAlert({
       watcher_id: currentRoleDID,
       watcher_did: currentRoleDID,
@@ -353,11 +353,11 @@ export default function WatcherDashboard() {
 
   async function resolveAlert(alertId: string) {
     // Update the alert in the database
-    await localDB.updateAlert(alertId, { 
-      status: 'resolved', 
+    await localDB.updateAlert(alertId, {
+      status: 'resolved',
       resolved: true
     });
-    
+
     // Reload data to get fresh stats
     await loadMonitoringData();
   }
@@ -396,12 +396,12 @@ export default function WatcherDashboard() {
   // Group monitored DPPs hierarchically
   const groupedMonitoredDPPs = (): GroupedMonitoredDPPs[] => {
     const groups = new Map<string, GroupedMonitoredDPPs>();
-    
+
     // Build parent-child relationships
     const dppMap = new Map(monitoredDPPs.map(dpp => [dpp.id, dpp]));
     const didToDppMap = new Map(monitoredDPPs.map(dpp => [dpp.did, dpp]));
     const parentMap = new Map<string, string>();
-    
+
     for (const dpp of monitoredDPPs) {
       if (dpp.type === 'component') {
         if (dpp.parent_did) {
@@ -414,13 +414,13 @@ export default function WatcherDashboard() {
         }
       }
     }
-    
+
     monitoredDPPs.forEach((dpp) => {
       // Determine grouping
       let groupDppId = dpp.id;
       let groupDppModel = dpp.model;
       let isComponent = false;
-      
+
       if (dpp.type === 'component' && parentMap.has(dpp.id)) {
         const parentId = parentMap.get(dpp.id)!;
         const parentDpp = dppMap.get(parentId);
@@ -430,7 +430,7 @@ export default function WatcherDashboard() {
           isComponent = true;
         }
       }
-      
+
       // Create group if doesn't exist
       if (!groups.has(groupDppId)) {
         const mainDpp = dppMap.get(groupDppId);
@@ -442,9 +442,9 @@ export default function WatcherDashboard() {
           components: [],
         });
       }
-      
+
       const group = groups.get(groupDppId)!;
-      
+
       // Add to components or update main DPP
       if (isComponent) {
         group.components!.push({ name: dpp.model, dpp });
@@ -452,92 +452,92 @@ export default function WatcherDashboard() {
         group.dpp = dpp;
       }
     });
-    
+
     // Filter to show only window groups (main products with components)
     const validGroups = Array.from(groups.values()).filter(group => {
-      const isWindowGroup = group.dppName.toLowerCase().startsWith('window') && 
-                           !group.dppName.toLowerCase().includes('frame') && 
-                           !group.dppName.toLowerCase().includes('panel');
+      const isWindowGroup = group.dppName.toLowerCase().startsWith('window') &&
+        !group.dppName.toLowerCase().includes('frame') &&
+        !group.dppName.toLowerCase().includes('panel');
       return isWindowGroup;
     });
-    
+
     return validGroups;
   };
 
   async function loadDPPDetails(dpp: MonitoredDPP) {
     setSelectedDPPForDetails(dpp);
     setFilter('selected'); // Auto-switch to selected product tab
-    
+
     // Load DID history (operations) - pass DPP ID not DID
     const historyResult = await getDIDOperationsHistory(dpp.id);
     setDidHistory(historyResult.success ? historyResult.operations : []);
-    
+
     // Load attestations
     const atts = await enhancedDB.getAttestationsByDID(dpp.did);
     setAttestations(atts);
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 pt-20">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6 pt-20 transition-colors">
       <div className="max-w-[1920px] mx-auto">
         {/* Header */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 mb-6 transition-colors">
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <div className="p-3 bg-rose-100 rounded-lg">
-                  <Activity className="w-8 h-8 text-rose-600" />
+                <div className="p-3 bg-rose-100 dark:bg-rose-900/50 rounded-lg">
+                  <Activity className="w-8 h-8 text-rose-600 dark:text-rose-400" />
                 </div>
                 <div>
-                  <h1 className="text-3xl font-bold text-gray-900">Watcher Node Dashboard</h1>
-                  <p className="text-gray-600">Monitor integrity and detect anomalies</p>
+                  <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Watcher Node Dashboard</h1>
+                  <p className="text-gray-600 dark:text-gray-400">Monitor integrity and detect anomalies</p>
                 </div>
               </div>
             </div>
             <div className="text-right">
-              <div className="text-sm text-gray-500">Your Watcher DID</div>
-              <div className="text-xs font-mono text-gray-900 mt-1">{currentRoleDID}</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">Your Watcher DID</div>
+              <div className="text-xs font-mono text-gray-900 dark:text-gray-200 mt-1">{currentRoleDID}</div>
             </div>
           </div>
         </div>
 
         {/* Statistics */}
         <div className="grid grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 transition-colors">
             <div className="flex items-center gap-3">
-              <Eye className="w-8 h-8 text-blue-600" />
+              <Eye className="w-8 h-8 text-blue-600 dark:text-blue-400" />
               <div>
-                <div className="text-2xl font-bold text-gray-900">{stats.monitored}</div>
-                <div className="text-sm text-gray-600">Monitored DPPs</div>
+                <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.monitored}</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Monitored DPPs</div>
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 transition-colors">
             <div className="flex items-center gap-3">
-              <AlertCircle className="w-8 h-8 text-red-600" />
+              <AlertCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
               <div>
-                <div className="text-2xl font-bold text-gray-900">{stats.criticalAlerts}</div>
-                <div className="text-sm text-gray-600">Critical Alerts</div>
+                <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.criticalAlerts}</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Critical Alerts</div>
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 transition-colors">
             <div className="flex items-center gap-3">
-              <AlertTriangle className="w-8 h-8 text-yellow-600" />
+              <AlertTriangle className="w-8 h-8 text-yellow-600 dark:text-yellow-400" />
               <div>
-                <div className="text-2xl font-bold text-gray-900">{stats.warningAlerts}</div>
-                <div className="text-sm text-gray-600">Warnings</div>
+                <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.warningAlerts}</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Warnings</div>
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 transition-colors">
             <div className="flex items-center gap-3">
-              <TrendingUp className="w-8 h-8 text-green-600" />
+              <TrendingUp className="w-8 h-8 text-green-600 dark:text-green-400" />
               <div>
                 <div className={`text-2xl font-bold ${getIntegrityColor(stats.averageIntegrity)}`}>
                   {stats.averageIntegrity.toFixed(1)}%
                 </div>
-                <div className="text-sm text-gray-600">Avg. Integrity</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Avg. Integrity</div>
               </div>
             </div>
           </div>
@@ -545,33 +545,32 @@ export default function WatcherDashboard() {
 
         <div className="grid grid-cols-3 gap-6">
           {/* Monitored DPPs - Left Column */}
-          <div className="bg-white rounded-lg border border-gray-200">
-            <div className="border-b border-gray-200 p-4">
-              <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                <Shield className="w-5 h-5 text-blue-600" />
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors">
+            <div className="border-b border-gray-200 dark:border-gray-700 p-4">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                 Monitored Products
               </h2>
-              <p className="text-xs text-gray-500 mt-1">Click a product to view DID details</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Click a product to view DID details</p>
             </div>
             <div className="p-4 max-h-[800px] overflow-y-auto">
               {monitoredDPPs.length === 0 ? (
                 <div className="text-center py-8">
-                  <Eye className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500">No products monitored yet</p>
+                  <Eye className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                  <p className="text-gray-500 dark:text-gray-400">No products monitored yet</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {groupedMonitoredDPPs().map((group) => {
                     const isExpanded = expandedDPP === group.dppId;
                     const dpp = group.dpp;
-                    
+
                     return (
                       <div key={group.dppId} className="border border-gray-200 rounded-lg overflow-hidden">
                         {/* Window/Main Product Header */}
-                        <div 
-                          className={`bg-blue-100 p-3 cursor-pointer hover:bg-blue-200 transition-colors ${
-                            selectedDPPForDetails?.id === dpp.id ? 'ring-2 ring-blue-500' : ''
-                          }`}
+                        <div
+                          className={`bg-blue-100 p-3 cursor-pointer hover:bg-blue-200 transition-colors ${selectedDPPForDetails?.id === dpp.id ? 'ring-2 ring-blue-500' : ''
+                            }`}
                           onClick={() => {
                             setExpandedDPP(isExpanded ? null : group.dppId);
                             loadDPPDetails(dpp);
@@ -614,7 +613,7 @@ export default function WatcherDashboard() {
                                   {dpp.alertCount} active alert{dpp.alertCount !== 1 ? 's' : ''}
                                 </div>
                               )}
-                              
+
                               <div className="grid grid-cols-2 gap-2 text-sm mb-3">
                                 <div>
                                   <span className="text-gray-600">Status:</span>
@@ -627,7 +626,7 @@ export default function WatcherDashboard() {
                                   </span>
                                 </div>
                               </div>
-                              
+
                               <div className="flex gap-2">
                                 <button
                                   onClick={(e) => {
@@ -642,20 +641,19 @@ export default function WatcherDashboard() {
                                 </button>
                               </div>
                             </div>
-                            
+
                             {/* Component Sub-DPPs */}
                             {group.components && group.components.map((component) => {
                               const componentKey = `${group.dppId}-${component.name}`;
                               const isComponentExpanded = expandedComponents.has(componentKey);
                               const compDpp = component.dpp;
-                              
+
                               return (
                                 <div key={component.name} className="border-t border-gray-300">
                                   {/* Component Header */}
-                                  <div 
-                                    className={`bg-purple-100 px-4 py-2 cursor-pointer hover:bg-purple-200 transition-colors ${
-                                      selectedDPPForDetails?.id === compDpp.id ? 'ring-2 ring-purple-500' : ''
-                                    }`}
+                                  <div
+                                    className={`bg-purple-100 px-4 py-2 cursor-pointer hover:bg-purple-200 transition-colors ${selectedDPPForDetails?.id === compDpp.id ? 'ring-2 ring-purple-500' : ''
+                                      }`}
                                     onClick={() => {
                                       const newExpanded = new Set(expandedComponents);
                                       if (isComponentExpanded) {
@@ -689,7 +687,7 @@ export default function WatcherDashboard() {
                                       </div>
                                     </div>
                                   </div>
-                                  
+
                                   {/* Component Details */}
                                   {isComponentExpanded && (
                                     <div className="bg-white p-3">
@@ -699,7 +697,7 @@ export default function WatcherDashboard() {
                                           {compDpp.alertCount} active alert{compDpp.alertCount !== 1 ? 's' : ''}
                                         </div>
                                       )}
-                                      
+
                                       <div className="grid grid-cols-2 gap-2 text-sm mb-3">
                                         <div>
                                           <span className="text-gray-600">Status:</span>
@@ -712,7 +710,7 @@ export default function WatcherDashboard() {
                                           </span>
                                         </div>
                                       </div>
-                                      
+
                                       <div className="flex gap-2">
                                         <button
                                           onClick={(e) => {
@@ -742,77 +740,76 @@ export default function WatcherDashboard() {
           </div>
 
           {/* DID Details Panel - Middle Column */}
-          <div className="bg-white rounded-lg border border-gray-200">
-            <div className="border-b border-gray-200 p-4">
-              <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                <FileText className="w-5 h-5 text-green-600" />
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors">
+            <div className="border-b border-gray-200 dark:border-gray-700 p-4">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <FileText className="w-5 h-5 text-green-600 dark:text-green-400" />
                 DID Verification Details
               </h2>
               {selectedDPPForDetails && (
-                <p className="text-xs text-gray-500 mt-1">{selectedDPPForDetails.model}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{selectedDPPForDetails.model}</p>
               )}
             </div>
             <div className="p-4 max-h-[800px] overflow-y-auto">
               {!selectedDPPForDetails ? (
                 <div className="text-center py-12">
-                  <Eye className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500">Select a product to view DID details</p>
-                  <p className="text-xs text-gray-400 mt-2">Click on any product to inspect signatures and hashes</p>
+                  <Eye className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                  <p className="text-gray-500 dark:text-gray-400">Select a product to view DID details</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">Click on any product to inspect signatures and hashes</p>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {/* DID Information */}
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <h3 className="font-semibold text-gray-900 mb-2 text-sm">DID Information</h3>
+                  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                    <h3 className="font-semibold text-gray-900 dark:text-white mb-2 text-sm">DID Information</h3>
                     <div className="space-y-2 text-xs">
                       <div>
-                        <span className="text-gray-600">DID:</span>
-                        <p className="font-mono text-gray-900 break-all mt-1">{selectedDPPForDetails.did}</p>
+                        <span className="text-gray-600 dark:text-gray-400">DID:</span>
+                        <p className="font-mono text-gray-900 dark:text-gray-200 break-all mt-1">{selectedDPPForDetails.did}</p>
                       </div>
                       <div>
-                        <span className="text-gray-600">Owner:</span>
-                        <p className="font-mono text-gray-900 break-all mt-1">{selectedDPPForDetails.owner}</p>
+                        <span className="text-gray-600 dark:text-gray-400">Owner:</span>
+                        <p className="font-mono text-gray-900 dark:text-gray-200 break-all mt-1">{selectedDPPForDetails.owner}</p>
                       </div>
                       <div>
-                        <span className="text-gray-600">Status:</span>
-                        <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-700 rounded">{selectedDPPForDetails.lifecycle_status}</span>
+                        <span className="text-gray-600 dark:text-gray-400">Status:</span>
+                        <span className="ml-2 px-2 py-0.5 bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 rounded">{selectedDPPForDetails.lifecycle_status}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* DID Operations History */}
-                  <div className="bg-blue-50 rounded-lg p-3">
-                    <h3 className="font-semibold text-gray-900 mb-2 text-sm flex items-center gap-2">
+                  <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-3">
+                    <h3 className="font-semibold text-gray-900 dark:text-white mb-2 text-sm flex items-center gap-2">
                       <Activity className="w-4 h-4" />
                       DID Operations History ({didHistory.length})
                     </h3>
                     {didHistory.length === 0 ? (
-                      <p className="text-xs text-gray-500">No DID operations recorded</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">No DID operations recorded</p>
                     ) : (
                       <div className="space-y-2">
                         {didHistory.map((op: any, idx: number) => (
-                          <div key={idx} className="bg-white rounded p-2 text-xs">
+                          <div key={idx} className="bg-white dark:bg-gray-800 rounded p-2 text-xs">
                             <div className="flex items-center justify-between mb-1">
-                              <span className="font-semibold text-blue-900">{op.attestation_type.replace(/_/g, ' ').toUpperCase()}</span>
-                              <span className="text-gray-500">{new Date(op.timestamp).toLocaleString()}</span>
+                              <span className="font-semibold text-blue-900 dark:text-blue-300">{op.attestation_type.replace(/_/g, ' ').toUpperCase()}</span>
+                              <span className="text-gray-500 dark:text-gray-400">{new Date(op.timestamp).toLocaleString()}</span>
                             </div>
                             <div className="space-y-1">
                               <div>
-                                <span className="text-gray-600">Witness:</span>
-                                <p className="font-mono text-gray-900 break-all">{op.witness_did}</p>
+                                <span className="text-gray-600 dark:text-gray-400">Witness:</span>
+                                <p className="font-mono text-gray-900 dark:text-gray-200 break-all">{op.witness_did}</p>
                               </div>
                               <div>
-                                <span className="text-gray-600">Signature:</span>
-                                <p className="font-mono text-gray-900 break-all">{op.signature}</p>
+                                <span className="text-gray-600 dark:text-gray-400">Signature:</span>
+                                <p className="font-mono text-gray-900 dark:text-gray-200 break-all">{op.signature}</p>
                               </div>
                               {op.approval_status && (
                                 <div>
-                                  <span className="text-gray-600">Status:</span>
-                                  <span className={`ml-2 px-2 py-0.5 rounded ${
-                                    op.approval_status === 'approved' ? 'bg-green-100 text-green-700' :
-                                    op.approval_status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                                    'bg-red-100 text-red-700'
-                                  }`}>{op.approval_status}</span>
+                                  <span className="text-gray-600 dark:text-gray-400">Status:</span>
+                                  <span className={`ml-2 px-2 py-0.5 rounded ${op.approval_status === 'approved' ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' :
+                                    op.approval_status === 'pending' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
+                                      'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
+                                    }`}>{op.approval_status}</span>
                                 </div>
                               )}
                             </div>
@@ -823,34 +820,34 @@ export default function WatcherDashboard() {
                   </div>
 
                   {/* Attestations */}
-                  <div className="bg-purple-50 rounded-lg p-3">
-                    <h3 className="font-semibold text-gray-900 mb-2 text-sm flex items-center gap-2">
+                  <div className="bg-purple-50 dark:bg-purple-900/30 rounded-lg p-3">
+                    <h3 className="font-semibold text-gray-900 dark:text-white mb-2 text-sm flex items-center gap-2">
                       <Hash className="w-4 h-4" />
                       All Attestations ({attestations.length})
                     </h3>
                     {attestations.length === 0 ? (
-                      <p className="text-xs text-gray-500">No attestations found</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">No attestations found</p>
                     ) : (
                       <div className="space-y-2">
                         {attestations.map((att: any, idx: number) => (
-                          <div key={idx} className="bg-white rounded p-2 text-xs">
+                          <div key={idx} className="bg-white dark:bg-gray-800 rounded p-2 text-xs">
                             <div className="flex items-center justify-between mb-1">
-                              <span className="font-semibold text-purple-900">{att.attestation_type.replace(/_/g, ' ').toUpperCase()}</span>
-                              <span className="text-gray-500">{new Date(att.timestamp).toLocaleString()}</span>
+                              <span className="font-semibold text-purple-900 dark:text-purple-300">{att.attestation_type.replace(/_/g, ' ').toUpperCase()}</span>
+                              <span className="text-gray-500 dark:text-gray-400">{new Date(att.timestamp).toLocaleString()}</span>
                             </div>
                             <div className="space-y-1">
                               <div>
-                                <span className="text-gray-600">Witness DID:</span>
-                                <p className="font-mono text-gray-900 break-all">{att.witness_did}</p>
+                                <span className="text-gray-600 dark:text-gray-400">Witness DID:</span>
+                                <p className="font-mono text-gray-900 dark:text-gray-200 break-all">{att.witness_did}</p>
                               </div>
                               <div>
-                                <span className="text-gray-600">Signature:</span>
-                                <p className="font-mono text-gray-900 break-all bg-gray-50 p-1 rounded">{att.signature}</p>
+                                <span className="text-gray-600 dark:text-gray-400">Signature:</span>
+                                <p className="font-mono text-gray-900 dark:text-gray-200 break-all bg-gray-50 dark:bg-gray-700 p-1 rounded">{att.signature}</p>
                               </div>
                               {att.attestation_data && Object.keys(att.attestation_data).length > 0 && (
                                 <div>
-                                  <span className="text-gray-600">Data Hash:</span>
-                                  <p className="font-mono text-gray-900 break-all bg-gray-50 p-1 rounded">
+                                  <span className="text-gray-600 dark:text-gray-400">Data Hash:</span>
+                                  <p className="font-mono text-gray-900 dark:text-gray-200 break-all bg-gray-50 dark:bg-gray-700 p-1 rounded">
                                     {JSON.stringify(att.attestation_data).substring(0, 64)}...
                                   </p>
                                 </div>
@@ -867,8 +864,8 @@ export default function WatcherDashboard() {
           </div>
 
           {/* Alerts - Right Column */}
-          <div className="bg-white rounded-lg border border-gray-200">
-            <div className="border-b border-gray-200">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors">
+            <div className="border-b border-gray-200 dark:border-gray-700">
               <div className="flex">
                 {[
                   { id: 'all', label: 'All Alerts', count: alerts.filter(a => a.status === 'active').length },
@@ -884,23 +881,22 @@ export default function WatcherDashboard() {
                   <button
                     key={tab.id}
                     onClick={() => setFilter(tab.id as any)}
-                    className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-                      filter === tab.id
-                        ? 'bg-gray-50 text-gray-900 border-b-2 border-blue-600'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                    }`}
+                    className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${filter === tab.id
+                      ? 'bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white border-b-2 border-blue-600'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700'
+                      }`}
                   >
                     {tab.label} ({tab.count})
                   </button>
                 ))}
               </div>
             </div>
-            
+
             <div className="p-4 min-h-[800px] max-h-[800px] overflow-y-auto">
               {filteredAlerts.length === 0 ? (
                 <div className="text-center py-8">
-                  <CheckCircle className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500">No alerts to display</p>
+                  <CheckCircle className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                  <p className="text-gray-500 dark:text-gray-400">No alerts to display</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -909,29 +905,27 @@ export default function WatcherDashboard() {
                     return (
                       <div
                         key={alert.id}
-                        className={`border rounded-lg p-4 ${
-                          alert.severity === 'critical'
-                            ? 'border-red-200 bg-red-50'
-                            : alert.severity === 'warning'
-                            ? 'border-yellow-200 bg-yellow-50'
-                            : 'border-blue-200 bg-blue-50'
-                        }`}
+                        className={`border rounded-lg p-4 ${alert.severity === 'critical'
+                          ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/30'
+                          : alert.severity === 'warning'
+                            ? 'border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/30'
+                            : 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30'
+                          }`}
                       >
                         <div className="flex items-start gap-3">
                           {getSeverityIcon(alert.severity)}
                           <div className="flex-1">
                             <div className="flex items-start justify-between mb-1">
                               <div>
-                                <h3 className="font-semibold text-gray-900">
+                                <h3 className="font-semibold text-gray-900 dark:text-white">
                                   {alert.alert_type.replace(/_/g, ' ').toUpperCase()}
                                 </h3>
                                 <p className="text-sm text-gray-600">{dpp?.model || 'Unknown Product'}</p>
                               </div>
-                              <span className={`px-2 py-1 text-xs rounded ${
-                                alert.status === 'active'
-                                  ? 'bg-red-100 text-red-700'
-                                  : 'bg-green-100 text-green-700'
-                              }`}>
+                              <span className={`px-2 py-1 text-xs rounded ${alert.status === 'active'
+                                ? 'bg-red-100 text-red-700'
+                                : 'bg-green-100 text-green-700'
+                                }`}>
                                 {alert.status}
                               </span>
                             </div>
@@ -939,7 +933,7 @@ export default function WatcherDashboard() {
                             <div className="text-xs text-gray-500">
                               Detected: {new Date(alert.detected_at).toLocaleString()}
                             </div>
-                            
+
                             {alert.status === 'active' && (
                               <button
                                 onClick={() => resolveAlert(alert.id)}
@@ -959,13 +953,13 @@ export default function WatcherDashboard() {
           </div>
         </div>
       </div>
-      
+
       {/* Alert Creation Modal */}
       {showAlertModal && alertModalDPP && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg max-w-2xl w-full mx-4 p-6">
             <h3 className="text-xl font-bold text-gray-900 mb-4">Report Issue for {alertModalDPP.model}</h3>
-            
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Severity</label>
@@ -979,7 +973,7 @@ export default function WatcherDashboard() {
                   <option value="critical">Critical</option>
                 </select>
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Issue Type</label>
                 <select
@@ -995,7 +989,7 @@ export default function WatcherDashboard() {
                   <option value="unauthorized_change">Unauthorized Change</option>
                 </select>
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Description *</label>
                 <textarea
@@ -1008,7 +1002,7 @@ export default function WatcherDashboard() {
                 />
               </div>
             </div>
-            
+
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => {

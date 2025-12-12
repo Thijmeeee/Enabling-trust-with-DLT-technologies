@@ -12,19 +12,19 @@ export default function DIDWebVHStatusPanel({ did }: DIDWebVHStatusPanelProps) {
     const [isExpanded, setIsExpanded] = useState(false);
 
     return (
-        <div className="bg-white rounded-lg border-2 border-purple-200 shadow-sm mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border-2 border-purple-200 dark:border-purple-700 shadow-sm mb-6 transition-colors">
             {/* Clickable Header */}
             <button
                 onClick={() => setIsExpanded(!isExpanded)}
-                className="w-full px-6 py-4 flex items-center justify-between hover:bg-purple-50 transition-colors rounded-t-lg"
+                className="w-full px-6 py-4 flex items-center justify-between hover:bg-purple-50 dark:hover:bg-gray-700 transition-colors rounded-t-lg"
             >
                 <div className="flex items-center gap-3">
                     <div className="p-3 bg-gradient-to-br from-purple-500 to-purple-700 rounded-lg shadow-lg">
                         <ShieldCheck className="w-6 h-6 text-white" />
                     </div>
                     <div className="text-left">
-                        <h2 className="text-2xl font-bold text-gray-900">DID:webvh Technology</h2>
-                        <p className="text-sm text-gray-600">Understanding the Verification Mechanism</p>
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">DID:webvh Technology</h2>
+                        <p className="text-sm text-gray-600 dark:text-gray-300">Understanding the Verification Mechanism</p>
                     </div>
                 </div>
                 <div className="ml-4">
