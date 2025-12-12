@@ -34,15 +34,20 @@ graph TD
         Verifier([Customer / Verifier])
     end
 
-    %% --- Production Layer ---
-    %% --- School Infrastructure ---
+    %% --- School Infrastructure (Single VM) ---
     subgraph VM ["School VM (51.77.71.29)"]
         direction TB
-        Nginx[("Web Server (Nginx)")]
-        ReactSPA[("Frontend (React)")]
-        NodeAPI[("Backend API (Node.js)")]
-        SQLite[("Database (SQLite)")]
-        Disk[("File System (Identity Logs)")]
+        
+        subgraph Services ["Service Layer"]
+            Nginx[("Web Server (Nginx)")]
+            ReactSPA[("Frontend (React)")]
+            NodeAPI[("Backend API (Node.js)")]
+        end
+        
+        subgraph Data ["Data Layer"]
+            SQLite[("Database (SQLite)")]
+            Disk[("File System (Identity Logs)")]
+        end
     end
 
     %% --- Trust Layer ---
@@ -56,12 +61,13 @@ graph TD
     Verifier -->|Scans QR| Nginx
 
     Nginx -->|Serves App| ReactSPA
-    ReactSPA -->|2. API Calls| Nginx
-    Nginx -->|Proxy| NodeAPI
+    Nginx -->|Proxy API| NodeAPI
     
+    NodeAPI -->|2. process| NodeAPI
     NodeAPI -->|3. Stores Data| SQLite
     NodeAPI -->|4. Writes Logs| Disk
-    Nginx -.->|5. Serves Logs (Static)| Disk
+    
+    Nginx -.->|5. Serves Logs| Disk
     
     Verifier -.->|6. Verifies DID| Nginx
 
