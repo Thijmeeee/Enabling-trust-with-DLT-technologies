@@ -19,10 +19,10 @@ This document provides a **complete, production-ready implementation plan** for 
 | System | Technology | Selection Rationale (Why?) |
 |--------|------------|----------------------------|
 | **Frontend** | React + Vite | Enables client-side verification directly in the user's browser, ensuring a zero-trust model. |
-| **Backend** | Node.js + Express | Efficiently handles thousands of events via "Batch Anchoring", reducing blockchain interaction by 99%. |
-| **Database** | SQLite + Volume | Lightweight, file-based persistence perfectly suits the single-container architecture, minimizing cloud complexity. |
-| **Trust Anchor** | Ethereum Sepolia | The industry-standard testnet provides immutable proof at zero gas cost for the pilot phase. |
-| **Identity Storage** | Azure Blob Storage | Decouples public DID logs from the API server, ensuring high availability and global caching. Suitable for students (no CC required credits). |
+| **Backend** | Node.js + Express | Efficiently handles events. Hosted directly on the VM for zero latency access to the file system. |
+| **Database** | SQLite | Lightweight, file-based persistence. Stored locally on the VM's disk. |
+| **Trust Anchor** | Ethereum Sepolia | The industry-standard testnet provides immutable proof at zero gas cost. |
+| **Identity Storage** | Nginx (Local VM) | Serves `did.jsonl` files directly from the VM's file system (`/var/www/html`). No external cloud dependencies. |
 
 ### 1.2 Complete Interaction Diagram
 
@@ -35,16 +35,14 @@ graph TD
     end
 
     %% --- Production Layer ---
-    subgraph Production ["Production Environment (Railway)"]
-        ReactSPA[("Frontend App (React)")]
+    %% --- School Infrastructure ---
+    subgraph VM ["School VM (51.77.71.29)"]
+        direction TB
+        Nginx[("Web Server (Nginx)")]
+        ReactSPA[("Frontend (React)")]
         NodeAPI[("Backend API (Node.js)")]
         SQLite[("Database (SQLite)")]
-    end
-
-    %% --- Storage Layer ---
-    subgraph Storage ["Storage & Distribution"]
-        BlobStorage[("Identity Storage (Azure Blob)")]
-        CDN[("CDN (Azure Front Door)")]
+        Disk[("File System (Identity Logs)")]
     end
 
     %% --- Trust Layer ---
@@ -54,18 +52,21 @@ graph TD
     end
 
     %% --- Relations ---
-    Manufacturer -->|1. Registers Event| ReactSPA
-    Verifier -->|Scans QR| ReactSPA
+    Manufacturer -->|1. Registers Event| Nginx
+    Verifier -->|Scans QR| Nginx
 
-    ReactSPA -->|2. Sends Data| NodeAPI
-    NodeAPI -->|3. Stores Data| SQLite
+    Nginx -->|Serves App| ReactSPA
+    ReactSPA -->|2. API Calls| Nginx
+    Nginx -->|Proxy| NodeAPI
     
-    NodeAPI -->|4. Uploads Logs| BlobStorage
-    BlobStorage -.->|Cache| CDN
-    Verifier -.->|5. Verifies DID| CDN
+    NodeAPI -->|3. Stores Data| SQLite
+    NodeAPI -->|4. Writes Logs| Disk
+    Nginx -.->|5. Serves Logs (Static)| Disk
+    
+    Verifier -.->|6. Verifies DID| Nginx
 
-    NodeAPI -->|6. Sends Batch| Alchemy
-    Alchemy -->|7. Anchors| Sepolia
+    NodeAPI -->|7. Sends Batch| Alchemy
+    Alchemy -->|8. Anchors| Sepolia
 ```
 
 ### 1.3 Data Flow: Event Lifecycle
@@ -106,7 +107,7 @@ Enabling-trust-with-DLT-technologies/  # Root (Current Frontend)
 │   │   ├── batch-processor.ts
 │   │   ├── crypto.ts
 │   │   └── contract-abi.ts
-│   │   ├── storage.ts           # [NEW] AWS S3 Client
+│   │   ├── storage.ts           # [NEW] Local File System Handler
 │   ├── package.json
 │   └── tsconfig.json
 ├── contracts/                   # [NEW] Smart Contracts
@@ -117,8 +118,8 @@ Enabling-trust-with-DLT-technologies/  # Root (Current Frontend)
 │   ├── test/
 │   └── hardhat.config.ts
 ├── deployment/                  # [NEW] Deployment configs
-│   ├── Dockerfile
-│   ├── railway.json
+│   ├── ecosystem.config.js  # [NEW] PM2 Config
+│   ├── nginx.conf           # [NEW] Nginx Config
 │   └── .env.example
 ├── scripts/                     # [NEW] Utilities
 │   └── generate-demo-data.ts
@@ -484,37 +485,32 @@ export function createLeafHash(event: {
 ```
 
 
-### 4.4 Azure Blob Storage Service
+### 4.4 Local Storage Service (VM)
 
 **File:** `backend/src/storage.ts`
 
 ```typescript
-import { BlobServiceClient } from "@azure/storage-blob";
+import * as fs from 'fs/promises';
+import * as path from 'path';
 
-// Connection string is simpler for students than IAM roles
-const blobServiceClient = BlobServiceClient.fromConnectionString(
-  process.env.AZURE_STORAGE_CONNECTION_STRING || ""
-);
+// The Nginx web root for serving static files
+const STORAGE_ROOT = process.env.STORAGE_ROOT || '/var/www/html/dpp-identities';
 
 export async function uploadToStorage(key: string, body: string, contentType: string) {
-  const containerName = process.env.AZURE_CONTAINER_NAME || "did-logs";
-  const containerClient = blobServiceClient.getContainerClient(containerName);
-
-  // Ensure container exists (create if not)
-  await containerClient.createIfNotExists({
-    access: 'blob' // Public read access for blobs
-  });
-
-  const blockBlobClient = containerClient.getBlockBlobClient(key);
-
   try {
-    await blockBlobClient.upload(body, body.length, {
-      blobHTTPHeaders: { blobContentType: contentType }
-    });
-    console.log(`✅ Uploaded ${key} to Azure Blob Storage`);
+    // Construct full local path
+    const fullPath = path.join(STORAGE_ROOT, key);
+    const dir = path.dirname(fullPath);
+
+    // Ensure directory exists
+    await fs.mkdir(dir, { recursive: true });
+
+    // Write file directly to disk (Nginx will serve it)
+    await fs.writeFile(fullPath, body, 'utf8');
+    
+    console.log(`✅ Written ${key} to local disk`);
   } catch (error) {
-    console.error(`❌ Failed to upload ${key} to Azure:`, error);
-    // Don't throw, we want to continue even if storage fails (local DB is primary)
+    console.error(`❌ Failed to write ${key} to disk:`, error);
   }
 }
 ```
@@ -1469,12 +1465,29 @@ FRONTEND_URL=https://your-app.railway.app
 # Optional
 ETHERSCAN_API_KEY=... # For contract verification
 
-# Azure Blob Storage
-AZURE_STORAGE_CONNECTION_STRING=...
-AZURE_CONTAINER_NAME=dpp-identities
+# Storage (Local VM Paths)
+STORAGE_ROOT=/var/www/html
 ```
 
-### 6.2 Dockerfile with Persistence
+### 6.2 PM2 Configuration
+
+**File:** `deployment/ecosystem.config.js`
+
+```javascript
+module.exports = {
+  apps: [{
+    name: "dpp-backend",
+    script: "./dist/server.js",
+    env: {
+      NODE_ENV: "production",
+      PORT: 3000,
+      STORAGE_ROOT: "/var/www/html"
+    }
+  }]
+}
+```
+
+### 6.3 Dockerfile with Persistence
 
 **File:** `deployment/Dockerfile`
 
@@ -1882,54 +1895,59 @@ Before proceeding to implementation, verify you have:
 
 ---
 
-### 9.9 Create Azure Storage Account
+### 9.9 VM Configuration (School Infrastructure)
 
-**Purpose**: Hosting the public `did.jsonl` files. Azure is often more accessible for students (Education credits).
-
-**Steps**:
-1.  **Create Azure Account**: Go to [portal.azure.com](https://portal.azure.com).
-    *   *Tip*: Use your school email for "Azure for Students" (No Credit Card required).
-2.  **Create Storage Account**:
-    *   Search for **Storage accounts** -> **Create**.
-    *   Resource Group: Create new (e.g., `DPP-Resources`).
-    *   Storage account name: `dppstorageunique123` (lowercase, numbers only).
-    *   Region: `West Europe` (or closest to you).
-    *   Redundancy: `LRS` (Locally-redundant storage) is cheapest.
-    *   Click **Review + create** -> **Create**.
-3.  **Enable Public Access**:
-    *   Go to the new resource.
-    *   Settings -> Configuration -> Allow Blob public access = **Enabled**.
-    *   Save.
-4.  **Create Container**:
-    *   Data storage -> **Containers** -> **+ Container**.
-    *   Name: `dpp-identities`.
-    *   Public access level: **Blob** (anonymous read access for blobs only).
-    *   Create.
-5.  **Get Connection String**:
-    *   Security + networking -> **Access keys**.
-    *   Show keys -> Copy **Connection string** (Key 1).
-6.  **Save to `.env`**:
-    *   `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_CONTAINER_NAME`.
-
----
-
-### 9.10 Setup Azure CDN (Optional but Recommended)
-
-**Purpose**: Serve `did.jsonl` files over HTTPS with high performance, essential for a `did:webvh` production setup.
+**Specs**:
+*   **IP**: `51.77.71.29`
+*   **User**: `webvh`
+*   **OS**: Ubuntu 22.04 LTS
 
 **Steps**:
-1.  **Create CDN Profile**:
-    *   Search for **Front Door and CDN profiles**.
-    *   Create New -> **Azure CDN Standard from Microsoft** (Cheapest/Student friendly).
-    *   Name: `dpp-cdn-profile`.
-2.  **Add Endpoint**:
-    *   Name: `dpp-identity-gateway` (Your URL will be `dpp-identity-gateway.azureedge.net`).
-    *   Origin type: **Storage**.
-    *   Origin hostname: Select your `dppstorageunique123` account.
-3.  **Enable Caching**:
-    *   Query string caching: **Ignore query strings**.
-4.  **Verify**:
-    *   The file `https://dpp-identity-gateway.azureedge.net/dpp-identities/did.jsonl` should now be accessible.
+
+1.  **SSH into VM**:
+    ```bash
+    ssh webvh@51.77.71.29
+    # Enter password
+    ```
+2.  **Install Production Dependencies**:
+    ```bash
+    sudo apt update
+    sudo apt install -y nodejs npm nginx git
+    sudo npm install -g pm2 typescript ts-node
+    ```
+3.  **Configure Nginx**:
+    *   Edit default config: `sudo nano /etc/nginx/sites-available/default`
+    *   Add CORS headers for the JSONL files:
+    ```nginx
+    server {
+        listen 80;
+        server_name webvh.web3connect.nl;
+        root /var/www/html;
+        index index.html;
+
+        # Serve static DID files
+        location / {
+            try_files $uri $uri/ =404;
+            add_header Access-Control-Allow-Origin *;
+        }
+
+        # Proxy API requests to Node.js
+        location /api/ {
+            proxy_pass http://localhost:3000;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_cache_bypass $http_upgrade;
+        }
+    }
+    ```
+    *   Restart Nginx: `sudo systemctl restart nginx`
+4.  **Permissions**:
+    *   Ensure the web user can write to the html folder (or run Node as a user who can):
+    ```bash
+    sudo chown -R webvh:webvh /var/www/html
+    ```
 
 ---
 
@@ -1948,21 +1966,34 @@ npx hardhat run scripts/deploy.ts --network sepolia
 
 Save the deployed `CONTRACT_ADDRESS`.
 
-### Step 2: Set Up Railway
+### Step 2: Deploy to VM
 
-1. Create new project on [railway.app](https://railway.app)
-2. Connect your GitHub repository
-3. Add a **Volume** mounted at `/app/data` for SQLite persistence
-4. Set Environment Variables in Railway dashboard:
-   - `ALCHEMY_SEPOLIA_URL` (from step 9.1)
-   - `RELAYER_PRIVATE_KEY` (from step 9.4)
-   - `CONTRACT_ADDRESS` (from step 10.1 output)
-   - `DATABASE_PATH=/app/data/dpp.sqlite`
-   - `NODE_ENV=production`
-   - `FRONTEND_URL=https://your-app.railway.app` (update after first deploy)
-5. Deploy
-
-**Important**: After first deployment, Railway will give you a public URL. Update the `FRONTEND_URL` environment variable with this URL and redeploy.
+1.  **Clone on VM**:
+    ```bash
+    cd ~
+    git clone https://github.com/Thijmeeee/Enabling-trust-with-DLT-technologies.git
+    cd Enabling-trust-with-DLT-technologies/backend
+    ```
+2.  **Install & Build**:
+    ```bash
+    npm install
+    npx tsc
+    ```
+3.  **Setup Environment**:
+    ```bash
+    cp ../deployment/.env.example .env
+    nano .env
+    # Fill in CONTRACT_ADDRESS, ALCHEMY_SEPOLIA_URL, etc.
+    # Set STORAGE_ROOT=/var/www/html
+    ```
+4.  **Start with PM2**:
+    ```bash
+    pm2 start dist/server.js --name "dpp-backend"
+    pm2 save
+    pm2 startup
+    ```
+5.  **Verify**:
+    *   Visit `http://webvh.web3connect.nl/api/health`
 
 ---
 
@@ -2010,11 +2041,10 @@ API_URL=https://your-app.railway.app npx ts-node scripts/generate-demo-data.ts
 
 | Service | Tier | Cost (Est.) |
 |---------|------|-------------|
-| **Railway** | Starter Plan + Volume | ~€5.00 / mo |
-| **Azure Blob** | Standard / Student | ~€0.20 / mo (or Free w/ Student) |
+| **School VM** | Provided | €0.00 |
 | **Alchemy** | Free Tier (300M CU) | €0.00 |
 | **Sepolia ETH** | Testnet Faucet | €0.00 |
-| **Total** | | **~€5.20 / mo** |
+| **Total** | | **€0.00 / mo** |
 
 ---
 
@@ -2028,7 +2058,7 @@ API_URL=https://your-app.railway.app npx ts-node scripts/generate-demo-data.ts
 - [ ] Frontend displays anchored vs pending status
 - [ ] Etherscan links work for all transactions
 - [ ] Demo data (300 DIDs) visible in dashboard
-- [ ] Zero cost deployment on Railway
+- [ ] Zero cost deployment on School VM
 
 ---
 
@@ -2067,19 +2097,18 @@ This section outlines the step-by-step phases to implement this plan. Each phase
     *   Check `/health` endpoint.
     *   Verify `dpp.sqlite` file creation.
 
-### Phase 3: Identity & Cloud Storage (Azure)
-**Goal**: Implement `did:webvh` logic and connect to Azure Blob Storage.
+### Phase 3: Identity & Storage (Local VM)
+**Goal**: Implement `did:webvh` logic and file system handling.
 
-1.  **Azure Integration**:
-    *   Install `@azure/storage-blob`.
-    *   Implement `src/storage.ts` (The code added in Production Plan).
+1.  **Storage Engine**:
+    *   Implement `src/storage.ts` using Node.js `fs` module.
+    *   Ensure it writes to `STORAGE_ROOT` (mapped to `/var/www/html`).
 2.  **DID Resolver**:
     *   Implement `src/did-resolver.ts`.
-    *   Add `resolveDID`, `createDIDLogEntry`, `updateDIDLog`.
-    *   **Crucial**: Ensure `uploadToStorage` is called on every update.
+    *   Logic stays same, but calls the local `uploadToStorage`.
 3.  **Verification**:
-    *   Mock a DID creation.
-    *   Verify `did.jsonl` appears in your Azure Blob Container.
+    *   Run locally with `STORAGE_ROOT=./tmp`.
+    *   Verify `did.jsonl` files are created in the folder.
 
 ### Phase 4: Event Engine & Anchoring
 **Goal**: Handle massive event volume and anchor to Ethereum.
