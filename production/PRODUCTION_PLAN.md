@@ -63,7 +63,6 @@ graph TD
     Nginx -->|Serves App| ReactSPA
     Nginx -->|Proxy API| NodeAPI
     
-    NodeAPI -->|2. process| NodeAPI
     NodeAPI -->|3. Stores Data| SQLite
     NodeAPI -->|4. Writes Logs| Disk
     
