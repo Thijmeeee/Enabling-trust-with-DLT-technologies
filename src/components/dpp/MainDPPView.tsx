@@ -23,6 +23,7 @@ import {
   Droplets,
   FileCheck,
   Clock,
+  FileJson,
 } from 'lucide-react';
 import { getDPPWithRelations, getAggregatedMetrics } from '../../lib/data/enhancedAdapter';
 import { calculateTrustScore } from '../../lib/utils/verificationLocal';
@@ -40,6 +41,8 @@ import TrustValidationTab from '../TrustValidationTab';
 import DoPerformanceView from '../DoPerformanceView';
 import DoPerformanceEditor from '../DoPerformanceEditor';
 import AttestationDetailsModal from '../modals/AttestationDetailsModal';
+import RawDataModal from '../modals/RawDataModal';
+import DIDWebVHStatusPanel from '../DIDWebVHStatusPanel';
 
 export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
   did: string;
@@ -53,6 +56,7 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
   const [trustScore, setTrustScore] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showQR, setShowQR] = useState(false);
+  const [showRawData, setShowRawData] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'specifications' | 'components' | 'lifecycle' | 'did-operations' | 'trust-validation' | 'events'>('overview');
   const [eventRefreshKey, setEventRefreshKey] = useState(0);
   const [editingDoP, setEditingDoP] = useState(false);
@@ -319,6 +323,11 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
     );
   }
 
+  // Helper to check if current role can see advanced features
+  const canSeeAdvancedFeatures = () => {
+    return currentRole.includes('Manufacturer') || currentRole === 'Supervisor';
+  };
+
   const dpp = data.dpp;
 
   return (
@@ -364,6 +373,15 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
             </div>
 
             <div className="flex gap-2">
+              {canSeeAdvancedFeatures() && (
+                <button
+                  onClick={() => setShowRawData(true)}
+                  className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2"
+                >
+                  <FileJson className="w-4 h-4" />
+                  View Raw Data
+                </button>
+              )}
               <button
                 onClick={() => setShowQR(true)}
                 className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2"
@@ -1061,10 +1079,15 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
         )}
 
         {activeTab === 'did-operations' && (
-          <DIDOperationsPanel
-            dpp={dpp}
-            onUpdate={loadData}
-          />
+          <>
+            {canSeeAdvancedFeatures() && (
+              <DIDWebVHStatusPanel did={did} />
+            )}
+            <DIDOperationsPanel
+              dpp={dpp}
+              onUpdate={loadData}
+            />
+          </>
         )}
 
         {activeTab === 'trust-validation' && (
@@ -1130,6 +1153,13 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
         <AttestationDetailsModal
           attestation={selectedAttestation}
           onClose={() => setSelectedAttestation(null)}
+        />
+      )}
+
+      {showRawData && (
+        <RawDataModal
+          data={data}
+          onClose={() => setShowRawData(false)}
         />
       )}
     </div>
