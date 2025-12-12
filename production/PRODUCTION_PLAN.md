@@ -8,7 +8,7 @@ This document provides a **complete, production-ready implementation plan** for 
 - Deploy a working demo with **real blockchain anchoring** (not mock data)
 - Implement proper `did:webvh` compliance with hash-chained logs
 - Enable **client-side Merkle proof verification** (leaf → root)
-- Deploy on free-tier infrastructure (Railway + Alchemy) at **€0 cost**
+- Deploy on **School VM infrastructure** at **€0 cost**
 
 ---
 
@@ -1465,7 +1465,7 @@ DATABASE_PATH=/app/data/dpp.sqlite
 # Server
 PORT=3000
 NODE_ENV=production
-FRONTEND_URL=https://your-app.railway.app
+FRONTEND_URL=http://webvh.web3connect.nl
 
 # Optional
 ETHERSCAN_API_KEY=... # For contract verification
@@ -1492,80 +1492,7 @@ module.exports = {
 }
 ```
 
-### 6.3 Dockerfile with Persistence
 
-**File:** `deployment/Dockerfile`
-
-```dockerfile
-# ============ Stage 1: Build Frontend ============
-FROM node:18 AS frontend-build
-WORKDIR /app/frontend
-
-COPY frontend/package*.json ./
-RUN npm ci --legacy-peer-deps
-
-COPY frontend/ .
-RUN npm run build
-
-# ============ Stage 2: Build Backend ============
-FROM node:18 AS backend-build
-WORKDIR /app/backend
-
-COPY backend/package*.json ./
-RUN npm ci
-
-COPY backend/ .
-RUN npm run build
-
-# ============ Stage 3: Production Image ============
-FROM node:18-alpine
-WORKDIR /app
-
-# Install production dependencies only
-COPY backend/package*.json ./
-RUN npm ci --omit=dev
-
-# Copy built files
-COPY --from=backend-build /app/backend/dist ./dist
-COPY --from=frontend-build /app/frontend/dist ./public
-
-# Create data directory for SQLite persistence
-RUN mkdir -p /app/data
-VOLUME ["/app/data"]
-
-# Environment
-ENV NODE_ENV=production
-ENV DATABASE_PATH=/app/data/dpp.sqlite
-EXPOSE 3000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
-
-CMD ["node", "dist/server.js"]
-```
-
-### 6.3 Railway Configuration
-
-**File:** `deployment/railway.json`
-
-```json
-{
-  "$schema": "https://railway.app/railway.schema.json",
-  "build": {
-    "builder": "DOCKERFILE",
-    "dockerfilePath": "deployment/Dockerfile"
-  },
-  "deploy": {
-    "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 5,
-    "healthcheckPath": "/health",
-    "healthcheckTimeout": 3
-  }
-}
-```
-
----
 
 ## 7. Data Generation Script
 
@@ -1804,23 +1731,7 @@ generateDemoData().catch(console.error);
 
 ---
 
-### 9.5 Create Railway Account
 
-**Purpose**: Free hosting platform for backend + frontend + database.
-
-**Steps:**
-1. Go to [railway.app](https://railway.app/)
-2. Sign up with GitHub account
-3. **No credit card required** for free tier ($5 credit/month)
-4. Create a new **Empty Project**
-5. Keep the dashboard open - you'll deploy here later
-
-**Free Tier Limits**: 
-- $5 credit/month (sufficient for prototype)
-- 500 hours/month execution time
-- 100GB bandwidth
-
----
 
 ### 9.6 Optional: Create Etherscan Account (for Contract Verification)
 
@@ -1861,7 +1772,7 @@ DATABASE_PATH=/app/data/dpp.sqlite
 # ============ SERVER ============
 PORT=3000
 NODE_ENV=production
-FRONTEND_URL=https://your-app.railway.app
+FRONTEND_URL=http://webvh.web3connect.nl
 
 # ============ OPTIONAL ============
 # From step 9.6: Etherscan API key for verification
@@ -1869,14 +1780,13 @@ ETHERSCAN_API_KEY=YOUR_ETHERSCAN_API_KEY_HERE
 
 # ============ STORAGE ============
 # From Step 9.9
-AZURE_STORAGE_CONNECTION_STRING=YOUR_AZURE_CONNECTION_STRING_HERE
-AZURE_CONTAINER_NAME=dpp-identities
+STORAGE_ROOT=/var/www/html
 ```
 
 **⚠️ Security**:
 - Add `deployment/.env` to `.gitignore`
 - Never commit this file to version control
-- Use Railway's environment variable UI for production
+- Use PM2 environment variables for production
 
 ---
 
@@ -1892,7 +1802,6 @@ Before proceeding to implementation, verify you have:
 - [ ] ✅ Relayer wallet created
 - [ ] ✅ `RELAYER_PRIVATE_KEY` exported
 - [ ] ✅ 0.05 SepoliaETH sent to relayer wallet
-- [ ] ✅ Railway account created
 - [ ] ✅ `deployment/.env` file created with all keys
 - [ ] ✅ `.gitignore` includes `deployment/.env`
 
@@ -2005,8 +1914,8 @@ Save the deployed `CONTRACT_ADDRESS`.
 ### Step 3: Seed Demo Data
 
 ```bash
-# Run locally pointing to Railway
-API_URL=https://your-app.railway.app npx ts-node scripts/generate-demo-data.ts
+# Run locally pointing to Production VM
+API_URL=http://webvh.web3connect.nl npx ts-node scripts/generate-demo-data.ts
 ```
 
 ### Step 4: Verify Deployment
