@@ -89,6 +89,22 @@ graph TD
 
 ---
 
+### 1.4 System Technology Stack
+
+| Component | Technology | Role & Description |
+| :--- | :--- | :--- |
+| **Frontend** | **React + Vite** | The user interface. Vite ensures fast builds, while React handles the dynamic UI components for scanning and verifying products. |
+| **Backend** | **Node.js + Express** | The engine. Handles API requests, processes cryptographic signatures, and interacts with the database. |
+| **Web Server** | **Nginx** | The gatekeeper. Acts as a high-performance Reverse Proxy and serves static files (`did.jsonl`) directly from the VM disk. |
+| **Database** | **SQLite** | The memory. A lightweight, serverless, file-based SQL database that stores events and local state persistently. |
+| **Infrastructure** | **School VM (Ubuntu)** | The hardware. A dedicated Ubuntu 22.04 Virtual Machine (4 Cores, 4GB RAM) hosting the entire stack. |
+| **Blockchain** | **Ethereum Sepolia** | The trust anchor. A public testnet blockchain used to store the immutable Merkle Roots for zero cost. |
+| **Blockchain Node** | **Alchemy** | The bridge. An RPC provider that allows our backend to communicate with the Ethereum network without running a full node. |
+| **Smart Contract** | **Solidity + Hardhat** | The logic. `WitnessAnchorRegistry` is the on-chain contract, developed and deployed using the Hardhat framework. |
+| **Process Manager** | **PM2** | The supervisor. Keeps the Node.js backend running continuously and automatically restarts it if it crashes. |
+
+---
+
 ## 2. Project Structure
 
 ```
