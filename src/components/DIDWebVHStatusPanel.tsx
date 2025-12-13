@@ -55,18 +55,18 @@ export default function DIDWebVHStatusPanel({ did }: DIDWebVHStatusPanelProps) {
 
                     {/* Visual Flow Diagram */}
                     <div className="mb-6">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                            <Layers className="w-5 h-5 text-purple-600" />
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                            <Layers className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                             How It Works
                         </h3>
 
-                        <div className="flex items-center gap-4 bg-gray-50 p-6 rounded-lg border border-gray-200">
+                        <div className="flex items-center gap-4 bg-gray-50 dark:bg-gray-700 p-6 rounded-lg border border-gray-200 dark:border-gray-600">
                             {/* Step 1: Hash-Chained Log */}
                             <div className="flex-1">
-                                <div className="bg-blue-100 border-2 border-blue-400 rounded-lg p-4 text-center">
-                                    <Server className="w-8 h-8 text-blue-600 mx-auto mb-2" />
-                                    <div className="font-semibold text-blue-900 text-sm mb-1">Hash-Chained Log</div>
-                                    <div className="text-xs text-blue-700">Web Server Storage</div>
+                                <div className="bg-blue-100 dark:bg-blue-900/50 border-2 border-blue-400 dark:border-blue-600 rounded-lg p-4 text-center">
+                                    <Server className="w-8 h-8 text-blue-600 dark:text-blue-400 mx-auto mb-2" />
+                                    <div className="font-semibold text-blue-900 dark:text-blue-300 text-sm mb-1">Hash-Chained Log</div>
+                                    <div className="text-xs text-blue-700 dark:text-blue-400">Web Server Storage</div>
                                 </div>
                             </div>
 
@@ -78,16 +78,16 @@ export default function DIDWebVHStatusPanel({ did }: DIDWebVHStatusPanelProps) {
 
                             {/* Step 2: Ethereum Blockchain */}
                             <div className="flex-1">
-                                <div className="bg-purple-100 border-2 border-purple-400 rounded-lg p-4 text-center">
-                                    <ShieldCheck className="w-8 h-8 text-purple-600 mx-auto mb-2" />
-                                    <div className="font-semibold text-purple-900 text-sm mb-1">Ethereum Blockchain</div>
-                                    <div className="text-xs text-purple-700">Immutable Record</div>
+                                <div className="bg-purple-100 dark:bg-purple-900/50 border-2 border-purple-400 dark:border-purple-600 rounded-lg p-4 text-center">
+                                    <ShieldCheck className="w-8 h-8 text-purple-600 dark:text-purple-400 mx-auto mb-2" />
+                                    <div className="font-semibold text-purple-900 dark:text-purple-300 text-sm mb-1">Ethereum Blockchain</div>
+                                    <div className="text-xs text-purple-700 dark:text-purple-400">Immutable Record</div>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="mt-3 bg-blue-50 border border-blue-200 rounded-lg p-3">
-                            <p className="text-sm text-blue-900 leading-relaxed">
+                        <div className="mt-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg p-3">
+                            <p className="text-sm text-blue-900 dark:text-blue-300 leading-relaxed">
                                 <strong>The Mechanism:</strong> DID:webvh creates a cryptographic hash chain of all changes,
                                 stored on a web server for efficiency. Critical checkpoints are anchored to Ethereum,
                                 ensuring tamper-proof verification without blockchain overhead for every update.
@@ -97,8 +97,8 @@ export default function DIDWebVHStatusPanel({ did }: DIDWebVHStatusPanelProps) {
 
                     {/* Status Indicator */}
                     <div className="mb-6">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                            <Info className="w-5 h-5 text-purple-600" />
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                            <Info className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                             Current Implementation Status
                         </h3>
 

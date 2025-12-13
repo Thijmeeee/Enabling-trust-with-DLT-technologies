@@ -96,28 +96,28 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
       // DID-related witness events (what witnesses actually monitor)
       const didEventTypes = ['did_creation', 'key_rotation', 'ownership_change', 'did_update', 'did_lifecycle_update'];
       const isDIDEvent = didEventTypes.includes(attestation.attestation_type);
-      
+
       // Skip pending DID events - they should only appear after witness approval
       if (isDIDEvent && attestation.approval_status === 'pending') {
         return;
       }
-      
+
       // Skip rejected DID events
       if (isDIDEvent && attestation.approval_status === 'rejected') {
         return;
       }
-      
+
       // Product lifecycle events (separate from witness attestations)
       const lifecycleEventTypes = ['assembly', 'installation', 'maintenance', 'disposal', 'manufacturing'];
       const isLifecycleEvent = lifecycleEventTypes.includes(attestation.attestation_type);
-      
+
       // Use attestation_data.timestamp if available, otherwise use attestation.timestamp
       const eventTimestamp = (attestation.attestation_data as any)?.timestamp || attestation.timestamp;
-      
+
       let description = '';
       let eventType: 'attestation' | 'update' = 'attestation';
       let color = 'green';
-      
+
       if (isDIDEvent) {
         // These are witness attestations of DID operations
         const eventNames: Record<string, string> = {
@@ -138,7 +138,7 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
         // Fallback for any other attestation types
         description = `Event: ${attestation.attestation_type.replace(/_/g, ' ')}`;
       }
-      
+
       allEvents.push({
         id: `attestation-${attestation.id}`,
         timestamp: eventTimestamp,
@@ -186,7 +186,7 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
 
   const getFilteredEvents = () => {
     return events.filter(event => {
-      const matchesSearch = searchTerm === '' || 
+      const matchesSearch = searchTerm === '' ||
         event.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
         event.did.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = filterType === 'all' || event.type === filterType;
@@ -205,12 +205,12 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 transition-colors">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <Clock className="w-5 h-5 text-gray-600" />
-          <h3 className="text-lg font-semibold text-gray-900">Event Timeline</h3>
-          <span className="ml-2 text-sm text-gray-500">{filteredEvents.length} events</span>
+          <Clock className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Event Timeline</h3>
+          <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">{filteredEvents.length} events</span>
         </div>
       </div>
 
@@ -223,7 +223,7 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
             placeholder="Search events..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
           />
         </div>
         <div className="relative">
@@ -231,7 +231,7 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
           <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value as any)}
-            className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none bg-white cursor-pointer"
+            className="pl-10 pr-8 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none bg-white dark:bg-gray-700 cursor-pointer text-gray-900 dark:text-white"
           >
             <option value="all">All Types</option>
             <option value="creation">Creation</option>
@@ -253,9 +253,9 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
           <div className="relative">
             {/* Vertical timeline line */}
             <div className="absolute left-1/2 transform -translate-x-1/2 h-full w-1 bg-gradient-to-b from-blue-200 via-purple-200 to-green-200"></div>
-            
+
             {/* Events */}
-              <div className="space-y-8">
+            <div className="space-y-8">
               {filteredEvents.map((event, index) => {
                 const IconComponent = event.icon;
                 const colorClasses = {
@@ -264,15 +264,15 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
                   green: 'bg-green-500 border-green-200',
                   emerald: 'bg-emerald-500 border-emerald-200',
                 }[event.color];
-                
+
                 const isLeft = index % 2 === 0;
 
                 return (
                   <div key={event.id} id={`event-${event.id}`} className={`flex items-center ${isLeft ? 'flex-row' : 'flex-row-reverse'}`}>
                     {/* Content card */}
                     <div className={`w-5/12 ${isLeft ? 'pr-8 text-right' : 'pl-8 text-left'}`}>
-                      <div 
-                        className="bg-white rounded-lg shadow-md border-2 border-gray-200 p-4 hover:shadow-lg transition-all cursor-pointer"
+                      <div
+                        className="bg-white dark:bg-gray-800 rounded-lg shadow-md border-2 border-gray-200 dark:border-gray-700 p-4 hover:shadow-lg transition-all cursor-pointer"
                         onClick={() => setExpandedEvent(expandedEvent === event.id ? null : event.id)}
                       >
                         <div className={`flex items-start gap-3 ${isLeft ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -281,23 +281,23 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
                           </div>
                           <div className="flex-grow min-w-0">
                             <div className="flex items-center justify-between">
-                              <h4 className="font-semibold text-gray-900 text-sm mb-1">{event.description.trim()}</h4>
+                              <h4 className="font-semibold text-gray-900 dark:text-white text-sm mb-1">{event.description.trim()}</h4>
                               {expandedEvent === event.id ? (
                                 <ChevronUp className="w-4 h-4 text-gray-400" />
                               ) : (
                                 <ChevronDown className="w-4 h-4 text-gray-400" />
                               )}
                             </div>
-                            <p className="text-xs text-gray-500 mb-2">
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                               {new Date(event.timestamp).toLocaleString()}
                             </p>
-                            <p className="text-xs text-gray-600 font-mono break-all">{event.did}</p>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 font-mono break-all">{event.did}</p>
                           </div>
                         </div>
-                        
+
                         {/* Collapsed view - show minimal info */}
                         {expandedEvent !== event.id && (
-                          <div className="mt-3 text-xs text-gray-700">
+                          <div className="mt-3 text-xs text-gray-700 dark:text-gray-300">
                             {event.type === 'creation' && (
                               <p><span className="font-medium">Type:</span> {event.details.type} • <span className="font-medium">Model:</span> {event.details.model}</p>
                             )}
@@ -326,11 +326,11 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
                             )}
                           </div>
                         )}
-                        
+
                         {/* Expanded view - show all details */}
                         {expandedEvent === event.id && (
-                          <div className="mt-4 pt-4 border-t border-gray-200">
-                            <div className="text-xs font-semibold text-gray-600 mb-2">Full Event Details:</div>
+                          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                            <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">Full Event Details:</div>
                             <div className="space-y-2 text-xs">
                               {Object.entries(event.details)
                                 .filter(([key]) => {
@@ -343,16 +343,16 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
                                 })
                                 .map(([key, value]) => (
                                   <div key={key} className="flex justify-between items-start gap-2">
-                                    <span className="text-gray-600 font-medium capitalize min-w-fit">
+                                    <span className="text-gray-600 dark:text-gray-400 font-medium capitalize min-w-fit">
                                       {key.replace(/([A-Z])/g, ' $1').trim()}:
                                     </span>
-                                    <span className="text-gray-900 font-mono break-all text-right">
+                                    <span className="text-gray-900 dark:text-white font-mono break-all text-right">
                                       {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
                                     </span>
                                   </div>
                                 ))}
                             </div>
-                            
+
                             <div className="mt-3 pt-3 border-t border-gray-100">
                               <p className="text-xs text-gray-500 italic">Click to collapse details</p>
                             </div>
@@ -360,12 +360,12 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
                         )}
                       </div>
                     </div>
-                    
+
                     {/* Center dot on timeline */}
                     <div className="w-2/12 flex justify-center relative z-10">
                       <div className={`w-6 h-6 rounded-full ${colorClasses} border-4 border-white shadow-lg`}></div>
                     </div>
-                    
+
                     {/* Empty space on other side */}
                     <div className="w-5/12"></div>
                   </div>

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { 
-  BarChart3, 
-  Users, 
-  CheckCircle, 
-  AlertTriangle, 
+import {
+  BarChart3,
+  Users,
+  CheckCircle,
+  AlertTriangle,
   Clock,
   Package,
   TrendingUp,
@@ -83,7 +83,7 @@ export default function SupervisorDashboard({ onNavigate }: SupervisorDashboardP
   }).slice(0, 20);
 
   return (
-    <div className="min-h-screen bg-red-50">
+    <div className="min-h-screen bg-red-50 dark:bg-gray-900">
       {/* Header */}
       <div className="bg-gradient-to-r from-red-700 to-red-800 text-white">
         <div className="max-w-7xl mx-auto px-6 py-6">
@@ -94,10 +94,10 @@ export default function SupervisorDashboard({ onNavigate }: SupervisorDashboardP
             </div>
             <div className="flex items-center gap-2 text-sm text-red-100">
               <Calendar className="w-4 h-4" />
-              {new Date().toLocaleDateString('en-US', { 
-                weekday: 'long', 
-                day: 'numeric', 
-                month: 'long' 
+              {new Date().toLocaleDateString('en-US', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long'
               })}
             </div>
           </div>
@@ -107,16 +107,16 @@ export default function SupervisorDashboard({ onNavigate }: SupervisorDashboardP
       <div className="max-w-7xl mx-auto px-6 py-8">
         {/* KPI Cards with Trends */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-          <div className="bg-white rounded-xl p-5 border border-red-200 shadow-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-red-200 dark:border-red-800 shadow-sm">
             <div className="flex items-center justify-between mb-3">
               <Package className="w-8 h-8 text-red-600" />
               <span className="text-xs font-medium text-gray-400">TOTAL</span>
             </div>
-            <p className="text-3xl font-bold text-gray-900">{stats.total}</p>
-            <p className="text-sm text-gray-500">Products</p>
+            <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.total}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Products</p>
           </div>
 
-          <div className="bg-white rounded-xl p-5 border border-red-200 shadow-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-red-200 dark:border-red-800 shadow-sm">
             <div className="flex items-center justify-between mb-3">
               <TrendingUp className="w-8 h-8 text-green-600" />
               <span className="flex items-center gap-1 text-xs font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
@@ -124,43 +124,43 @@ export default function SupervisorDashboard({ onNavigate }: SupervisorDashboardP
                 {stats.today >= stats.yesterdayCount ? '+' : ''}{stats.today - stats.yesterdayCount}
               </span>
             </div>
-            <p className="text-3xl font-bold text-gray-900">{stats.today}</p>
-            <p className="text-sm text-gray-500">Today</p>
+            <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.today}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Today</p>
           </div>
 
-          <div className="bg-white rounded-xl p-5 border border-red-200 shadow-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-red-200 dark:border-red-800 shadow-sm">
             <div className="flex items-center justify-between mb-3">
               <BarChart3 className="w-8 h-8 text-red-600" />
               <span className="text-xs font-medium text-gray-400">7 DAYS</span>
             </div>
-            <p className="text-3xl font-bold text-gray-900">{stats.thisWeek}</p>
-            <p className="text-sm text-gray-500">This Week</p>
+            <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.thisWeek}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">This Week</p>
           </div>
 
-          <div className="bg-white rounded-xl p-5 border border-red-200 shadow-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-red-200 dark:border-red-800 shadow-sm">
             <div className="flex items-center justify-between mb-3">
               <Users className="w-8 h-8 text-red-600" />
               <span className="text-xs font-medium text-green-600">●</span>
             </div>
-            <p className="text-3xl font-bold text-gray-900">{stats.activeOperators}</p>
-            <p className="text-sm text-gray-500">Active Workers</p>
+            <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.activeOperators}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Active Workers</p>
           </div>
 
-          <div className="bg-white rounded-xl p-5 border border-red-200 shadow-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-red-200 dark:border-red-800 shadow-sm">
             <div className="flex items-center justify-between mb-3">
               <AlertTriangle className="w-8 h-8 text-yellow-600" />
               {stats.pendingValidation > 0 && (
                 <span className="text-xs font-medium text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded-full">Action</span>
               )}
             </div>
-            <p className="text-3xl font-bold text-gray-900">{stats.pendingValidation}</p>
-            <p className="text-sm text-gray-500">Pending Validation</p>
+            <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.pendingValidation}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Pending Validation</p>
           </div>
         </div>
 
         {/* Action Center */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <button 
+          <button
             onClick={() => {
               const blob = new Blob([JSON.stringify(dpps, null, 2)], { type: 'application/json' });
               const url = URL.createObjectURL(blob);
@@ -175,21 +175,21 @@ export default function SupervisorDashboard({ onNavigate }: SupervisorDashboardP
             <Download className="w-5 h-5" />
             Export Report
           </button>
-          <button 
+          <button
             onClick={() => alert('Quality audit scheduled!')}
             className="flex items-center justify-center gap-2 bg-white border border-red-200 hover:bg-red-50 text-red-700 py-3 px-4 rounded-xl transition-colors font-medium"
           >
             <CheckCircle className="w-5 h-5" />
             Schedule Audit
           </button>
-          <button 
+          <button
             onClick={() => alert('Opening compliance dashboard...')}
             className="flex items-center justify-center gap-2 bg-white border border-red-200 hover:bg-red-50 text-red-700 py-3 px-4 rounded-xl transition-colors font-medium"
           >
             <FileText className="w-5 h-5" />
             Compliance
           </button>
-          <button 
+          <button
             onClick={() => window.print()}
             className="flex items-center justify-center gap-2 bg-white border border-red-200 hover:bg-red-50 text-red-700 py-3 px-4 rounded-xl transition-colors font-medium"
           >
@@ -201,7 +201,7 @@ export default function SupervisorDashboard({ onNavigate }: SupervisorDashboardP
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Product List */}
-          <div className="lg:col-span-2 bg-white rounded-xl border border-red-200 shadow-sm overflow-hidden">
+          <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl border border-red-200 dark:border-red-800 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-red-100">
               <div className="flex items-center gap-4">
                 <div className="relative flex-1">
@@ -211,7 +211,7 @@ export default function SupervisorDashboard({ onNavigate }: SupervisorDashboardP
                     placeholder="Search by model or DID..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
                 </div>
                 <div className="flex items-center gap-2">
@@ -242,20 +242,18 @@ export default function SupervisorDashboard({ onNavigate }: SupervisorDashboardP
                     className="w-full px-4 py-3 flex items-center justify-between hover:bg-red-50 transition-colors text-left"
                   >
                     <div className="flex items-center gap-3">
-                      <div className={`w-2 h-2 rounded-full ${
-                        dpp.lifecycle_status === 'active' ? 'bg-green-500' : 'bg-yellow-500'
-                      }`} />
+                      <div className={`w-2 h-2 rounded-full ${dpp.lifecycle_status === 'active' ? 'bg-green-500' : 'bg-yellow-500'
+                        }`} />
                       <div>
-                        <p className="font-medium text-gray-900">{dpp.model}</p>
-                        <p className="text-xs text-gray-500 font-mono">{dpp.did.slice(0, 40)}...</p>
+                        <p className="font-medium text-gray-900 dark:text-white">{dpp.model}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">{dpp.did.slice(0, 40)}...</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className={`text-xs px-2 py-1 rounded-full ${
-                        dpp.type === 'main' 
-                          ? 'bg-red-100 text-red-700' 
-                          : 'bg-gray-100 text-gray-600'
-                      }`}>
+                      <span className={`text-xs px-2 py-1 rounded-full ${dpp.type === 'main'
+                        ? 'bg-red-100 text-red-700'
+                        : 'bg-gray-100 text-gray-600'
+                        }`}>
                         {dpp.type === 'main' ? 'Main Product' : 'Component'}
                       </span>
                       <Eye className="w-4 h-4 text-gray-400" />
@@ -267,9 +265,9 @@ export default function SupervisorDashboard({ onNavigate }: SupervisorDashboardP
           </div>
 
           {/* Activity Feed */}
-          <div className="bg-white rounded-xl border border-red-200 shadow-sm overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-red-200 dark:border-red-800 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-red-100">
-              <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+              <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                 <Clock className="w-4 h-4 text-red-500" />
                 Recent Activity
               </h3>
@@ -278,16 +276,14 @@ export default function SupervisorDashboard({ onNavigate }: SupervisorDashboardP
               {dpps.slice(0, 10).map((dpp, index) => (
                 <div key={dpp.id} className="px-4 py-3">
                   <div className="flex items-start gap-3">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                      index === 0 ? 'bg-green-100' : 'bg-gray-100'
-                    }`}>
-                      <CheckCircle className={`w-4 h-4 ${
-                        index === 0 ? 'text-green-600' : 'text-gray-400'
-                      }`} />
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${index === 0 ? 'bg-green-100' : 'bg-gray-100'
+                      }`}>
+                      <CheckCircle className={`w-4 h-4 ${index === 0 ? 'text-green-600' : 'text-gray-400'
+                        }`} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-900 truncate">{dpp.model} registered</p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-sm text-gray-900 dark:text-white truncate">{dpp.model} registered</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
                         {new Date(dpp.created_at).toLocaleString('en-US', {
                           day: 'numeric',
                           month: 'short',

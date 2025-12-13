@@ -43,9 +43,9 @@ export function LifecycleControls({ dppId, did, onEventCreated }: LifecycleContr
   };
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
+    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4 transition-colors">
       <div className="flex items-center justify-between mb-2">
-        <h4 className="font-medium text-gray-700">Add New Event</h4>
+        <h4 className="font-medium text-gray-700 dark:text-gray-300">Add New Event</h4>
         <button
           onClick={() => setShowEventForm(!showEventForm)}
           className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
@@ -56,15 +56,15 @@ export function LifecycleControls({ dppId, did, onEventCreated }: LifecycleContr
       </div>
 
       {showEventForm && (
-        <div className="space-y-3 bg-gray-50 p-4 rounded mt-3">
+        <div className="space-y-3 bg-gray-50 dark:bg-gray-700 p-4 rounded mt-3 transition-colors">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Event Type
             </label>
             <select
               value={eventType}
               onChange={(e) => setEventType(e.target.value as any)}
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-600 text-gray-900 dark:text-white"
             >
               <option value="assembly">Assembly</option>
               <option value="installation">Installation</option>
@@ -74,14 +74,14 @@ export function LifecycleControls({ dppId, did, onEventCreated }: LifecycleContr
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Details
             </label>
             <textarea
               value={eventDetails}
               onChange={(e) => setEventDetails(e.target.value)}
               placeholder="Describe what happened..."
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-600 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400"
               rows={3}
             />
           </div>
@@ -89,7 +89,7 @@ export function LifecycleControls({ dppId, did, onEventCreated }: LifecycleContr
           <button
             onClick={handleCreateEvent}
             disabled={loading || !eventDetails.trim()}
-            className="w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+            className="w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
           >
             {loading ? 'Adding...' : 'Add Event'}
           </button>

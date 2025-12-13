@@ -547,7 +547,7 @@ export default function WitnessDashboard() {
         </div>
 
         {/* Search and Filter Bar */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-6 transition-colors">
           <div className="flex items-center gap-4">
             {/* Search */}
             <div className="flex-1 relative">
@@ -557,7 +557,7 @@ export default function WitnessDashboard() {
                 placeholder="Search by product name, DID, or event type..."
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               />
               {searchText && (
                 <button
@@ -575,8 +575,8 @@ export default function WitnessDashboard() {
                 onClick={() => setShowFilterDropdown(!showFilterDropdown)}
                 className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-300"
               >
-                <FilterIcon className="w-5 h-5 text-gray-500" />
-                <span className="text-sm font-medium text-gray-700">
+                <FilterIcon className="w-5 h-5 text-white" />
+                <span className="text-sm font-medium text-white">
                   {productTypeFilter === 'all' ? 'All Products' :
                     productTypeFilter === 'window' ? 'Windows' :
                       productTypeFilter === 'glass' ? 'Glass' : 'Frame'}
@@ -695,8 +695,8 @@ export default function WitnessDashboard() {
                 key={tab.id}
                 onClick={() => setFilter(tab.id as any)}
                 className={`flex-1 px-6 py-4 font-medium transition-colors ${filter === tab.id
-                    ? 'bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white border-b-2 border-blue-600'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700'
+                  ? 'bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white border-b-2 border-blue-600'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700'
                   }`}
               >
                 {tab.label} <span className={`ml-2 px-2 py-0.5 text-xs rounded-full bg-${tab.color}-100 dark:bg-${tab.color}-900/50 text-${tab.color}-700 dark:text-${tab.color}-300`}>{tab.count}</span>
@@ -721,22 +721,22 @@ export default function WitnessDashboard() {
                     <div key={group.dppId} className="border border-gray-300 rounded-lg overflow-hidden">
                       {/* Window Header - Clickable */}
                       <div
-                        className="bg-gradient-to-r from-blue-100 to-blue-50 px-4 py-3 cursor-pointer hover:from-blue-200 hover:to-blue-100 transition-colors"
+                        className="bg-gradient-to-r from-blue-100 to-blue-50 dark:from-gray-800 dark:to-gray-700 px-4 py-3 cursor-pointer hover:from-blue-200 hover:to-blue-100 dark:hover:from-gray-700 dark:hover:to-gray-600 transition-colors"
                         onClick={() => setExpandedDPP(isExpanded ? null : group.dppId)}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
-                            <Package className="w-5 h-5 text-blue-600" />
+                            <Package className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                             <div>
-                              <h3 className="font-semibold text-gray-900">{group.dppName}</h3>
-                              <p className="text-sm text-gray-600">
+                              <h3 className="font-semibold text-gray-900 dark:text-white">{group.dppName}</h3>
+                              <p className="text-sm text-gray-600 dark:text-gray-400">
                                 Main Product • {totalEvents} event{totalEvents !== 1 ? 's' : ''}
                                 {group.components && group.components.length > 0 && ` • ${group.components.length} component${group.components.length !== 1 ? 's' : ''}`}
                               </p>
                             </div>
                           </div>
                           <div className="flex items-center gap-3">
-                            <p className="text-xs text-gray-500 font-mono">
+                            <p className="font-semibold text-xs text-gray-500 dark:text-white font-mono">
                               DID: {group.did}
                             </p>
                             {isExpanded ? (
@@ -758,10 +758,10 @@ export default function WitnessDashboard() {
                                 <div
                                   key={event.id}
                                   className={`border-b border-gray-200 p-4 transition-all ${event.status === 'pending'
-                                      ? 'bg-yellow-50'
-                                      : event.status === 'approved'
-                                        ? 'bg-green-50'
-                                        : 'bg-red-50'
+                                    ? 'bg-yellow-50'
+                                    : event.status === 'approved'
+                                      ? 'bg-green-50'
+                                      : 'bg-red-50'
                                     }`}
                                 >
                                   <div className="flex items-start justify-between">
@@ -867,10 +867,10 @@ export default function WitnessDashboard() {
                                       <div
                                         key={event.id}
                                         className={`border-t border-gray-200 p-4 transition-all ${event.status === 'pending'
-                                            ? 'bg-yellow-50'
-                                            : event.status === 'approved'
-                                              ? 'bg-green-50'
-                                              : 'bg-red-50'
+                                          ? 'bg-yellow-50'
+                                          : event.status === 'approved'
+                                            ? 'bg-green-50'
+                                            : 'bg-red-50'
                                           }`}
                                       >
                                         <div className="flex items-start justify-between">
@@ -1227,8 +1227,8 @@ export default function WitnessDashboard() {
                 <button
                   onClick={handleConfirm}
                   className={`px-6 py-2.5 text-white rounded-lg font-medium transition-colors shadow-lg ${confirmAction === 'approve'
-                      ? 'bg-green-600 hover:bg-green-700'
-                      : 'bg-red-600 hover:bg-red-700'
+                    ? 'bg-green-600 hover:bg-green-700'
+                    : 'bg-red-600 hover:bg-red-700'
                     }`}
                 >
                   {confirmAction === 'approve' ? '✓ Confirm Approval' : '✗ Confirm Rejection'}

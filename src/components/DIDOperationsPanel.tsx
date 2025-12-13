@@ -12,21 +12,21 @@ interface DIDOperationsPanelProps {
 export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanelProps) {
   const { currentRoleDID } = useRole();
   const [history, setHistory] = useState<WitnessAttestation[]>([]);
-  
+
   // Load pending/approved/rejected from localStorage on mount
-  const [currentPendingOp, setCurrentPendingOp] = useState<{type: string; details: any} | null>(() => {
+  const [currentPendingOp, setCurrentPendingOp] = useState<{ type: string; details: any } | null>(() => {
     const stored = localStorage.getItem(`pending_op_${dpp.did}`);
     return stored ? JSON.parse(stored) : null;
   });
-  const [currentApprovedOp, setCurrentApprovedOp] = useState<{type: string; details: any} | null>(() => {
+  const [currentApprovedOp, setCurrentApprovedOp] = useState<{ type: string; details: any } | null>(() => {
     const stored = localStorage.getItem(`approved_op_${dpp.did}`);
     return stored ? JSON.parse(stored) : null;
   });
-  const [currentRejectedOp, setCurrentRejectedOp] = useState<{type: string; details: any} | null>(() => {
+  const [currentRejectedOp, setCurrentRejectedOp] = useState<{ type: string; details: any } | null>(() => {
     const stored = localStorage.getItem(`rejected_op_${dpp.did}`);
     return stored ? JSON.parse(stored) : null;
   });
-  
+
   const [loading, setLoading] = useState(true);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [newOwnerDID, setNewOwnerDID] = useState('');
@@ -80,7 +80,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
 
     const interval = setInterval(async () => {
       const statusResult = await getPendingAndRejectedOperations(dpp.did);
-      
+
       console.log('🔍 Polling status:', {
         dppDid: dpp.did,
         currentPendingType: currentPendingOp.type,
@@ -92,7 +92,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
         })),
         pendingCount: statusResult.pending.length
       });
-      
+
       // Check if operation was rejected
       if (statusResult.rejected.length > 0) {
         // Check for matching type (ownership_change or key_rotation)
@@ -106,13 +106,13 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
           });
           return matches;
         });
-        
+
         if (rejectedOp) {
           console.log('✅ Operation rejected, switching to red');
           // Immediately update localStorage before triggering state updates
           localStorage.removeItem(`pending_op_${dpp.did}`);
           localStorage.setItem(`rejected_op_${dpp.did}`, JSON.stringify(currentPendingOp));
-          
+
           setCurrentPendingOp(null);
           setCurrentRejectedOp(currentPendingOp);
           onUpdate();
@@ -121,7 +121,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
           console.log('❌ No matching rejected operation found');
         }
       }
-      
+
       // Check if operation was approved (no longer in pending, not in rejected)
       if (statusResult.pending.length === 0 && statusResult.rejected.length === 0) {
         // Reload history to check if it was added
@@ -129,18 +129,18 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
         if (historyResult.success) {
           const wasApproved = historyResult.operations.some((op: any) => {
             const attestationType = op.attestation_type;
-            return (attestationType === currentPendingOp.type || 
-                   (attestationType === 'ownership_change' && currentPendingOp.type === 'ownership_change') ||
-                   (attestationType === 'key_rotation' && currentPendingOp.type === 'key_rotation')) &&
-                   op.approval_status === 'approved';
+            return (attestationType === currentPendingOp.type ||
+              (attestationType === 'ownership_change' && currentPendingOp.type === 'ownership_change') ||
+              (attestationType === 'key_rotation' && currentPendingOp.type === 'key_rotation')) &&
+              op.approval_status === 'approved';
           });
-          
+
           if (wasApproved) {
             console.log('Operation approved, switching to green');
             // Immediately update localStorage before triggering state updates
             localStorage.removeItem(`pending_op_${dpp.did}`);
             localStorage.setItem(`approved_op_${dpp.did}`, JSON.stringify(currentPendingOp));
-            
+
             setCurrentPendingOp(null);
             setCurrentApprovedOp(currentPendingOp);
             setHistory(historyResult.operations);
@@ -149,7 +149,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
         }
       }
     }, 2000); // Poll every 2 seconds
-    
+
     return () => clearInterval(interval);
   }, [currentPendingOp, dpp.id, onUpdate]);
 
@@ -165,13 +165,13 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
       setMessage(null);
       setNewOwnerDID('');
       setShowTransferModal(false);
-      
+
       // Clear any existing approved/rejected notifications from both state and localStorage
       localStorage.removeItem(`approved_op_${dpp.did}`);
       localStorage.removeItem(`rejected_op_${dpp.did}`);
       setCurrentApprovedOp(null);
       setCurrentRejectedOp(null);
-      
+
       // Show orange pending notification
       const pendingOp = {
         type: 'ownership_change',
@@ -197,13 +197,13 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
     if (result.success) {
       // Remove success message - only show pending notification
       setMessage(null);
-      
+
       // Clear any existing approved/rejected notifications from both state and localStorage
       localStorage.removeItem(`approved_op_${dpp.did}`);
       localStorage.removeItem(`rejected_op_${dpp.did}`);
       setCurrentApprovedOp(null);
       setCurrentRejectedOp(null);
-      
+
       // Show orange pending notification
       const pendingOp = {
         type: 'key_rotation',
@@ -239,9 +239,9 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
 
     return {
       label: typeLabels[attestation.attestation_type] || attestation.attestation_type,
-      icon: attestation.attestation_type === 'did_creation' ? '🆕' : 
-            attestation.attestation_type === 'key_rotation' ? '🔑' :
-            attestation.attestation_type === 'ownership_change' ? '👤' : '📝',
+      icon: attestation.attestation_type === 'did_creation' ? '🆕' :
+        attestation.attestation_type === 'key_rotation' ? '🔑' :
+          attestation.attestation_type === 'ownership_change' ? '👤' : '📝',
     };
   };
 
@@ -273,19 +273,19 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
   return (
     <div className="space-y-6">
       {/* DID Information Card */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-xl font-bold text-gray-800 mb-4">DID Information</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-6 transition-colors">
+        <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">DID Information</h2>
         <div className="space-y-3">
           <div>
-            <span className="text-sm font-medium text-gray-600">DID:</span>
-            <p className="text-sm font-mono bg-gray-50 px-3 py-2 rounded mt-1 break-all">
+            <span className="text-sm font-medium text-gray-600 dark:text-gray-400">DID:</span>
+            <p className="text-sm font-mono bg-gray-50 dark:bg-gray-700 px-3 py-2 rounded mt-1 break-all text-gray-900 dark:text-white">
               {dpp.did}
             </p>
           </div>
           <div>
-            <span className="text-sm font-medium text-gray-600">Current Owner:</span>
+            <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Current Owner:</span>
             <div className="flex items-center gap-2 mt-1">
-              <p className="text-sm font-mono bg-gray-50 px-3 py-2 rounded flex-1 break-all">
+              <p className="text-sm font-mono bg-gray-50 dark:bg-gray-700 px-3 py-2 rounded flex-1 break-all text-gray-900 dark:text-white">
                 {dpp.owner}
               </p>
               {isOwner && (
@@ -299,8 +299,8 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
 
         {/* Action Buttons - Only visible to owner */}
         {isOwner && (
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">Owner Actions</h3>
+          <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Owner Actions</h3>
             <div className="flex gap-3">
               <button
                 onClick={handleRotateKey}
@@ -342,7 +342,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                       Operation Approved by Witness
                     </h3>
                     <p className="text-sm text-green-700 mb-2">
-                      {currentApprovedOp.type === 'ownership_change' 
+                      {currentApprovedOp.type === 'ownership_change'
                         ? `Ownership successfully transferred to: ${currentApprovedOp.details.to}`
                         : 'Key rotation completed successfully'}
                     </p>
@@ -375,7 +375,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                       Operation Rejected by Witness
                     </h3>
                     <p className="text-sm text-red-700 mb-2">
-                      {currentRejectedOp.type === 'ownership_change' 
+                      {currentRejectedOp.type === 'ownership_change'
                         ? `Ownership transfer to ${currentRejectedOp.details.to} was denied`
                         : 'Key rotation request was denied'}
                     </p>
@@ -406,7 +406,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                   Operation Pending Witness Approval
                 </h3>
                 <p className="text-sm text-orange-700 mb-2">
-                  {currentPendingOp.type === 'ownership_change' 
+                  {currentPendingOp.type === 'ownership_change'
                     ? `Awaiting witness approval for ownership transfer to: ${currentPendingOp.details.to}`
                     : 'Awaiting witness approval for key rotation'}
                 </p>
@@ -419,42 +419,42 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
         )}
       </div>
       {/* DID Operations History */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-xl font-bold text-gray-800 mb-4">DID Operations History</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-6 transition-colors">
+        <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">DID Operations History</h2>
         {loading ? (
-          <p className="text-gray-600 text-center py-8">Loading...</p>
+          <p className="text-gray-600 dark:text-gray-400 text-center py-8">Loading...</p>
         ) : history.length === 0 ? (
-          <p className="text-gray-600 text-center py-8">No DID operations yet</p>
+          <p className="text-gray-600 dark:text-gray-400 text-center py-8">No DID operations yet</p>
         ) : (
           <div className="space-y-3">
             {history.map((attestation, index) => {
               const formatted = formatAttestation(attestation);
               const keyFields = getKeyFields(attestation);
               const isExpanded = expandedItems.has(index);
-              
+
               return (
-                <div key={index} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                <div key={index} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3 flex-1">
                       <span className="text-2xl">{formatted.icon}</span>
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-gray-800">{formatted.label}</h4>
-                        
+                        <h4 className="font-semibold text-gray-800 dark:text-white">{formatted.label}</h4>
+
                         {/* Key Fields */}
                         {keyFields.length > 0 && (
                           <div className="mt-2 space-y-1">
                             {keyFields.map((field, idx) => (
                               <div key={idx} className="text-sm">
-                                <span className="text-gray-600 font-medium">{field.label}:</span>{' '}
-                                <span className="text-gray-800 font-mono text-xs break-all">
+                                <span className="text-gray-600 dark:text-gray-400 font-medium">{field.label}:</span>{' '}
+                                <span className="text-gray-800 dark:text-gray-200 font-mono text-xs break-all">
                                   {field.value.length > 60 ? `${field.value.substring(0, 60)}...` : field.value}
                                 </span>
                               </div>
                             ))}
                           </div>
                         )}
-                        
-                        <p className="text-xs text-gray-500 mt-2 break-all">
+
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 break-all">
                           Witness: <span className="font-mono">{attestation.witness_did}</span>
                         </p>
 
@@ -478,7 +478,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                               )}
                             </button>
                             {isExpanded && (
-                              <div className="text-xs text-gray-700 mt-2 bg-gray-50 p-3 rounded border border-gray-200">
+                              <div className="text-xs text-gray-700 dark:text-gray-300 mt-2 bg-gray-50 dark:bg-gray-700 p-3 rounded border border-gray-200 dark:border-gray-600">
                                 <pre className="whitespace-pre-wrap break-all overflow-x-auto">
                                   {JSON.stringify(attestation.attestation_data, null, 2)}
                                 </pre>
@@ -488,7 +488,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                         )}
                       </div>
                     </div>
-                    <span className="text-xs text-gray-500 whitespace-nowrap ml-4">
+                    <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap ml-4">
                       {new Date(attestation.timestamp).toLocaleString()}
                     </span>
                   </div>

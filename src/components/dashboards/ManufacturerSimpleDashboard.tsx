@@ -109,7 +109,7 @@ export default function ManufacturerSimpleDashboard({ onRegisterWindow, onNaviga
 
         {/* Recent Items - Clean List */}
         <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden transition-colors">
-          <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
+          <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
               <Clock className="w-5 h-5 text-gray-400 dark:text-gray-500" />
               Recently Added

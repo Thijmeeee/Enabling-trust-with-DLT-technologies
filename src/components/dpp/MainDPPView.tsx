@@ -714,10 +714,10 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                 {trustScore && (
                   <>
                     {/* Main Status Banner */}
-                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-4 mb-4">
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 border-2 border-blue-200 dark:border-blue-700 rounded-lg p-4 mb-4">
                       <div className="flex items-center gap-3 mb-3">
-                        <CheckCircle className="w-6 h-6 text-blue-600" />
-                        <span className="text-lg font-semibold text-gray-900">
+                        <CheckCircle className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                        <span className="text-lg font-semibold text-gray-900 dark:text-white">
                           {trustScore.score >= 80 ? 'Fully Verified Product' :
                             trustScore.score >= 60 ? 'Verified Product' :
                               'Partially Verified'}
@@ -727,8 +727,8 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                       {/* Progress Bar */}
                       <div className="mb-3">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium text-gray-700">Verification Completeness</span>
-                          <span className="text-sm font-bold text-gray-900">{trustScore.score}%</span>
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Verification Completeness</span>
+                          <span className="text-sm font-bold text-gray-900 dark:text-white">{trustScore.score}%</span>
                         </div>
                         <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
                           <div
@@ -744,8 +744,8 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                       <div className="flex items-start gap-3">
                         <CheckCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
                         <div>
-                          <div className="font-medium text-gray-900">Production Verified</div>
-                          <div className="text-xs text-gray-600">DID document validated and registered</div>
+                          <div className="font-medium text-gray-900 dark:text-white">Production Verified</div>
+                          <div className="text-xs text-gray-600 dark:text-gray-400">DID document validated and registered</div>
                         </div>
                       </div>
 
@@ -756,8 +756,8 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                           <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                         )}
                         <div>
-                          <div className="font-medium text-gray-900">Quality Controlled</div>
-                          <div className="text-xs text-gray-600">
+                          <div className="font-medium text-gray-900 dark:text-white">Quality Controlled</div>
+                          <div className="text-xs text-gray-600 dark:text-gray-400">
                             {Math.round((trustScore.breakdown.credentials / 25) * 100)}% of certificates available
                           </div>
                         </div>
@@ -770,10 +770,10 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                           <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                         )}
                         <div>
-                          <div className="font-medium text-gray-900">
+                          <div className="font-medium text-gray-900 dark:text-white">
                             {data.credentials ? data.credentials.length : 0} of {data.credentials ? Math.ceil(data.credentials.length / 0.68) : 25} Certificates Uploaded
                           </div>
-                          <div className="text-xs text-gray-600">Verifiable documents available</div>
+                          <div className="text-xs text-gray-600 dark:text-gray-400">Verifiable documents available</div>
                         </div>
                       </div>
 
@@ -784,8 +784,8 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                           <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                         )}
                         <div>
-                          <div className="font-medium text-gray-900">Blockchain Registered</div>
-                          <div className="text-xs text-gray-600">
+                          <div className="font-medium text-gray-900 dark:text-white">Blockchain Registered</div>
+                          <div className="text-xs text-gray-600 dark:text-gray-400">
                             Data immutably recorded on blockchain
                           </div>
                         </div>
@@ -796,35 +796,35 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
               </div>
 
               {/* Product Information */}
-              <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Product Information</h2>
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 transition-colors">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Product Information</h2>
                 <div className="grid grid-cols-2 gap-4">
                   <ProtectedField field="basic" label="Owner" value={dpp.owner}>
                     <div>
-                      <div className="text-sm text-gray-600">Owner</div>
-                      <div className="text-sm font-mono text-gray-900 break-all">{dpp.owner}</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Owner</div>
+                      <div className="text-sm font-mono text-gray-900 dark:text-white break-all">{dpp.owner}</div>
                     </div>
                   </ProtectedField>
                   {dpp.custodian && (
                     <ProtectedField field="operations" label="Custodian" value={dpp.custodian}>
                       <div>
-                        <div className="text-sm text-gray-600">Custodian</div>
-                        <div className="text-sm font-mono text-gray-900 break-all">{dpp.custodian}</div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Custodian</div>
+                        <div className="text-sm font-mono text-gray-900 dark:text-white break-all">{dpp.custodian}</div>
                       </div>
                     </ProtectedField>
                   )}
                   <ProtectedField field="operations" label="Created" value={new Date(dpp.created_at).toLocaleString()}>
                     <div>
-                      <div className="text-sm text-gray-600">Created</div>
-                      <div className="text-sm text-gray-900">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Created</div>
+                      <div className="text-sm text-gray-900 dark:text-white">
                         {new Date(dpp.created_at).toLocaleString()}
                       </div>
                     </div>
                   </ProtectedField>
                   <ProtectedField field="operations" label="Updated" value={new Date(dpp.updated_at).toLocaleString()}>
                     <div>
-                      <div className="text-sm text-gray-600">Updated</div>
-                      <div className="text-sm text-gray-900">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Updated</div>
+                      <div className="text-sm text-gray-900 dark:text-white">
                         {new Date(dpp.updated_at).toLocaleString()}
                       </div>
                     </div>
@@ -841,28 +841,28 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                 metrics.aggregatedSustainability.avgRecycledContent > 0 ||
                 metrics.aggregatedSustainability.avgRecyclability > 0
               ) && (
-                  <div className="bg-white rounded-lg border border-gray-200 p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Aggregated Sustainability</h2>
+                  <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 transition-colors">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Aggregated Sustainability</h2>
                     <div className="grid grid-cols-3 gap-4">
                       <div>
-                        <div className="text-sm text-gray-600">Total CO₂ Footprint</div>
-                        <div className="text-2xl font-bold text-gray-900">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Total CO₂ Footprint</div>
+                        <div className="text-2xl font-bold text-gray-900 dark:text-white">
                           {metrics.aggregatedSustainability.totalCO2Footprint.toFixed(1)}
-                          <span className="text-sm text-gray-600 ml-1">kg</span>
+                          <span className="text-sm text-gray-600 dark:text-gray-400 ml-1">kg</span>
                         </div>
                       </div>
                       <div>
-                        <div className="text-sm text-gray-600">Avg Recycled Content</div>
-                        <div className="text-2xl font-bold text-gray-900">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Avg Recycled Content</div>
+                        <div className="text-2xl font-bold text-gray-900 dark:text-white">
                           {metrics.aggregatedSustainability.avgRecycledContent.toFixed(0)}
-                          <span className="text-sm text-gray-600 ml-1">%</span>
+                          <span className="text-sm text-gray-600 dark:text-gray-400 ml-1">%</span>
                         </div>
                       </div>
                       <div>
-                        <div className="text-sm text-gray-600">Avg Recyclability</div>
-                        <div className="text-2xl font-bold text-gray-900">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Avg Recyclability</div>
+                        <div className="text-2xl font-bold text-gray-900 dark:text-white">
                           {metrics.aggregatedSustainability.avgRecyclability.toFixed(0)}
-                          <span className="text-sm text-gray-600 ml-1">%</span>
+                          <span className="text-sm text-gray-600 dark:text-gray-400 ml-1">%</span>
                         </div>
                       </div>
                     </div>
@@ -873,12 +873,12 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
             {/* Right column: Components/Parent (top) + Recent Events (bottom) */}
             <div className="space-y-6">
               {/* Components or Parent */}
-              <div className="bg-white rounded-lg border border-gray-200 p-6">
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 transition-colors">
                 {dpp.type === 'main' ? (
                   <>
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Components</h2>
-                    <div className="text-3xl font-bold text-blue-600 mb-2">{data.children.length}</div>
-                    <div className="text-sm text-gray-600 mb-4">Total components</div>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Components</h2>
+                    <div className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-2">{data.children.length}</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mb-4">Total components</div>
 
                     <div className="space-y-2">
                       {data.children.map((child: any) => {
@@ -907,8 +907,8 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                               e.currentTarget.style.backgroundColor = `${color}10`;
                             }}
                           >
-                            <div className="font-medium text-gray-900 text-sm mb-1">{childDpp.model}</div>
-                            <div className="text-xs text-gray-600 font-mono truncate">{childDpp.did}</div>
+                            <div className="font-medium text-gray-900 dark:text-white text-sm mb-1">{childDpp.model}</div>
+                            <div className="text-xs text-gray-600 dark:text-gray-400 font-mono truncate">{childDpp.did}</div>
                           </button>
                         );
                       })}
@@ -916,14 +916,14 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                   </>
                 ) : data.parent ? (
                   <>
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Parent Product</h2>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Parent Product</h2>
                     <button
                       onClick={() => onNavigate(data.parent.did)}
-                      className="w-full p-4 rounded-lg transition-colors text-left border-2 border-blue-200 bg-blue-50 hover:bg-blue-100 hover:border-blue-300"
+                      className="w-full p-4 rounded-lg transition-colors text-left border-2 border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:border-blue-300 dark:hover:border-blue-600"
                     >
-                      <div className="font-semibold text-gray-900 text-base mb-2">{data.parent.model}</div>
-                      <div className="text-xs text-gray-600 font-mono truncate mb-2">{data.parent.did}</div>
-                      <div className="flex items-center gap-1 text-sm text-blue-700 font-medium">
+                      <div className="font-semibold text-gray-900 dark:text-white text-base mb-2">{data.parent.model}</div>
+                      <div className="text-xs text-gray-600 dark:text-gray-400 font-mono truncate mb-2">{data.parent.did}</div>
+                      <div className="flex items-center gap-1 text-sm text-blue-700 dark:text-blue-400 font-medium">
                         <span>View parent product</span>
                         <ExternalLink className="w-4 h-4" />
                       </div>
@@ -933,9 +933,9 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
               </div>
 
               {/* Recent Events */}
-              <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-blue-600" />
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 transition-colors">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                   Recent Events
                 </h2>
                 <div className="space-y-2">
@@ -947,13 +947,13 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                           setActiveTab('events');
                           setOpenEventId(event.id);
                         }}
-                        className="w-full text-left text-sm border-l-2 border-blue-500 pl-3 py-2 hover:bg-blue-50 transition-colors rounded-r"
+                        className="w-full text-left text-sm border-l-2 border-blue-500 dark:border-blue-400 pl-3 py-2 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors rounded-r"
                       >
                         <div className="flex items-center justify-between">
-                          <span className="font-medium text-blue-600 capitalize hover:underline">
+                          <span className="font-medium text-blue-600 dark:text-blue-400 capitalize hover:underline">
                             {event.description ? String(event.description) : (event.attestation_type ? event.attestation_type.replace(/_/g, ' ') : 'Unknown Event')}
                           </span>
-                          <span className="text-xs text-gray-500">
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
                             {event.timestamp ? new Date(event.timestamp).toLocaleString('en-US', {
                               day: '2-digit',
                               month: '2-digit',
@@ -966,7 +966,7 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                       </button>
                     ))
                   ) : (
-                    <p className="text-sm text-gray-500 text-center py-2">No recent events</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-2">No recent events</p>
                   )}
                 </div>
               </div>
@@ -976,8 +976,8 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
 
         {activeTab === 'components' && (
           <div className="space-y-6">
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-6">Component Details</h2>
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 transition-colors">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">Component Details</h2>
               <div className="grid grid-cols-2 gap-6">
                 {data.children.map((child: any) => {
                   const childDpp = child.dpp || child;
@@ -990,10 +990,9 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                   return (
                     <div
                       key={childDpp.id}
-                      className="group border-2 rounded-xl overflow-hidden transition-all hover:shadow-lg"
+                      className="group border-2 rounded-xl overflow-hidden transition-all hover:shadow-lg bg-white dark:bg-gray-800"
                       style={{
-                        borderColor: `${color}40`,
-                        backgroundColor: 'white'
+                        borderColor: `${color}40`
                       }}
                     >
                       {/* Visual Header with Icon */}
@@ -1020,7 +1019,7 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
 
                       {/* Content */}
                       <div className="p-4">
-                        <h3 className="font-bold text-gray-900 text-lg mb-2">{childDpp.model}</h3>
+                        <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-2">{childDpp.model}</h3>
 
                         {/* Key Specs */}
                         {keySpecs.length > 0 && (
@@ -1031,20 +1030,20 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                                   className="w-1.5 h-1.5 rounded-full"
                                   style={{ backgroundColor: color }}
                                 ></div>
-                                <span className="text-gray-700 font-medium">{spec}</span>
+                                <span className="text-gray-700 dark:text-gray-300 font-medium">{spec}</span>
                               </div>
                             ))}
                           </div>
                         )}
 
                         {/* DID */}
-                        <div className="mb-3 p-2 bg-gray-50 rounded border border-gray-200">
-                          <div className="text-xs text-gray-500 mb-0.5">DID</div>
-                          <p className="text-xs text-gray-700 font-mono truncate">{childDpp.did}</p>
+                        <div className="mb-3 p-2 bg-gray-50 dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600">
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">DID</div>
+                          <p className="text-xs text-gray-700 dark:text-gray-300 font-mono truncate">{childDpp.did}</p>
                         </div>
 
                         {/* Meta Info */}
-                        <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
+                        <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-3">
                           <span className="capitalize">{childDpp.lifecycle_status}</span>
                           <span>v{childDpp.version || '1.0'}</span>
                         </div>
@@ -1098,26 +1097,26 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
           <>
             {/* Pending Approvals Banner */}
             {pendingApprovals.length > 0 && (
-              <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div className="mb-4 p-4 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 rounded-lg transition-colors">
                 <div className="flex items-start gap-3">
-                  <Clock className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                  <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
                   <div className="flex-1">
-                    <h3 className="font-semibold text-yellow-900 mb-1">
+                    <h3 className="font-semibold text-yellow-900 dark:text-yellow-300 mb-1">
                       {pendingApprovals.length} DID Event{pendingApprovals.length > 1 ? 's' : ''} Awaiting Witness Approval
                     </h3>
-                    <p className="text-sm text-yellow-700 mb-2">
+                    <p className="text-sm text-yellow-700 dark:text-yellow-400 mb-2">
                       The following DID operations are pending validation by a witness node before they will appear in the event history:
                     </p>
                     <div className="space-y-2">
                       {pendingApprovals.map((att) => (
                         <div key={att.id} className="flex items-center gap-2 text-sm">
-                          <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
-                          <span className="font-medium text-yellow-900">
+                          <div className="w-2 h-2 bg-yellow-400 dark:bg-yellow-500 rounded-full"></div>
+                          <span className="font-medium text-yellow-900 dark:text-yellow-300">
                             {att.attestation_type === 'key_rotation' && 'Key Rotation'}
                             {att.attestation_type === 'ownership_change' && 'Ownership Transfer'}
                             {att.attestation_type === 'did_update' && 'DID Document Update'}
                           </span>
-                          <span className="text-yellow-600">
+                          <span className="text-yellow-600 dark:text-yellow-400">
                             • Submitted {new Date(att.timestamp).toLocaleString()}
                           </span>
                         </div>

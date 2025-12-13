@@ -64,14 +64,14 @@ export function ProtectedMetadata({ metadata, fieldMapping = {} }: MetadataProps
   const filteredMetadata = Object.entries(metadata).filter(([key]) => key !== 'image_url');
 
   return (
-    <div className="mt-4 pt-4 border-t border-gray-200">
+    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
       <div className="flex items-center justify-between mb-2">
-        <div className="text-sm text-gray-600">Metadata</div>
-        <div className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded">
+        <div className="text-sm text-gray-600 dark:text-gray-400">Metadata</div>
+        <div className="text-xs px-2 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">
           Viewing as: {currentRole}
         </div>
       </div>
-      <div className="text-sm text-gray-900 space-y-1">
+      <div className="text-sm text-gray-900 dark:text-white space-y-1">
         {filteredMetadata.map(([key, value]) => {
           const requiredPermission = defaultMapping[key] || 'basic';
           const hasPermission = canSeeField(requiredPermission);
@@ -93,9 +93,9 @@ export function ProtectedMetadata({ metadata, fieldMapping = {} }: MetadataProps
 
           return (
             <div key={key} className="flex justify-between">
-              <span className="text-gray-600">{key}:</span>
+              <span className="text-gray-600 dark:text-gray-400">{key}:</span>
               {hasPermission ? (
-                <span className="font-medium">
+                <span className="font-medium text-gray-900 dark:text-white">
                   {displayValue}
                 </span>
               ) : (

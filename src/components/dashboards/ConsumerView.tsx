@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { 
-  Shield, 
-  MapPin, 
-  Calendar, 
-  Leaf, 
+import {
+  Shield,
+  MapPin,
+  Calendar,
+  Leaf,
   Award,
   CheckCircle,
   ChevronRight,
@@ -64,7 +64,7 @@ export default function ConsumerView({ did, onNavigate }: ConsumerViewProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
@@ -72,17 +72,17 @@ export default function ConsumerView({ did, onNavigate }: ConsumerViewProps) {
 
   if (!product) {
     return (
-      <div className="min-h-screen bg-blue-50 flex items-center justify-center">
+      <div className="min-h-screen bg-blue-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500">Product not found</p>
+          <Package className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+          <p className="text-gray-500 dark:text-gray-400">Product not found</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-blue-50">
+    <div className="min-h-screen bg-blue-50 dark:bg-gray-900">
       {/* Hero Section - Mobile First */}
       <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 text-white">
         <div className="max-w-lg mx-auto px-6 py-8">
@@ -115,7 +115,7 @@ export default function ConsumerView({ did, onNavigate }: ConsumerViewProps) {
                 <span className="text-sm text-blue-200">Produced</span>
               </div>
               <p className="text-xl font-bold">
-                {new Date(product.created_at).toLocaleDateString('en-US', { 
+                {new Date(product.created_at).toLocaleDateString('en-US', {
                   month: 'short',
                   year: 'numeric'
                 })}
@@ -128,7 +128,7 @@ export default function ConsumerView({ did, onNavigate }: ConsumerViewProps) {
       {/* Content */}
       <div className="max-w-lg mx-auto px-6 -mt-4">
         {/* Tab Navigation */}
-        <div className="bg-white rounded-xl shadow-lg mb-6 overflow-hidden border border-blue-200">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg mb-6 overflow-hidden border border-blue-200 dark:border-gray-700">
           <div className="flex border-b border-blue-100">
             {[
               { id: 'story', label: 'Story', icon: MapPin },
@@ -138,11 +138,10 @@ export default function ConsumerView({ did, onNavigate }: ConsumerViewProps) {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`flex-1 py-4 flex flex-col items-center gap-1 text-sm font-medium transition-colors ${
-                  activeTab === tab.id
-                    ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
+                className={`flex-1 py-4 flex flex-col items-center gap-1 text-sm font-medium transition-colors ${activeTab === tab.id
+                  ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50 dark:bg-blue-900/30'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                  }`}
               >
                 <tab.icon className="w-5 h-5" />
                 {tab.label}
@@ -155,7 +154,7 @@ export default function ConsumerView({ did, onNavigate }: ConsumerViewProps) {
             {activeTab === 'story' && (
               <div className="space-y-6">
                 <div>
-                  <h3 className="font-semibold text-gray-900 mb-3">The journey of your window</h3>
+                  <h3 className="font-semibold text-gray-900 dark:text-white mb-3">The journey of your window</h3>
                   <div className="space-y-4">
                     {/* Timeline */}
                     <div className="flex gap-4">
@@ -166,7 +165,7 @@ export default function ConsumerView({ did, onNavigate }: ConsumerViewProps) {
                         <div className="w-0.5 h-full bg-blue-200 my-2" />
                       </div>
                       <div className="pb-4">
-                        <p className="font-medium text-gray-900">Manufactured</p>
+                        <p className="font-medium text-gray-900 dark:text-white">Manufactured</p>
                         <p className="text-sm text-gray-500">
                           {new Date(product.created_at).toLocaleDateString('en-US', {
                             day: 'numeric',
@@ -188,7 +187,7 @@ export default function ConsumerView({ did, onNavigate }: ConsumerViewProps) {
                         <div className="w-0.5 h-full bg-blue-200 my-2" />
                       </div>
                       <div className="pb-4">
-                        <p className="font-medium text-gray-900">Quality Control</p>
+                        <p className="font-medium text-gray-900 dark:text-white">Quality Control</p>
                         <p className="text-sm text-gray-600">
                           Tested and approved according to EN 14351-1
                         </p>
@@ -202,7 +201,7 @@ export default function ConsumerView({ did, onNavigate }: ConsumerViewProps) {
                         </div>
                       </div>
                       <div>
-                        <p className="font-medium text-gray-900">Certified</p>
+                        <p className="font-medium text-gray-900 dark:text-white">Certified</p>
                         <p className="text-sm text-gray-600">
                           CE marking and KOMO quality mark
                         </p>
@@ -228,47 +227,47 @@ export default function ConsumerView({ did, onNavigate }: ConsumerViewProps) {
 
             {activeTab === 'maintenance' && (
               <div className="space-y-4">
-                <h3 className="font-semibold text-gray-900">Maintenance Tips</h3>
-                
+                <h3 className="font-semibold text-gray-900 dark:text-white">Maintenance Tips</h3>
+
                 <div className="space-y-3">
-                  <div className="flex gap-3 p-3 bg-blue-50 rounded-lg">
-                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                      <span className="text-sm font-bold text-blue-600">1</span>
+                  <div className="flex gap-3 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-800 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sm font-bold text-blue-600 dark:text-blue-300">1</span>
                     </div>
                     <div>
-                      <p className="font-medium text-gray-900">Regular Cleaning</p>
-                      <p className="text-sm text-gray-600">
+                      <p className="font-medium text-gray-900 dark:text-white">Regular Cleaning</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
                         Clean the frame monthly with a damp cloth and mild soap.
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex gap-3 p-3 bg-blue-50 rounded-lg">
-                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                      <span className="text-sm font-bold text-blue-600">2</span>
+                  <div className="flex gap-3 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-800 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sm font-bold text-blue-600 dark:text-blue-300">2</span>
                     </div>
                     <div>
-                      <p className="font-medium text-gray-900">Lubricate Hinges</p>
-                      <p className="text-sm text-gray-600">
+                      <p className="font-medium text-gray-900 dark:text-white">Lubricate Hinges</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
                         Apply silicone spray to hinges annually.
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex gap-3 p-3 bg-blue-50 rounded-lg">
-                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                      <span className="text-sm font-bold text-blue-600">3</span>
+                  <div className="flex gap-3 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-800 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sm font-bold text-blue-600 dark:text-blue-300">3</span>
                     </div>
                     <div>
-                      <p className="font-medium text-gray-900">Check Seals</p>
-                      <p className="text-sm text-gray-600">
+                      <p className="font-medium text-gray-900 dark:text-white">Check Seals</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
                         Inspect rubber seals for wear and replace if needed.
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <button 
+                <button
                   onClick={() => {
                     const manualContent = `
 # Maintenance Manual - ${product.model}
@@ -309,7 +308,7 @@ Product DID: ${product.did}
                   <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
                     <Award className="w-8 h-8 text-green-600" />
                   </div>
-                  <h3 className="text-xl font-bold text-gray-900">10 Year Warranty</h3>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">10 Year Warranty</h3>
                   <p className="text-gray-500">Valid until {
                     new Date(new Date(product.created_at).getTime() + 10 * 365 * 24 * 60 * 60 * 1000)
                       .toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
@@ -331,7 +330,7 @@ Product DID: ${product.did}
                   </div>
                 </div>
 
-                <button 
+                <button
                   onClick={() => {
                     const subject = encodeURIComponent(`Warranty Claim - ${product.model}`);
                     const body = encodeURIComponent(`
@@ -357,7 +356,7 @@ Please describe your issue:
 
         {/* Share Button */}
         <div className="flex gap-3 mb-8">
-          <button 
+          <button
             onClick={() => {
               const shareUrl = `${window.location.origin}/product/${product.did}`;
               if (navigator.share) {
@@ -376,7 +375,7 @@ Please describe your issue:
             <Share2 className="w-4 h-4" />
             Share
           </button>
-          <button 
+          <button
             onClick={() => onNavigate?.(product.did)}
             className="flex-1 py-3 bg-white border border-blue-200 rounded-xl font-medium text-gray-700 flex items-center justify-center gap-2 shadow-sm hover:bg-blue-50 transition-colors"
           >

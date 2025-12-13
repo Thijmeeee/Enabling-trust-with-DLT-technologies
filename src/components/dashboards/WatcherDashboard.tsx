@@ -569,7 +569,7 @@ export default function WatcherDashboard() {
                       <div key={group.dppId} className="border border-gray-200 rounded-lg overflow-hidden">
                         {/* Window/Main Product Header */}
                         <div
-                          className={`bg-blue-100 p-3 cursor-pointer hover:bg-blue-200 transition-colors ${selectedDPPForDetails?.id === dpp.id ? 'ring-2 ring-blue-500' : ''
+                          className={`bg-blue-100 dark:bg-gray-800 p-3 cursor-pointer hover:bg-blue-200 dark:hover:bg-gray-700 transition-colors ${selectedDPPForDetails?.id === dpp.id ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''
                             }`}
                           onClick={() => {
                             setExpandedDPP(isExpanded ? null : group.dppId);
@@ -578,10 +578,10 @@ export default function WatcherDashboard() {
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3 flex-1">
-                              <Package className="w-5 h-5 text-blue-600" />
+                              <Package className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                               <div className="flex-1">
-                                <h3 className="font-semibold text-blue-900">{dpp.model}</h3>
-                                <p className="text-xs text-blue-600">
+                                <h3 className="font-semibold text-blue-900 dark:text-white">{dpp.model}</h3>
+                                <p className="text-xs text-blue-600 dark:text-blue-400">
                                   {dpp.type} • {group.components?.length || 0} component{(group.components?.length || 0) !== 1 ? 's' : ''}
                                 </p>
                               </div>
@@ -920,7 +920,7 @@ export default function WatcherDashboard() {
                                 <h3 className="font-semibold text-gray-900 dark:text-white">
                                   {alert.alert_type.replace(/_/g, ' ').toUpperCase()}
                                 </h3>
-                                <p className="text-sm text-gray-600">{dpp?.model || 'Unknown Product'}</p>
+                                <p className="font-semibold text-sm text-white">{dpp?.model || 'Unknown Product'}</p>
                               </div>
                               <span className={`px-2 py-1 text-xs rounded ${alert.status === 'active'
                                 ? 'bg-red-100 text-red-700'
@@ -929,15 +929,15 @@ export default function WatcherDashboard() {
                                 {alert.status}
                               </span>
                             </div>
-                            <p className="text-sm text-gray-700 mb-2">{alert.description}</p>
-                            <div className="text-xs text-gray-500">
+                            <p className="text-sm text-gray-700 dark:text-white mb-2">{alert.description}</p>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
                               Detected: {new Date(alert.detected_at).toLocaleString()}
                             </div>
 
                             {alert.status === 'active' && (
                               <button
                                 onClick={() => resolveAlert(alert.id)}
-                                className="mt-2 px-3 py-1 text-sm bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50"
+                                className="mt-2 px-3 py-1 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-50 dark:hover:bg-gray-600"
                               >
                                 Mark Resolved
                               </button>

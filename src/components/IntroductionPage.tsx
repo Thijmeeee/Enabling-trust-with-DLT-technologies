@@ -76,8 +76,8 @@ export default function IntroductionPage({ onContinue }: IntroductionPageProps) 
             onClick={handleBack}
             disabled={currentStep === 0}
             className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-colors ${currentStep === 0
-                ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
+              ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+              : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
               }`}
           >
             <ArrowLeft className="w-5 h-5" /> Back
@@ -134,55 +134,55 @@ function PlayersStep() {
   return (
     <div className="max-w-4xl mx-auto">
       <div className="text-center mb-10">
-        <h2 className="text-3xl font-bold text-gray-900 mb-4">Stakeholders</h2>
-        <p className="text-xl text-gray-600">Who is involved in the product lifecycle?</p>
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Stakeholders</h2>
+        <p className="text-xl text-gray-600 dark:text-gray-300">Who is involved in the product lifecycle?</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-8 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
           <div className="flex items-center gap-4 mb-4">
             <div className="p-3 bg-blue-100 rounded-lg">
               <Factory className="w-8 h-8 text-blue-600" />
             </div>
-            <h3 className="text-xl font-bold text-gray-900">Manufacturer</h3>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Manufacturer</h3>
           </div>
-          <p className="text-gray-600 leading-relaxed">
+          <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
             Creates the product and issues its first digital passport. They are the starting point of the journey and define the initial specifications.
           </p>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-8 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
           <div className="flex items-center gap-4 mb-4">
             <div className="p-3 bg-green-100 rounded-lg">
               <Wrench className="w-8 h-8 text-green-600" />
             </div>
-            <h3 className="text-xl font-bold text-gray-900">Operator</h3>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Operator</h3>
           </div>
-          <p className="text-gray-600 leading-relaxed">
+          <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
             Works with the materials day-to-day. They handle assembly, installation, and maintenance, updating the passport with new events.
           </p>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-8 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
           <div className="flex items-center gap-4 mb-4">
             <div className="p-3 bg-purple-100 rounded-lg">
               <UserCheck className="w-8 h-8 text-purple-600" />
             </div>
-            <h3 className="text-xl font-bold text-gray-900">Supervisor</h3>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Supervisor</h3>
           </div>
-          <p className="text-gray-600 leading-relaxed">
+          <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
             Oversees the entire process. They ensure compliance with regulations and quality standards, acting as an auditor.
           </p>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-8 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
           <div className="flex items-center gap-4 mb-4">
             <div className="p-3 bg-teal-100 rounded-lg">
               <Recycle className="w-8 h-8 text-teal-600" />
             </div>
-            <h3 className="text-xl font-bold text-gray-900">Recycler</h3>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Recycler</h3>
           </div>
-          <p className="text-gray-600 leading-relaxed">
+          <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
             Handles end-of-life processing. They use the passport to identify materials for efficient recycling, closing the loop.
           </p>
         </div>
@@ -195,8 +195,8 @@ function TrustStep() {
   return (
     <div className="max-w-5xl mx-auto">
       <div className="text-center mb-10">
-        <h2 className="text-3xl font-bold text-gray-900 mb-4">Under the Hood</h2>
-        <p className="text-xl text-gray-600">Three digital guardians work together to ensure trust.</p>
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Under the Hood</h2>
+        <p className="text-xl text-gray-600 dark:text-gray-300">Three digital guardians work together to ensure trust.</p>
       </div>
 
       <div className="grid md:grid-cols-3 gap-6">
@@ -208,7 +208,7 @@ function TrustStep() {
             <p className="text-emerald-100 text-sm">The Digital Notaries</p>
           </div>
           <div className="p-6 flex-1 flex flex-col">
-            <p className="text-gray-700 mb-4 flex-1">
+            <p className="text-gray-700 dark:text-gray-300 mb-4 flex-1">
               When an event happens (like production), a Witness reviews and digitally signs it.
             </p>
             <div className="bg-emerald-50 rounded-lg p-3 text-sm text-emerald-800 border border-emerald-100">
@@ -225,7 +225,7 @@ function TrustStep() {
             <p className="text-amber-100 text-sm">The Security Guards</p>
           </div>
           <div className="p-6 flex-1 flex flex-col">
-            <p className="text-gray-700 mb-4 flex-1">
+            <p className="text-gray-700 dark:text-gray-300 mb-4 flex-1">
               They continuously monitor data for tampering and verify that components belong to the right products.
             </p>
             <div className="bg-amber-50 rounded-lg p-3 text-sm text-amber-800 border border-amber-100">
@@ -242,7 +242,7 @@ function TrustStep() {
             <p className="text-blue-100 text-sm">The Digital Phonebook</p>
           </div>
           <div className="p-6 flex-1 flex flex-col">
-            <p className="text-gray-700 mb-4 flex-1">
+            <p className="text-gray-700 dark:text-gray-300 mb-4 flex-1">
               Looks up the unique ID (DID) and retrieves the full, verified history of the product.
             </p>
             <div className="bg-blue-50 rounded-lg p-3 text-sm text-blue-800 border border-blue-100">
@@ -258,7 +258,7 @@ function TrustStep() {
 function ValueStep() {
   return (
     <div className="max-w-3xl mx-auto text-center">
-      <h2 className="text-3xl font-bold text-gray-900 mb-8">Why Does This Matter?</h2>
+      <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">Why Does This Matter?</h2>
 
       <div className="bg-gradient-to-br from-blue-600 to-purple-700 rounded-3xl p-10 text-white shadow-xl mb-10">
         <div className="grid md:grid-cols-3 gap-8">
@@ -292,7 +292,7 @@ function ValueStep() {
         </div>
       </div>
 
-      <p className="text-gray-600 text-lg mb-8">
+      <p className="text-gray-600 dark:text-gray-300 text-lg mb-8">
         You are now ready to explore the dashboard. Remember, you can always revisit this guide by clicking the help icon.
       </p>
     </div>

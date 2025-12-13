@@ -511,7 +511,7 @@ export default function ResolverDashboard() {
             <button
               onClick={handleVerifyDID}
               disabled={loading || !searchDID.trim()}
-              className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+              className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
             >
               <Search className="w-4 h-4" />
               {loading ? 'Verifying...' : 'Verify'}
@@ -654,10 +654,10 @@ export default function ResolverDashboard() {
                             <XCircle className="w-4 h-4 text-red-600 mt-0.5" />
                           )}
                           <div className="flex-1">
-                            <p className="text-sm font-medium text-gray-900">Controller Signatures</p>
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">Controller Signatures</p>
                             <button
                               onClick={() => openDetailsModal('Controller Signatures Verification', group.verification.checks.controllerSignatures, group.verification)}
-                              className="text-xs text-blue-600 hover:text-blue-800 hover:underline text-left"
+                              className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline text-left"
                             >
                               {group.verification.checks.controllerSignatures.message}
                             </button>
@@ -671,10 +671,10 @@ export default function ResolverDashboard() {
                             <XCircle className="w-4 h-4 text-red-600 mt-0.5" />
                           )}
                           <div className="flex-1">
-                            <p className="text-sm font-medium text-gray-900">Witness Proofs</p>
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">Witness Proofs</p>
                             <button
                               onClick={() => openDetailsModal('Witness Proofs Verification', group.verification.checks.witnessProofs, group.verification)}
-                              className="text-xs text-blue-600 hover:text-blue-800 hover:underline text-left"
+                              className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline text-left"
                             >
                               {group.verification.checks.witnessProofs.message}
                             </button>
@@ -688,10 +688,10 @@ export default function ResolverDashboard() {
                             <XCircle className="w-4 h-4 text-red-600 mt-0.5" />
                           )}
                           <div className="flex-1">
-                            <p className="text-sm font-medium text-gray-900">Document Consistency</p>
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">Document Consistency</p>
                             <button
                               onClick={() => openDetailsModal('Document Consistency Verification', group.verification.checks.documentConsistency, group.verification)}
-                              className="text-xs text-blue-600 hover:text-blue-800 hover:underline text-left"
+                              className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline text-left"
                             >
                               {group.verification.checks.documentConsistency.message}
                             </button>
@@ -700,12 +700,12 @@ export default function ResolverDashboard() {
                       </div>
 
                       {/* History Summary */}
-                      <div className="bg-gray-50 rounded-lg p-4">
-                        <h4 className="font-semibold text-sm text-gray-900 mb-2">History Summary</h4>
-                        <p className="text-xs text-gray-600">
+                      <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                        <h4 className="font-semibold text-sm text-gray-900 dark:text-white mb-2">History Summary</h4>
+                        <p className="text-xs text-gray-600 dark:text-gray-400">
                           {group.verification.history.length} operations in history
                         </p>
-                        <p className="text-xs text-gray-600">
+                        <p className="text-xs text-gray-600 dark:text-gray-400">
                           {group.verification.attestations.length} attestations recorded
                         </p>
                       </div>
@@ -713,12 +713,12 @@ export default function ResolverDashboard() {
                       {/* Components */}
                       {group.components && group.components.length > 0 && (
                         <div className="mt-4">
-                          <h4 className="font-semibold text-sm text-gray-900 mb-3">Components ({group.components.length})</h4>
+                          <h4 className="font-semibold text-sm text-gray-900 dark:text-white mb-3">Components ({group.components.length})</h4>
                           <div className="space-y-2">
                             {group.components.map((component) => (
                               <div
                                 key={component.verification.did}
-                                className="bg-white border border-gray-200 rounded-lg p-3"
+                                className="bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-3"
                               >
                                 <div
                                   className="flex items-center justify-between cursor-pointer"
@@ -736,7 +736,7 @@ export default function ResolverDashboard() {
                                     <Package className="w-4 h-4 text-gray-500" />
                                     <div>
                                       <div className="flex items-center gap-2">
-                                        <span className="font-medium text-sm text-gray-900">{component.name}</span>
+                                        <span className="font-medium text-sm text-gray-900 dark:text-white">{component.name}</span>
                                         {component.verification.status === 'valid' && (
                                           <CheckCircle className="w-3 h-3 text-green-600" />
                                         )}
@@ -768,7 +768,7 @@ export default function ResolverDashboard() {
                                           <XCircle className="w-3 h-3 text-red-600 mt-0.5" />
                                         )}
                                         <div className="flex-1">
-                                          <p className="text-xs font-medium text-gray-900">Hash Chain</p>
+                                          <p className="text-xs font-medium text-gray-900 dark:text-white">Hash Chain</p>
                                           <button
                                             onClick={() => openDetailsModal('Hash Chain Verification', component.verification.checks.hashChain, component.verification)}
                                             className="text-xs text-blue-600 hover:text-blue-800 hover:underline text-left"
@@ -785,7 +785,7 @@ export default function ResolverDashboard() {
                                           <XCircle className="w-3 h-3 text-red-600 mt-0.5" />
                                         )}
                                         <div className="flex-1">
-                                          <p className="text-xs font-medium text-gray-900">Controller Signatures</p>
+                                          <p className="text-xs font-medium text-gray-900 dark:text-white">Controller Signatures</p>
                                           <button
                                             onClick={() => openDetailsModal('Controller Signatures Verification', component.verification.checks.controllerSignatures, component.verification)}
                                             className="text-xs text-blue-600 hover:text-blue-800 hover:underline text-left"
@@ -802,7 +802,7 @@ export default function ResolverDashboard() {
                                           <XCircle className="w-3 h-3 text-red-600 mt-0.5" />
                                         )}
                                         <div className="flex-1">
-                                          <p className="text-xs font-medium text-gray-900">Witness Proofs</p>
+                                          <p className="text-xs font-medium text-gray-900 dark:text-white">Witness Proofs</p>
                                           <button
                                             onClick={() => openDetailsModal('Witness Proofs Verification', component.verification.checks.witnessProofs, component.verification)}
                                             className="text-xs text-blue-600 hover:text-blue-800 hover:underline text-left"
@@ -819,7 +819,7 @@ export default function ResolverDashboard() {
                                           <XCircle className="w-3 h-3 text-red-600 mt-0.5" />
                                         )}
                                         <div className="flex-1">
-                                          <p className="text-xs font-medium text-gray-900">Document Consistency</p>
+                                          <p className="text-xs font-medium text-gray-900 dark:text-white">Document Consistency</p>
                                           <button
                                             onClick={() => openDetailsModal('Document Consistency Verification', component.verification.checks.documentConsistency, component.verification)}
                                             className="text-xs text-blue-600 hover:text-blue-800 hover:underline text-left"
