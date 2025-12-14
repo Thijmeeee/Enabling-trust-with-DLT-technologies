@@ -38,22 +38,25 @@ graph TD
     Wat([Watcher])
 
     %% Infrastructure
-    subgraph VM ["School VM Infrastructure"]
-        Caddy[("Caddy Reverse Proxy")]
+    subgraph VM ["School VM (Host)"]
         
-        subgraph Services
-            Identity[("Identity Service")]
-            Trust[("Trust Engine")]
+        %% Container 2 (Caddy)
+        subgraph DockerC2 ["Container 2: Web Server"]
+            Caddy[("Caddy Reverse Proxy")]
+            Frontend[("Frontend Static Files")]
+            Logs[("Static DID Logs (.well-known)")]
         end
         
-        subgraph Data
-            DB[(SQLite DB)]
-            Logs[("Static Logs (.well-known)")]
+        %% Container 1 (Backend)
+        subgraph DockerC1 ["Container 1: Backend (Node.js)"]
+            Identity[("Identity Service")]
+            Trust[("Trust Engine (Scheduler)")]
+            DB[(SQLite DB File)]
         end
     end
 
     %% External
-    Sepolia[("Ethereum Sepolia")]
+    Sepolia[("External: Ethereum Node (Alchemy)")]
 
     %% Flows
     Man -->|Create| Caddy
@@ -61,14 +64,18 @@ graph TD
     Wit -->|Attest| Caddy
     Wat -->|Audit| Caddy
 
-    Caddy -->|HTTPS Route| Identity
-    Caddy -->|Static File| Logs
+    %% Caddy Internal Routing
+    Caddy -->|/api/*| Identity
+    Caddy -->|/.well-known/*| Logs
+    Caddy -->|/*| Frontend
 
-    Identity -->|Store| DB
-    Identity -->|Write| Logs
+    %% Backend Logic
+    Identity -->|Read/Write| DB
+    Identity -->|Append| Logs
     
+    %% Trust Engine Logic
     Trust -->|Batch Read| DB
-    Trust -->|Anchor| Sepolia
+    Trust -->|Anchor Transaction| Sepolia
 ```
 
 ### 1.3 System Technology Stack
@@ -409,8 +416,10 @@ stateDiagram-v2
     [*] --> Draft
     Draft --> Created: Manufacturer Signs
     Created --> Active: First Scan/Transport
-    Active --> Updated: Event Added
-    Updated --> Updated: Event Added
+    
+    %% Self-loop for updates instead of separate state
+    Active --> Active: Event Added (Update)
+    
     Active --> EndOfLife: Recycled/Disposed
     EndOfLife --> [*]
 
@@ -418,6 +427,7 @@ stateDiagram-v2
         [*] --> InTransit
         InTransit --> InStock
         InStock --> Sold
+        Sold --> InTransit
     }
 ```
 
