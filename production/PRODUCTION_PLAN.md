@@ -416,19 +416,17 @@ stateDiagram-v2
     [*] --> Draft
     Draft --> Created: Manufacturer Signs
     Created --> Active: First Scan/Transport
-    
-    %% Self-loop for updates instead of separate state
-    Active --> Active: Event Added (Update)
-    
     Active --> EndOfLife: Recycled/Disposed
     EndOfLife --> [*]
 
     state Active {
         [*] --> InTransit
-        InTransit --> InStock
-        InStock --> Sold
-        Sold --> InTransit
+        InTransit --> InStock: Received
+        InStock --> Sold: Purchased
+        Sold --> InTransit: Resold/Returned
     }
+
+    note right of Active : Events can be added<br/>at any sub-state
 ```
 
 ---
@@ -456,23 +454,23 @@ This section provides concrete, step-by-step explanations of how the witness/wat
 
 2. Identity Service Response:
    {
-     "did": "did:webvh:webvh.web3connect.nl:scid:abc123xyz",
-     "versionId": "1",
+     "did": "did:webvh:z4oJ9Lq3KZ...:webvh.web3connect.nl",
+     "versionId": "1-a3f12bc9e7d2",
      "status": "pending_witness"
    }
 
 3. Automatic File Generation:
-   /.well-known/did/abc123xyz/did.jsonl         ← DID Log (event history)
-   /.well-known/did/abc123xyz/did-witness.json  ← Witness proofs
+   /.well-known/did/z4oJ9Lq3KZ.../did.jsonl         ← DID Log (event history)
+   /.well-known/did/z4oJ9Lq3KZ.../did-witness.json  ← Witness proofs
 
 4. User Verification (later):
-   GET https://webvh.web3connect.nl/.well-known/did/abc123xyz/did.jsonl
+   GET https://webvh.web3connect.nl/.well-known/did/z4oJ9Lq3KZ.../did.jsonl
    → Returns full verifiable log
 ```
 
 **File Structure After Creation:**
 ```
-/var/www/did-logs/
+/var/www/html/.well-known/did/
 └── abc123xyz/
     ├── did.jsonl          ← Event log with hash chain
     └── did-witness.json   ← Witness attestations & Merkle proofs
@@ -707,7 +705,7 @@ Watcher Detection:
 
 ```
 1. User Scans QR Code on Window
-   QR Contains: did:webvh:webvh.web3connect.nl:scid:abc123xyz
+   QR Contains: did:webvh:z4oJ9Lq3KZ...:webvh.web3connect.nl
 
 2. Frontend Fetches DID Data
    const did = extractFromQR();
@@ -856,7 +854,7 @@ Watcher Detection:
 
 ## 5. Deployment Guide: Docker Strategy
 
-**Motivation**: We use Docker to isolate our dependencies (Node.js version, Caddy version) from the host VM. This prevents "pollution" of the School VM and makes the system easy to start/stop/clean.
+We use Docker to isolate our dependencies (Node.js version, Caddy version) from the host VM. This prevents "pollution" of the School VM and makes the system easy to start/stop/clean.
 
 ### 5.1 Instructions
 (Detailed implementation logic is in **[PRODUCTION_CODE.md](./PRODUCTION_CODE.md)**)
@@ -881,10 +879,3 @@ Watcher Detection:
 
 ---
 
-## 6. Pre-Implementation Checklist
-
-- [ ] **Repo Hygiene**: Run BFG/Filter-Branch to remove exposed IPs from git history.
-- [ ] **Infrastructure**: Install Docker & Docker Compose on School VM.
-- [ ] **Accounts**: Alchemy App Created + RPC URL.
-- [ ] **Wallets**: Deployer & Relayer wallets created and funded (Sepolia ETH).
-- [ ] **Environment**: `.env` file created locally (do not commit!).

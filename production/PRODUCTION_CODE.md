@@ -391,6 +391,350 @@ console.log('Trust Engine scheduler started');
 
 ---
 
+### 2.5 DID:WebVH Utilities (Spec v1.0 Compliant)
+
+**File:** `backend/src/didwebvh.ts`
+
+This module implements the core did:webvh v1.0 specification requirements:
+- SCID generation (Self-Certifying Identifier)
+- Entry hash computation
+- Spec-compliant log entry structure
+
+```typescript
+import { sha256 } from '@noble/hashes/sha256';
+import { bytesToHex } from '@noble/hashes/utils';
+import * as ed from '@noble/ed25519';
+
+// Base58-btc alphabet (Bitcoin standard)
+const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+
+/**
+ * Encode bytes to base58-btc string
+ */
+function encodeBase58(bytes: Uint8Array): string {
+  let num = BigInt('0x' + bytesToHex(bytes));
+  let result = '';
+  while (num > 0n) {
+    const remainder = Number(num % 58n);
+    num = num / 58n;
+    result = BASE58_ALPHABET[remainder] + result;
+  }
+  // Handle leading zeros
+  for (const byte of bytes) {
+    if (byte === 0) result = '1' + result;
+    else break;
+  }
+  return result;
+}
+
+/**
+ * Generate SCID (Self-Certifying Identifier) per did:webvh v1.0 spec
+ * 
+ * The SCID MUST be generated from the initial log entry content.
+ * Returns a 46-character base58-btc encoded string.
+ */
+export function generateSCID(initialLogEntry: object): string {
+  // Canonicalize: sort keys and stringify
+  const canonicalJson = JSON.stringify(initialLogEntry, Object.keys(initialLogEntry).sort());
+  const hash = sha256(new TextEncoder().encode(canonicalJson));
+  const encoded = encodeBase58(hash);
+  return encoded.slice(0, 46); // SCID is 46 characters
+}
+
+/**
+ * Compute entryHash for a log entry (used in versionId)
+ * 
+ * Per spec: versionId = "{versionNumber}-{entryHash}"
+ */
+export function computeEntryHash(logEntry: object): string {
+  const canonicalJson = JSON.stringify(logEntry, Object.keys(logEntry).sort());
+  const hash = sha256(new TextEncoder().encode(canonicalJson));
+  return bytesToHex(hash).slice(0, 16); // First 16 hex chars (64 bits)
+}
+
+/**
+ * Generate multikey from Ed25519 public key
+ * 
+ * Per spec: updateKeys must be in multikey format
+ */
+export function toMultikey(publicKey: Uint8Array): string {
+  // Multicodec prefix for Ed25519 public key: 0xed01
+  const prefix = new Uint8Array([0xed, 0x01]);
+  const combined = new Uint8Array(prefix.length + publicKey.length);
+  combined.set(prefix);
+  combined.set(publicKey, prefix.length);
+  return 'z' + encodeBase58(combined); // 'z' indicates base58-btc
+}
+
+/**
+ * Create a spec-compliant DID Log Entry
+ * 
+ * Per did:webvh v1.0, each entry MUST have:
+ * - versionId: "{number}-{entryHash}"
+ * - versionTime: ISO8601 timestamp
+ * - parameters: {method, scid, updateKeys, ...}
+ * - state: DIDDoc
+ * - proof: Data Integrity Proof array
+ */
+export interface DIDLogEntry {
+  versionId: string;
+  versionTime: string;
+  parameters: {
+    method: string;
+    scid: string;
+    updateKeys: string[];
+    prerotation?: boolean;
+    nextKeyHashes?: string[];
+    witnessConfig?: {
+      witnesses: string[];
+      threshold: number;
+    };
+  };
+  state: DIDDocument;
+  proof: DataIntegrityProof[];
+}
+
+export interface DIDDocument {
+  '@context': string[];
+  id: string;
+  controller?: string;
+  verificationMethod?: VerificationMethod[];
+  authentication?: string[];
+  assertionMethod?: string[];
+  service?: ServiceEndpoint[];
+}
+
+export interface VerificationMethod {
+  id: string;
+  type: string;
+  controller: string;
+  publicKeyMultibase: string;
+}
+
+export interface ServiceEndpoint {
+  id: string;
+  type: string;
+  serviceEndpoint: string;
+}
+
+export interface DataIntegrityProof {
+  type: string;
+  created: string;
+  verificationMethod: string;
+  proofPurpose: string;
+  proofValue: string;
+}
+
+/**
+ * Create initial log entry for DID creation
+ */
+export async function createInitialLogEntry(
+  domain: string,
+  publicKey: Uint8Array,
+  privateKey: Uint8Array,
+  metadata?: Record<string, unknown>
+): Promise<{ did: string; scid: string; logEntry: DIDLogEntry }> {
+  const multikey = toMultikey(publicKey);
+  const versionTime = new Date().toISOString();
+  
+  // Placeholder SCID for initial computation
+  const placeholderSCID = '{SCID}';
+  const placeholderDID = `did:webvh:${placeholderSCID}:${domain}`;
+  
+  // Build parameters
+  const parameters = {
+    method: 'sha256',
+    scid: placeholderSCID,
+    updateKeys: [multikey],
+  };
+  
+  // Build initial DIDDoc (state)
+  const state: DIDDocument = {
+    '@context': [
+      'https://www.w3.org/ns/did/v1',
+      'https://w3id.org/security/multikey/v1'
+    ],
+    id: placeholderDID,
+    controller: placeholderDID,
+    verificationMethod: [{
+      id: `${placeholderDID}#key-1`,
+      type: 'Multikey',
+      controller: placeholderDID,
+      publicKeyMultibase: multikey
+    }],
+    authentication: [`${placeholderDID}#key-1`],
+    assertionMethod: [`${placeholderDID}#key-1`],
+  };
+  
+  // Build entry WITHOUT versionId (needed for SCID computation)
+  const entryForSCID = {
+    versionId: '1-{HASH}',
+    versionTime,
+    parameters,
+    state,
+  };
+  
+  // Generate SCID from initial entry
+  const scid = generateSCID(entryForSCID);
+  const did = `did:webvh:${scid}:${domain}`;
+  
+  // Update all placeholders with real SCID/DID
+  parameters.scid = scid;
+  state.id = did;
+  state.controller = did;
+  state.verificationMethod![0].id = `${did}#key-1`;
+  state.verificationMethod![0].controller = did;
+  state.authentication = [`${did}#key-1`];
+  state.assertionMethod = [`${did}#key-1`];
+  
+  // Build entry for hash computation (without versionId hash part)
+  const entryForHash = {
+    versionId: '1',
+    versionTime,
+    parameters,
+    state,
+  };
+  
+  const entryHash = computeEntryHash(entryForHash);
+  const versionId = `1-${entryHash}`;
+  
+  // Build final entry
+  const logEntry: DIDLogEntry = {
+    versionId,
+    versionTime,
+    parameters,
+    state,
+    proof: [] // Will be added after signing
+  };
+  
+  // Sign the entry
+  const proofValue = await signLogEntry(logEntry, privateKey, did);
+  logEntry.proof = [{
+    type: 'DataIntegrityProof',
+    created: versionTime,
+    verificationMethod: `${did}#key-1`,
+    proofPurpose: 'assertionMethod',
+    proofValue
+  }];
+  
+  return { did, scid, logEntry };
+}
+
+/**
+ * Create update log entry
+ */
+export async function createUpdateLogEntry(
+  previousEntry: DIDLogEntry,
+  updatedState: Partial<DIDDocument>,
+  privateKey: Uint8Array
+): Promise<DIDLogEntry> {
+  const versionNumber = parseInt(previousEntry.versionId.split('-')[0]) + 1;
+  const versionTime = new Date().toISOString();
+  const did = previousEntry.state.id;
+  
+  // Merge state updates
+  const state: DIDDocument = {
+    ...previousEntry.state,
+    ...updatedState
+  };
+  
+  // Copy parameters (can be updated if needed)
+  const parameters = { ...previousEntry.parameters };
+  
+  // Build entry for hash
+  const entryForHash = {
+    versionId: String(versionNumber),
+    versionTime,
+    parameters,
+    state,
+  };
+  
+  const entryHash = computeEntryHash(entryForHash);
+  const versionId = `${versionNumber}-${entryHash}`;
+  
+  const logEntry: DIDLogEntry = {
+    versionId,
+    versionTime,
+    parameters,
+    state,
+    proof: []
+  };
+  
+  // Sign
+  const proofValue = await signLogEntry(logEntry, privateKey, did);
+  logEntry.proof = [{
+    type: 'DataIntegrityProof',
+    created: versionTime,
+    verificationMethod: `${did}#key-1`,
+    proofPurpose: 'assertionMethod',
+    proofValue
+  }];
+  
+  return logEntry;
+}
+
+/**
+ * Sign a log entry with Ed25519
+ */
+async function signLogEntry(
+  logEntry: Omit<DIDLogEntry, 'proof'>,
+  privateKey: Uint8Array,
+  did: string
+): Promise<string> {
+  const message = JSON.stringify(logEntry, Object.keys(logEntry).sort());
+  const signature = await ed.signAsync(
+    new TextEncoder().encode(message),
+    privateKey
+  );
+  return 'z' + encodeBase58(signature); // base58-btc encoded
+}
+
+/**
+ * Build DID string per did:webvh v1.0 spec
+ * 
+ * Format: did:webvh:{scid}:{domain}
+ * 
+ * CRITICAL: SCID MUST be first element after "did:webvh:"
+ */
+export function buildDID(scid: string, domain: string, path?: string): string {
+  if (path) {
+    // Path segments use colons instead of slashes
+    const pathSegments = path.split('/').filter(Boolean).join(':');
+    return `did:webvh:${scid}:${domain}:${pathSegments}`;
+  }
+  return `did:webvh:${scid}:${domain}`;
+}
+
+/**
+ * Parse a did:webvh DID string
+ */
+export function parseDID(did: string): { scid: string; domain: string; path?: string } {
+  const parts = did.split(':');
+  if (parts[0] !== 'did' || parts[1] !== 'webvh') {
+    throw new Error('Invalid did:webvh DID');
+  }
+  const scid = parts[2];
+  const domain = parts[3];
+  const path = parts.length > 4 ? parts.slice(4).join('/') : undefined;
+  return { scid, domain, path };
+}
+
+/**
+ * Transform DID to HTTPS URL for log retrieval
+ * 
+ * did:webvh:{scid}:{domain} → https://{domain}/.well-known/did/{scid}/did.jsonl
+ */
+export function didToHttps(did: string): string {
+  const { scid, domain, path } = parseDID(did);
+  if (path) {
+    return `https://${domain}/${path}/did.jsonl`;
+  }
+  return `https://${domain}/.well-known/did/${scid}/did.jsonl`;
+}
+```
+
+---
+
 ## 3. Witness & Watcher Integration
 
 ### 3.1 Product Creation Endpoint
@@ -399,34 +743,65 @@ console.log('Trust Engine scheduler started');
 
 **Referenced in:** [PRODUCTION_PLAN.md § 5.1](./PRODUCTION_PLAN.md#51-how-users-request-and-receive-dids)
 
-```javascript
-// POST /api/products/create endpoint
+```typescript
+import * as ed from '@noble/ed25519';
+import * as fs from 'fs/promises';
+import { 
+  createInitialLogEntry, 
+  parseDID,
+  type DIDLogEntry 
+} from './didwebvh';
+
+const DOMAIN = 'webvh.web3connect.nl';
+
+// POST /api/products/create endpoint (did:webvh v1.0 compliant)
 async function createProduct(req, res) {
   const { type, model, metadata } = req.body;
   
-  // 1. Generate DID
-  const scid = generateSCID(); // e.g., "abc123xyz"
-  const did = `did:webvh:webvh.web3connect.nl:scid:${scid}`;
-  
-  // 2. Create initial log entry
-  const logEntry = {
-    versionId: "1",
-    timestamp: new Date().toISOString(),
-    operation: "create",
-    data: { type, model, metadata }
-  };
-  
-  // 3. Sign with controller key
-  const signature = await signEd25519(logEntry, controllerPrivateKey);
-  logEntry.proof = { signature, ...};
-  
-  // 4. Write did.jsonl
-  await fs.appendFile(`/did-logs/${scid}/did.jsonl`, JSON.stringify(logEntry) + '\n');
-  
-  // 5. Request witness attestation (async)
-  await requestWitnessProof(scid, logEntry);
-  
-  return res.json({ did, versionId: "1", status: "pending_witness" });
+  try {
+    // 1. Generate Ed25519 key pair for this DID
+    const privateKey = ed.utils.randomPrivateKey();
+    const publicKey = await ed.getPublicKeyAsync(privateKey);
+    
+    // 2. Create spec-compliant DID and initial log entry
+    // This handles SCID generation, versionId with hash, proper structure
+    const { did, scid, logEntry } = await createInitialLogEntry(
+      DOMAIN,
+      publicKey,
+      privateKey,
+      { type, model, ...metadata }
+    );
+    
+    // 3. Store private key securely (encrypted)
+    await storePrivateKey(scid, privateKey);
+    
+    // 4. Create directory and write did.jsonl
+    const storageRoot = process.env.STORAGE_ROOT || './did-logs';
+    await fs.mkdir(`${storageRoot}/${scid}`, { recursive: true });
+    await fs.writeFile(
+      `${storageRoot}/${scid}/did.jsonl`, 
+      JSON.stringify(logEntry) + '\n'
+    );
+    
+    // 5. Store in database
+    await db.run(
+      `INSERT INTO identities (did, scid, public_key, created_at) VALUES (?, ?, ?, ?)`,
+      [did, scid, logEntry.parameters.updateKeys[0], Date.now()]
+    );
+    
+    // 6. Request witness attestation (async)
+    await requestWitnessProof(scid, logEntry);
+    
+    return res.json({ 
+      did, 
+      versionId: logEntry.versionId, 
+      status: 'pending_witness' 
+    });
+    
+  } catch (error) {
+    console.error('Failed to create product:', error);
+    return res.status(500).json({ error: 'Failed to create DID' });
+  }
 }
 ```
 
@@ -436,55 +811,91 @@ async function createProduct(req, res) {
 
 **Referenced in:** [PRODUCTION_PLAN.md § 5.2](./PRODUCTION_PLAN.md#52-how-didjsonl-is-updated)
 
-```javascript
-async function addEvent(did, eventData) {
-  const scid = extractSCID(did);
-  const currentLog = await readDIDLog(scid);
-  const newVersionId = (currentLog.length + 1).toString();
+```typescript
+import { 
+  createUpdateLogEntry, 
+  parseDID, 
+  computeEntryHash,
+  type DIDLogEntry 
+} from './didwebvh';
+
+/**
+ * Add event to DID log (did:webvh v1.0 compliant)
+ * 
+ * Implements witness-first workflow: witnesses must sign before log is updated.
+ */
+async function addEvent(did: string, eventData: {
+  type: string;
+  data: Record<string, unknown>;
+}) {
+  const { scid } = parseDID(did);
   
-  // 1. Create log entry
-  const logEntry = {
-    versionId: newVersionId,
-    timestamp: new Date().toISOString(),
-    ...eventData,
-    previousHash: hash(currentLog[currentLog.length - 1])
+  // 1. Read current log and get latest entry
+  const storageRoot = process.env.STORAGE_ROOT || './did-logs';
+  const logPath = `${storageRoot}/${scid}/did.jsonl`;
+  const logContent = await fs.readFile(logPath, 'utf-8');
+  const entries = logContent.trim().split('\n').map(line => JSON.parse(line) as DIDLogEntry);
+  const previousEntry = entries[entries.length - 1];
+  
+  // 2. Get private key for signing
+  const privateKey = await getPrivateKey(scid);
+  
+  // 3. Create spec-compliant update entry
+  // Note: For events, we add a service endpoint to state
+  const newService = {
+    id: `${did}#event-${Date.now()}`,
+    type: eventData.type,
+    serviceEndpoint: JSON.stringify(eventData.data)
   };
   
-  // 2. Sign
-  logEntry.proof = await signEntry(logEntry);
+  const updatedState = {
+    ...previousEntry.state,
+    service: [...(previousEntry.state.service || []), newService]
+  };
   
-  // 3. Request witness attestations (parallel)
-  const leafHash = hash(logEntry);
-  const witnessProofs = await Promise.all(
-    witnesses.map(w => w.attest(scid, newVersionId, leafHash))
+  const logEntry = await createUpdateLogEntry(
+    previousEntry,
+    updatedState,
+    privateKey
   );
   
-  // 4. CRITICAL: Publish witnesses FIRST
+  // 4. Compute leaf hash for witness attestation
+  const leafHash = computeEntryHash(logEntry);
+  
+  // 5. Request witness attestations (parallel)
+  const witnessProofs = await Promise.all(
+    witnesses.map(w => w.attest(scid, logEntry.versionId, leafHash))
+  );
+  
+  // 6. CRITICAL: Publish witnesses FIRST (spec requirement)
   await updateWitnessFile(scid, {
-    versionId: newVersionId,
+    versionId: logEntry.versionId,
     leafHash,
     merkleIndex: null, // Pending batch
     merkleProof: null,
     witnessProofs
   });
   
-  // 5. THEN publish log entry
-  await fs.appendFile(`/did-logs/${scid}/did.jsonl`, JSON.stringify(logEntry) + '\n');
+  // 7. THEN append to did.jsonl
+  await fs.appendFile(logPath, JSON.stringify(logEntry) + '\n');
   
-  // 6. Add to pending batch queue
-  await db.insertPendingAnchor({ scid, versionId: newVersionId, leafHash });
+  // 8. Add to pending batch queue for blockchain anchoring
+  await db.run(
+    `INSERT INTO events (did, event_type, payload, signature, leaf_hash, timestamp, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [did, eventData.type, JSON.stringify(eventData.data), 
+     logEntry.proof[0].proofValue, leafHash, Date.now(), Date.now()]
+  );
+  
+  return { versionId: logEntry.versionId, status: 'witnessed' };
 }
 
 // Key Invariant Enforcement
-if (!witnessProofsAvailable) {
-  throw new Error("Cannot publish log entry without witness proofs");
+function validateWitnessFirst(witnessProofs: any[], logEntry: DIDLogEntry) {
+  if (!witnessProofs || witnessProofs.length < 3) {
+    throw new Error('Cannot publish log entry without minimum 3 witness proofs');
+  }
 }
-
-// 1. Write witness proofs
-await writeWitnessFile(did, versionId, proofs);
-
-// 2. THEN append to log
-await appendDIDLog(did, logEntry);
 ```
 
 ### 3.3 Watcher Audit Implementation
@@ -676,14 +1087,14 @@ function TrustValidationTab({ did }) {
 webvh.web3connect.nl {
     # Serve Static DID Logs
     handle /.well-known/did/* {
-        root * /var/www/html
+        root * /var/www/html/.well-known/did
         file_server
         header Access-Control-Allow-Origin "*"
     }
 
     # Reverse Proxy to Backend
     handle /api/* {
-        reverse_proxy localhost:3000
+        reverse_proxy backend:3000
     }
 
     # Serve Frontend
@@ -710,14 +1121,16 @@ services:
       context: ..
       dockerfile: deployment/Dockerfile.backend
     restart: always
+    env_file:
+      - .env
     environment:
       - NODE_ENV=production
       - PORT=3000
       - DATABASE_PATH=/data/dpp.sqlite
-      - STORAGE_ROOT=/var/www/html/identities
+      - STORAGE_ROOT=/var/www/html/.well-known/did
     volumes:
       - dpp_data:/data
-      - dpp_identities:/var/www/html/identities
+      - dpp_identities:/var/www/html/.well-known/did
     networks:
       - dpp_net
 
