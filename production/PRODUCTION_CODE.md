@@ -2,6 +2,18 @@
 
 This document contains the implementation details and code snippets referenced in the [Production Plan](./PRODUCTION_PLAN.md).
 
+---
+
+## Table of Contents
+
+1. [Smart Contract Implementation](#1-smart-contract-implementation)
+2. [Backend Implementation](#2-backend-implementation)
+3. [Witness & Watcher Integration](#3-witness--watcher-integration)
+4. [Client Verification](#4-client-verification)
+5. [Deployment Configuration](#5-deployment-configuration)
+
+---
+
 ## 1. Smart Contract Implementation
 
 ### 1.1 WitnessAnchorRegistry.sol
@@ -158,7 +170,7 @@ export const WITNESS_ANCHOR_REGISTRY_ABI = [
 ];
 ```
 
-### 2.2 Database Persistence
+### 2.2 Database Schema
 
 **File:** `backend/src/database.ts`
 
@@ -172,9 +184,7 @@ let db: Database | null = null;
 export async function initDB(): Promise<Database> {
   if (db) return db;
   
-  // Use persistent volume path in production
   const dbPath = process.env.DATABASE_PATH || path.join(__dirname, '../data/dpp.sqlite');
-  
   console.log(`📁 Database path: ${dbPath}`);
   
   db = await open({
@@ -183,7 +193,6 @@ export async function initDB(): Promise<Database> {
   });
 
   await db.exec(`
-    -- DID Identities with full key material
     CREATE TABLE IF NOT EXISTS identities (
       did TEXT PRIMARY KEY,
       scid TEXT UNIQUE NOT NULL,
@@ -193,7 +202,6 @@ export async function initDB(): Promise<Database> {
       updated_at INTEGER
     );
 
-    -- DID Log entries (did:webvh compliance)
     CREATE TABLE IF NOT EXISTS did_log_entries (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       did TEXT NOT NULL,
@@ -209,7 +217,6 @@ export async function initDB(): Promise<Database> {
       UNIQUE(did, version_id)
     );
 
-    -- Lifecycle events
     CREATE TABLE IF NOT EXISTS events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       did TEXT NOT NULL,
@@ -224,7 +231,6 @@ export async function initDB(): Promise<Database> {
       FOREIGN KEY(did) REFERENCES identities(did)
     );
 
-    -- Anchor batches
     CREATE TABLE IF NOT EXISTS batches (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       merkle_root TEXT NOT NULL,
@@ -235,7 +241,6 @@ export async function initDB(): Promise<Database> {
       created_at INTEGER NOT NULL
     );
 
-    -- Merkle proofs for each event
     CREATE TABLE IF NOT EXISTS witness_proofs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       event_id INTEGER NOT NULL,
@@ -248,7 +253,6 @@ export async function initDB(): Promise<Database> {
       UNIQUE(event_id)
     );
 
-    -- Indexes for performance
     CREATE INDEX IF NOT EXISTS idx_events_did ON events(did);
     CREATE INDEX IF NOT EXISTS idx_events_anchored ON events(anchored);
     CREATE INDEX IF NOT EXISTS idx_did_log_did ON did_log_entries(did);
@@ -259,180 +263,12 @@ export async function initDB(): Promise<Database> {
 }
 
 export async function getDB(): Promise<Database> {
-  if (!db) {
-    return initDB();
-  }
+  if (!db) return initDB();
   return db;
 }
 ```
 
-### 2.3 Cryptographic Utilities
-
-**File:** `backend/src/crypto.ts`
-
-```typescript
-import * as ed from '@noble/ed25519';
-import { sha256 } from '@noble/hashes/sha256';
-import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
-
-export async function verifySignature(
-  publicKeyHex: string,
-  message: string,
-  signatureHex: string
-): Promise<boolean> {
-  try {
-    const publicKey = hexToBytes(publicKeyHex);
-    const signature = hexToBytes(signatureHex);
-    const messageBytes = new TextEncoder().encode(message);
-    
-    return await ed.verifyAsync(signature, messageBytes, publicKey);
-  } catch (error) {
-    console.error('Signature verification failed:', error);
-    return false;
-  }
-}
-
-export async function verifyEventSignature(
-  did: string,
-  payload: any,
-  signature: string
-): Promise<boolean> {
-  const db = await import('./database').then(m => m.getDB());
-  
-  const identity = await db.get('SELECT public_key FROM identities WHERE did = ?', [did]);
-  if (!identity) {
-    console.error(`DID not found: ${did}`);
-    return false;
-  }
-  
-  const message = canonicalizeForSigning(did, payload);
-  return verifySignature(identity.public_key, message, signature);
-}
-
-export function canonicalizeForSigning(did: string, payload: any): string {
-  return JSON.stringify({
-    did,
-    payload,
-  }, Object.keys({ did, payload }).sort());
-}
-
-export function sha256Hash(data: string): string {
-  const bytes = new TextEncoder().encode(data);
-  return bytesToHex(sha256(bytes));
-}
-
-export function createLeafHash(event: {
-  did: string;
-  event_type: string;
-  payload: string;
-  timestamp: number;
-}): string {
-  const canonical = JSON.stringify({
-    did: event.did,
-    event_type: event.event_type,
-    payload: JSON.parse(event.payload),
-    timestamp: event.timestamp
-  });
-  return sha256Hash(canonical);
-}
-```
-
-### 2.4 Local Storage Service
-
-**File:** `backend/src/storage.ts`
-
-```typescript
-import * as fs from 'fs/promises';
-import * as path from 'path';
-
-// The Web Server root for serving static files
-const STORAGE_ROOT = process.env.STORAGE_ROOT || '/var/www/html/dpp-identities';
-
-export async function uploadToStorage(key: string, body: string, contentType: string) {
-  try {
-    const fullPath = path.join(STORAGE_ROOT, key);
-    const dir = path.dirname(fullPath);
-
-    await fs.mkdir(dir, { recursive: true });
-    await fs.writeFile(fullPath, body, 'utf8');
-    
-    console.log(`✅ Written ${key} to local disk`);
-  } catch (error) {
-    console.error(`❌ Failed to write ${key} to disk:`, error);
-  }
-}
-```
-
-### 2.5 DID Resolver
-
-**File:** `backend/src/did-resolver.ts`
-
-```typescript
-import { getDB } from './database';
-import { sha256Hash } from './crypto';
-import { uploadToStorage } from './storage';
-
-interface DIDLogEntry {
-  versionId: number;
-  versionTime: string;
-  method: 'create' | 'update' | 'deactivate';
-  previousVersionHash?: string;
-  updateKeys?: string[];
-  params: {
-    id: string;
-    verificationMethod?: any[];
-    authentication?: string[];
-    service?: any[];
-  };
-  proof?: {
-    type: string;
-    created: string;
-    verificationMethod: string;
-    proofPurpose: string;
-    proofValue: string;
-  };
-}
-
-export async function resolveDID(scid: string): Promise<string> {
-  const db = await getDB();
-  
-  const entries = await db.all(
-    `SELECT * FROM did_log_entries 
-     WHERE did = (SELECT did FROM identities WHERE scid = ?)
-     ORDER BY version_id ASC`,
-    [scid]
-  );
-  
-  if (entries.length === 0) {
-    throw new Error(`DID not found: ${scid}`);
-  }
-  
-  const jsonl = entries.map(entry => {
-    const logEntry: DIDLogEntry = {
-      versionId: entry.version_id,
-      versionTime: entry.version_time,
-      method: entry.method,
-      params: JSON.parse(entry.params),
-    };
-    
-    if (entry.previous_version_hash) {
-      logEntry.previousVersionHash = entry.previous_version_hash;
-    }
-    if (entry.update_keys) {
-      logEntry.updateKeys = JSON.parse(entry.update_keys);
-    }
-    if (entry.proof) {
-      logEntry.proof = JSON.parse(entry.proof);
-    }
-    
-    return JSON.stringify(logEntry);
-  }).join('\n');
-  
-  return jsonl;
-}
-```
-
-### 2.6 Batch Processor
+### 2.3 Batch Processor
 
 **File:** `backend/src/batch-processor.ts`
 
@@ -449,14 +285,7 @@ function sha256Buffer(data: Buffer): Buffer {
   return Buffer.from(sha256(data));
 }
 
-export async function processBatch(): Promise<{
-  status: string;
-  batchId?: number;
-  txHash?: string;
-  blockNumber?: number;
-  eventCount?: number;
-  merkleRoot?: string;
-}> {
+export async function processBatch() {
   const db = await getDB();
   
   const events = await db.all('SELECT * FROM events WHERE anchored = 0 ORDER BY id ASC');
@@ -537,16 +366,187 @@ export async function processBatch(): Promise<{
 
 ---
 
-## 3. Client Verification
+## 3. Witness & Watcher Integration
 
-### 3.1 Verification Logic
+### 3.1 Product Creation Endpoint
+
+**File:** `backend/src/api/products.ts`
+
+**Referenced in:** [PRODUCTION_PLAN.md § 5.1](./PRODUCTION_PLAN.md#51-how-users-request-and-receive-dids)
+
+```javascript
+// POST /api/products/create endpoint
+async function createProduct(req, res) {
+  const { type, model, metadata } = req.body;
+  
+  // 1. Generate DID
+  const scid = generateSCID(); // e.g., "abc123xyz"
+  const did = `did:webvh:webvh.web3connect.nl:scid:${scid}`;
+  
+  // 2. Create initial log entry
+  const logEntry = {
+    versionId: "1",
+    timestamp: new Date().toISOString(),
+    operation: "create",
+    data: { type, model, metadata }
+  };
+  
+  // 3. Sign with controller key
+  const signature = await signEd25519(logEntry, controllerPrivateKey);
+  logEntry.proof = { signature, ...};
+  
+  // 4. Write did.jsonl
+  await fs.appendFile(`/did-logs/${scid}/did.jsonl`, JSON.stringify(logEntry) + '\n');
+  
+  // 5. Request witness attestation (async)
+  await requestWitnessProof(scid, logEntry);
+  
+  return res.json({ did, versionId: "1", status: "pending_witness" });
+}
+```
+
+### 3.2 Event Addition with Witness-First Workflow
+
+**File:** `backend/src/api/events.ts`
+
+**Referenced in:** [PRODUCTION_PLAN.md § 5.2](./PRODUCTION_PLAN.md#52-how-didjsonl-is-updated)
+
+```javascript
+async function addEvent(did, eventData) {
+  const scid = extractSCID(did);
+  const currentLog = await readDIDLog(scid);
+  const newVersionId = (currentLog.length + 1).toString();
+  
+  // 1. Create log entry
+  const logEntry = {
+    versionId: newVersionId,
+    timestamp: new Date().toISOString(),
+    ...eventData,
+    previousHash: hash(currentLog[currentLog.length - 1])
+  };
+  
+  // 2. Sign
+  logEntry.proof = await signEntry(logEntry);
+  
+  // 3. Request witness attestations (parallel)
+  const leafHash = hash(logEntry);
+  const witnessProofs = await Promise.all(
+    witnesses.map(w => w.attest(scid, newVersionId, leafHash))
+  );
+  
+  // 4. CRITICAL: Publish witnesses FIRST
+  await updateWitnessFile(scid, {
+    versionId: newVersionId,
+    leafHash,
+    merkleIndex: null, // Pending batch
+    merkleProof: null,
+    witnessProofs
+  });
+  
+  // 5. THEN publish log entry
+  await fs.appendFile(`/did-logs/${scid}/did.jsonl`, JSON.stringify(logEntry) + '\n');
+  
+  // 6. Add to pending batch queue
+  await db.insertPendingAnchor({ scid, versionId: newVersionId, leafHash });
+}
+
+// Key Invariant Enforcement
+if (!witnessProofsAvailable) {
+  throw new Error("Cannot publish log entry without witness proofs");
+}
+
+// 1. Write witness proofs
+await writeWitnessFile(did, versionId, proofs);
+
+// 2. THEN append to log
+await appendDIDLog(did, logEntry);
+```
+
+### 3.3 Watcher Audit Implementation
+
+**File:** `backend/src/services/watcher.ts`
+
+**Referenced in:** [PRODUCTION_PLAN.md § 5.3](./PRODUCTION_PLAN.md#53-how-watchers-detect-fraudulent-events)
+
+```javascript
+async function auditDID(did) {
+  const scid = extractSCID(did);
+  const alerts = [];
+  
+  const didLog = await fetchDIDLog(scid);
+  const witnessFile = await fetchWitnessFile(scid);
+  
+  // Verify hash chain
+  for (let i = 0; i < didLog.length - 1; i++) {
+    const computed = sha256(JSON.stringify(didLog[i]));
+    if (didLog[i + 1].previousHash !== computed) {
+      alerts.push({
+        severity: "CRITICAL",
+        type: "HASH_CHAIN_BROKEN",
+        versionId: didLog[i + 1].versionId,
+        message: `Hash chain break detected between v${i} and v${i+1}`
+      });
+    }
+  }
+  
+  // Verify Merkle proofs
+  for (const entry of didLog) {
+    const witnessData = witnessFile.find(w => w.versionId === entry.versionId);
+    
+    if (witnessData?.merkleProof) {
+      const verified = verifyMerkleProof(
+        witnessData.leafHash,
+        witnessData.merkleProof,
+        witnessData.merkleIndex
+      );
+      
+      if (!verified) {
+        alerts.push({
+          severity: "CRITICAL",
+          type: "MERKLE_PROOF_INVALID",
+          versionId: entry.versionId,
+          message: "Merkle proof does not reconstruct to anchored root"
+        });
+      }
+    }
+  }
+  
+  return {
+    did,
+    status: alerts.length === 0 ? "VALID" : "COMPROMISED",
+    alerts
+  };
+}
+
+function verifyMerkleProof(leafHash, proof, index) {
+  let hash = leafHash;
+  let idx = index;
+  
+  for (const sibling of proof) {
+    hash = (idx % 2 === 0)
+      ? sha256(hash + sibling)  // Left sibling
+      : sha256(sibling + hash); // Right sibling
+    idx = Math.floor(idx / 2);
+  }
+  
+  const anchoredRoot = getBlockchainRoot(); // From smart contract
+  return hash === anchoredRoot;
+}
+```
+
+---
+
+## 4. Client Verification
+
+### 4.1 Frontend Merkle Verification
 
 **File:** `src/lib/utils/merkle.ts`
+
+**Referenced in:** [PRODUCTION_PLAN.md § 5.4](./PRODUCTION_PLAN.md#54-uiux-integration)
 
 ```typescript
 import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
-import { ethers } from 'ethers';
 
 export function verifyMerkleProof(
   leafHash: string,
@@ -580,47 +580,99 @@ export function verifyMerkleProof(
 }
 ```
 
+### 4.2 React Trust Validation Component
+
+**File:** `src/components/TrustValidationTab.tsx` (enhancement)
+
+**Referenced in:** [PRODUCTION_PLAN.md § 5.4](./PRODUCTION_PLAN.md#54-uiux-integration)
+
+```jsx
+function TrustValidationTab({ did }) {
+  const [verification, setVerification] = useState({
+    hashChain: 'checking',
+    witnesses: 'checking',
+    blockchain: 'checking'
+  });
+
+  useEffect(() => {
+    async function verify() {
+      const didLog = await fetchDIDLog(did);
+      const witnessFile = await fetchWitnessFile(did);
+
+      // 1. Hash chain
+      const hashChainValid = verifyHashChain(didLog);
+      setVerification(prev => ({ ...prev, hashChain: hashChainValid ? 'valid' : 'invalid' }));
+
+      // 2. Witnesses
+      const witnessValid = await verifyWitnessSignatures(witnessFile);
+      setVerification(prev => ({ ...prev, witnesses: witnessValid ? 'valid' : 'invalid' }));
+
+      // 3. Blockchain (slowest)
+      const blockchainValid = await verifyMerkleAnchors(witnessFile);
+      setVerification(prev => ({ ...prev, blockchain: blockchainValid ? 'valid' : 'invalid' }));
+    }
+    verify();
+  }, [did]);
+
+  return (
+    <div className="space-y-4">
+      <VerificationCheck 
+        label="Hash Chain Integrity"
+        status={verification.hashChain}
+      />
+      <VerificationCheck 
+        label="Witness Attestations"
+        status={verification.witnesses}
+        details={`${witnessCount} independent witnesses`}
+      />
+      <VerificationCheck 
+        label="Blockchain Anchor"
+        status={verification.blockchain}
+        details={blockNumber ? `Block #${blockNumber}` : 'Pending next batch'}
+      />
+    </div>
+  );
+}
+```
+
 ---
 
-## 4. Deployment Configuration
+## 5. Deployment Configuration
 
-### 4.1 Caddy Configuration
+### 5.1 Caddy Configuration
 
 **File:** `deployment/Caddyfile`
 
 ```caddyfile
 {
-    # Admin API off in production for security
     admin off
 }
 
-# Identity Service & Application Domain
 webvh.web3connect.nl {
-    # 1. Serve Static DID Logs (Direct from Disk)
+    # Serve Static DID Logs
     handle /.well-known/did/* {
         root * /var/www/html
         file_server
         header Access-Control-Allow-Origin "*"
     }
 
-    # 2. Reverse Proxy to Identity & Trust Service (Node.js)
+    # Reverse Proxy to Backend
     handle /api/* {
         reverse_proxy localhost:3000
     }
 
-    # 3. Serve Frontend Application
+    # Serve Frontend
     handle {
         root * /var/www/html/app
         try_files {path} /index.html
         file_server
     }
 
-    # Automatic HTTPS managed by Caddy
     tls email@example.com
 }
 ```
 
-### 4.2 Docker Compose Configuration
+### 5.2 Docker Compose
 
 **File:** `deployment/docker-compose.yml`
 
@@ -628,7 +680,6 @@ webvh.web3connect.nl {
 version: '3.8'
 
 services:
-  # Identity & Trust Service
   backend:
     build: 
       context: ..
@@ -645,7 +696,6 @@ services:
     networks:
       - dpp_net
 
-  # Secure Web Server
   caddy:
     image: caddy:2
     restart: always
@@ -673,7 +723,7 @@ networks:
   dpp_net:
 ```
 
-### 4.3 Environment Template
+### 5.3 Environment Template
 
 **File:** `deployment/.env.example`
 
@@ -690,5 +740,4 @@ FRONTEND_URL=https://webvh.web3connect.nl
 
 # Security Note:
 # Do NOT commit real keys to git.
-# Remove previous commits if keys were exposed.
 ```
