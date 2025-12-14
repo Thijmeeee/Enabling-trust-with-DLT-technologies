@@ -366,6 +366,31 @@ export async function processBatch() {
 
 ---
 
+
+### 2.4 Scheduler Implementation
+
+**Reference:** [PRODUCTION_PLAN.md § 3.3](./PRODUCTION_PLAN.md#33-scheduled-tasks-cron-style-batch-processing)
+
+```javascript
+const cron = require('node-cron');
+const { processBatch } = require('./batch-processor');
+
+// Every 10 minutes
+cron.schedule('*/10 * * * *', async () => {
+  console.log('[Trust Engine] Starting batch anchor...');
+  try {
+    const result = await processBatch();
+    console.log(`[Trust Engine] Batch result:`, result);
+  } catch (err) {
+    console.error('[Trust Engine] Batch failed:', err);
+  }
+});
+
+console.log('Trust Engine scheduler started');
+```
+
+---
+
 ## 3. Witness & Watcher Integration
 
 ### 3.1 Product Creation Endpoint

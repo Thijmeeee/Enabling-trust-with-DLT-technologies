@@ -31,64 +31,44 @@ This document provides a **complete, production-ready architecture and deploymen
 
 ```mermaid
 graph TD
-    %% --- User Layer ---
-    subgraph Users ["Stakeholder Actors"]
-        Manufacturer([Manufacturer])
-        Verifier([Customer / Supervisor])
-        Witness([Witness Validator])
-        Watcher([Watcher Monitor])
-        ExtApp([External App])
-    end
+    %% Stakeholders
+    Man([Manufacturer])
+    Ver([Verifier])
+    Wit([Witness])
+    Wat([Watcher])
 
-    %% --- School VM (Docker Host) ---
-    subgraph VM ["School VM (<VM_IP>)"]
-        direction TB
+    %% Infrastructure
+    subgraph VM ["School VM Infrastructure"]
+        Caddy[("Caddy Reverse Proxy")]
         
-        subgraph Proxy ["Ingress Layer"]
-            Caddy[("Caddy Web Server<br/>(Rev. Proxy & TLS)")]
+        subgraph Services
+            Identity[("Identity Service")]
+            Trust[("Trust Engine")]
         end
         
-        subgraph Containers ["Application Containers"]
-            IdentityService[("Identity Service<br/>(Key Mgmt & Signing)")]
-            TrustEngine[("Trust Engine<br/>(Anchoring & Proofs)")]
-            Frontend[("Frontend Host")]
-        end
-        
-        subgraph Storage ["Persistent Storage"]
-            SQLite[("SQLite DB")]
-            Disk[("Static DID Logs<br/>(.well-known/did)")]
+        subgraph Data
+            DB[(SQLite DB)]
+            Logs[("Static Logs (.well-known)")]
         end
     end
 
-    %% --- External ---
-    subgraph External ["External Trust Layer"]
-        Alchemy[("Alchemy RPC")]
-        Sepolia[("Ethereum Sepolia")]
-    end
+    %% External
+    Sepolia[("Ethereum Sepolia")]
 
-    %% --- Relations ---
-    Manufacturer -->|1. Create/Sign Event| Caddy
-    Verifier -->|2. Resolve DID / Verify| Caddy
-    Witness -->|3. Attest Individual Events| Caddy
-    Watcher -->|4. Monitor DID Logbooks| Caddy
-    ExtApp -->|5. Use Identity API| Caddy
+    %% Flows
+    Man -->|Create| Caddy
+    Ver -->|Verify| Caddy
+    Wit -->|Attest| Caddy
+    Wat -->|Audit| Caddy
 
-    Caddy -->|/api/*| IdentityService
-    Caddy -->|/.well-known/did/*| Disk
-    Caddy -->|/*| Frontend
+    Caddy -->|HTTPS Route| Identity
+    Caddy -->|Static File| Logs
 
-    IdentityService -->|Manage Keys| SQLite
-    IdentityService -->|Write Logs| Disk
-    IdentityService -->|Store Attestations| SQLite
+    Identity -->|Store| DB
+    Identity -->|Write| Logs
     
-    IdentityService -.->|Trigger Anchor| TrustEngine
-    TrustEngine -->|Read Events| SQLite
-    TrustEngine -->|Anchor Root| Alchemy
-    Alchemy -->|Tx Config| Sepolia
-    
-    Witness -.->|Validate Signature| Disk
-    Watcher -.->|Audit Hash Chain| Disk
-    Watcher -.->|Verify Anchors| Sepolia
+    Trust -->|Batch Read| DB
+    Trust -->|Anchor| Sepolia
 ```
 
 ### 1.3 System Technology Stack
@@ -317,48 +297,17 @@ Breakdown:
 **In Production Plan Context:**
 The Trust Engine runs "cron-achtig" (=cron-style) meaning it executes periodically, not continuously.
 
-**Implementation Options:**
+**Implementation:**
+The Trust Engine uses a Node.js-based scheduler (`node-cron`) to periodically batch pending events and anchor them to the blockchain. This avoids the need for system-level cron jobs configuration.
 
-**Option 1: System Cron (in container)**
-```dockerfile
-# Dockerfile
-FROM node:20-alpine
-RUN apk add --no-cache dcron
-COPY crontab /etc/crontabs/root
-CMD crond -f -l 2
-```
+**How it works:**
+1.  Scheduler wakes up (e.g., every 10 minutes).
+2.  Fetches all unanchored events from SQLite.
+3.  Constructs a Merkle Tree.
+4.  Anchors root hash to Ethereum.
+5.  Updates database with anchor details.
 
-**Option 2: Node.js Scheduler (Recommended)**
-```javascript
-const cron = require('node-cron');
-
-// Every 10 minutes
-cron.schedule('*/10 * * * *', async () => {
-  console.log('[Trust Engine] Starting batch anchor...');
-  const events = await db.getPendingEvents();
-  if (events.length > 0) {
-    const merkleRoot = buildMerkleTree(events);
-    await anchorToBlockchain(merkleRoot);
-    console.log(`[Trust Engine] Anchored ${events.length} events`);
-  }
-});
-
-console.log('Trust Engine scheduler started');
-```
-
-**Comparison with Active Service:**
-
-| Aspect | Identity Service (Active) | Trust Engine (Cron-style) |
-|--------|---------------------------|---------------------------|
-| **Runtime** | 24/7 continuous | Sleeps between intervals |
-| **Trigger** | Incoming HTTP requests | Time-based automatic |
-| **CPU Usage** | Idle most of time, spikes on request | Brief spike every 10 min |
-| **Purpose** | Respond to users immediately | Aggregate and batch process |
-
-**Why use cron-style for Trust Engine?**
-- Batching events is more gas-efficient (1 tx for 100 events vs 100 txs)
-- No need for real-time anchoring (10 min delay acceptable)
-- Reduces blockchain costs significantly
+**Code Reference:** See [PRODUCTION_CODE.md § 2.4](./PRODUCTION_CODE.md#24-scheduler-implementation) for the implementation.
 
 ### 3.4 Docker Volumes (Persistent Storage)
 
@@ -402,191 +351,27 @@ With volumes:
 ```
 
 **docker-compose.yml Configuration:**
-```yaml
-version: '3.8'
+See [PRODUCTION_CODE.md § 5.2](./PRODUCTION_CODE.md#52-docker-compose) for the full configuration.
 
-services:
-  identity-service:
-    image: identity:latest
-    volumes:
-      # Named volume (Docker-managed)
-      - db-data:/app/data
-      # Bind mount (host directory)
-      - ./did-logs:/app/logs
-
-  trust-engine:
-    image: trust:latest
-    volumes:
-      # Same volume = shared database
-      - db-data:/app/data
-
-volumes:
-  # Declare named volume
-  db-data:
-    driver: local
-```
-
-**Two Types of Volumes:**
-
-**1. Named Volumes (Recommended for databases):**
-```yaml
-volumes:
-  - db-data:/app/data
-
-# Docker manages location
-# Stored in: /var/lib/docker/volumes/db-data/
-# Commands:
-#   docker volume ls          # List volumes
-#   docker volume inspect db-data  # See details
-#   docker volume rm db-data  # Delete (careful!)
-```
-
-**2. Bind Mounts (Good for configs/logs):**
-```yaml
-volumes:
-  - ./production/did-logs:/var/www/did-logs
-
-# You control location (current directory)
-# Easy to inspect: just check ./production/did-logs/
-# Can edit files directly on host
-```
-
-**Practical Example:**
-```bash
-# Start system
-docker-compose up -d
-
-# Create some data
-curl -X POST https://webvh.nl/api/events -d '{"type":"test"}'
-# → Data stored in db-data volume
-
-# Simulate crash/update
-docker-compose down
-
-# Restart
-docker-compose up -d
-
-# Data still there!
-curl https://webvh.nl/api/events
-# → Returns previously created event ✓
-```
+**Key Concept:**
+We map a host directory (or named volume) to the container's `/app/data` directory. This ensures that even if the container crashes or is redeployed, the SQLite database file remains safe on the host.
 
 ### 3.5 Caddy Web Server
 
 **What is Caddy?**
 A modern, open-source web server that prioritizes ease of use and automatic HTTPS.
 
-**Comparison with Nginx:**
+**Why Caddy?**
+Caddy is chosen for its simplicity and automatic HTTPS handling. Unlike Nginx, which requires manual certificate management and complex configuration, Caddy handles TLS automatically via Let's Encrypt.
 
-| Feature | Nginx | Caddy |
-|---------|-------|-------|
-| **HTTPS Setup** | Manual cert management | Fully automatic |
-| **Config Syntax** | Complex, error-prone | Simple, human-readable |
-| **Reload Config** | `nginx -s reload` | Automatic hot reload |
-| **Default Security** | Must configure | Secure by default (TLS 1.3, etc.) |
-| **Learning Curve** | Steep | Gentle |
-| **Use Case** | Large-scale production | Fast prototyping, SME deployments |
+**Configuration:**
+See [PRODUCTION_CODE.md § 5.1](./PRODUCTION_CODE.md#51-caddy-configuration) for the full `Caddyfile`.
 
-**Real Configuration Comparison:**
-
-**Nginx (Traditional):**
-```nginx
-# Redirect HTTP to HTTPSserver {
-    listen 80;
-    server_name webvh.web3connect.nl;
-    return 301 https://$server_name$request_uri;
-}
-
-# HTTPS Server
-server {
-    listen 443 ssl http2;
-    server_name webvh.web3connect.nl;
-    
-    # SSL Certificates (manual management)
-    ssl_certificate /etc/letsencrypt/live/webvh.web3connect.nl/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/webvh.web3connect.nl/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
-    
-    # Reverse Proxy for API
-    location /api/ {
-        proxy_pass http://identity-service:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-    
-    # Serve DID logs
-    location /.well-known/did/ {
-        alias /var/www/did-logs/;
-        try_files $uri $uri/ =404;
-    }
-    
-    # Frontend
-    location / {
-        root /var/www/frontend;
-        try_files $uri $uri/ /index.html;
-    }
-}
-```
-
-**Caddy (Modern):**
-```
-webvh.web3connect.nl {
-    reverse_proxy /api/* identity-service:3000
-    
-    handle /.well-known/did/* {
-        root * /var/www/did-logs
-        file_server
-    }
-    
-    root * /var/www/frontend
-    try_files {path} /index.html
-    file_server
-}
-```
-
-**What Caddy Does Automatically:**
-1. ✅ HTTP → HTTPS redirect
-2. ✅ SSL certificate acquisition (Let's Encrypt)
-3. ✅ Certificate renewal (every 60 days, auto)
-4. ✅ Secure TLS configuration (1.2, 1.3, strong ciphers)
-5. ✅ HTTP/2 enabled
-6. ✅ Proper headers (`X-Forwarded-*`, etc.)
-7. ✅ Config validation on reload
-8. ✅ Graceful restarts (zero downtime)
-
-**Why Chosen for Production Plan?**
-
-| Requirement | How Caddy Solves It |
-|-------------|---------------------|
-| **Zero-cost SSL** | Automatic Let's Encrypt integration |
-| **Simple deployment** | Single binary, no dependencies |
-| **Low maintenance** | Auto-renewal, no manual intervention |
-| **did:webvh compliance** | HTTPS mandatory, Caddy guarantees it |
-| **Rapid iteration** | Config changes don't require restart |
-| **No prior knowledge** | Readable config, no DevOps expertise needed |
-
-**Caddy in Production Architecture:**
-```
-┌─────────────────────────────────────────────┐
-│          Internet (Port 443)                │
-└────────────────┬────────────────────────────┘
-                 │
-         ┌───────▼────────┐
-         │  Caddy Container │
-         │  - Auto HTTPS    │
-         │  - Routing Logic │
-         └───────┬──────────┘
-                 │
-      ┌──────────┼──────────┬─────────────┐
-      │          │           │             │
- ┌────▼───┐ ┌───▼────┐ ┌───▼────┐  ┌────▼─────┐
- │Frontend│ │Identity│ │ DID    │  │/health   │
- │ (SPA)  │ │Service │ │ Logs   │  │(Status)  │
- └────────┘ └────────┘ └────────┘  └──────────┘
-```
+**Architecture:**
+Caddy acts as the single ingress point (port 443), routing requests to:
+1.  **Identity Service** (`/api/*`)
+2.  **Static DID Logs** (`/.well-known/did/*`)
+3.  **Frontend App** (`/*`)
 
 ---
 
@@ -985,214 +770,7 @@ Watcher Detection:
    - Displays witness names/logos
    - Shows blockchain transaction link
 
-### 5.5 Complete New Window Creation Flow
 
-**Question**: "Als de manufacturer een nieuwe window wordt aangemaakt, hoe wordt dit in het nieuwe systeem toegevoegd?"
-
-**Answer**: Complete end-to-end flow from UI click to blockchain anchor.
-
-**Full Lifecycle:**
-
-```
-═══════════════════════════════════════════════════════
- TIME: T+0 seconds - MANUFACTURER CREATES WINDOW
-═══════════════════════════════════════════════════════
-
-1. Manufacturer Dashboard (UI)
-   User clicks: "Create New Window"
-   Form: {
-     model: "W-1200x1000-E30",
-     glass: "Triple glazing",
-     frame: "Aluminum"
-   }
-   → Submit
-
-2. Frontend POST Request
-   POST /api/products/create
-   Headers: { Authorization: "Bearer <jwt>" }
-   Body: { /* form data */ }
-
-3. Identity Service (Container)
-   a) Generate SCID
-      scid = generateRandomSCID() // e.g., "8a7f3bc9"
-   
-   b) Create DID
-      did = `did:webvh:webvh.web3connect.nl:scid:${scid}`
-   
-   c) Initial Log Entry
-      entry = {
-        versionId: "1",
-        timestamp: "2025-12-14T18:00:00Z",
-        operation: "create",
-        data: { model, glass, frame },
-        previousHash: null // Genesis
-      }
-   
-   d) Sign Entry
-      signature = Ed25519.sign(controllerPrivateKey, hash(entry))
-      entry.proof = {
-        type: "DataIntegrityProof",
-        verificationMethod: "did:webvh:...#controller-key",
-        signature
-      }
-   
-   e) Write to Database
-      await db.insertDPP({
-        did,
-        scid,
-        model,
-        lifecycle_status: "created"
-      })
-
-═══════════════════════════════════════════════════════
- TIME: T+100ms - REQUEST WITNESS ATTESTATIONS
-═══════════════════════════════════════════════════════
-
-4. Identity Service → Witness APIs
-   leafHash = hash(entry)
-   
-   for each witness in [witness1, witness2, witness3]:
-     POST https://witness{i}.example.com/api/attest
-     {
-       "did": "did:webvh:...8a7f3bc9",
-       "versionId": "1",
-       "logEntryHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-       "controllerSignature": "a3f12bc..."
-     }
-
-5. Witnesses Validate & Sign
-   Each witness (independently):
-     a) Verify controller signature ✓
-     b) Check transaction is valid ✓
-     c) Create attestation:
-        {
-          "type": "DataIntegrityProof",
-          "created": "2025-12-14T18:00:01Z",
-          "verificationMethod": "did:web:witness{i}.example.com#key-1",
-          "signature": "fb8e20fc..."
-        }
-     d) Return to Identity Service
-
-═══════════════════════════════════════════════════════
- TIME: T+2 seconds - PUBLISH DID FILES
-═══════════════════════════════════════════════════════
-
-6. Identity Service Publishes
-   a) Create did-witness.json FIRST
-      /var/www/did-logs/8a7f3bc9/did-witness.json
-      [
-        {
-          "versionId": "1",
-          "leafHash": "e3b0c442...",
-          "merkleIndex": null,    ← Pending batch
-          "merkleProof": null,    ← Will be added later
-          "witnessProofs": [
-            { /* witness1 signature */ },
-            { /* witness2 signature */ },
-            { /* witness3 signature */ }
-          ]
-        }
-      ]
-   
-   b) Create did.jsonl SECOND
-      /var/www/did-logs/8a7f3bc9/did.jsonl
-      {"versionId":"1","timestamp":"2025-12-14T18:00:00Z",...}\n
-
-   c) Update Database
-      await db.updateDPP(scid, {
-        status: "witnessed",
-        anchor_status: "pending"
-      })
-
-7. Response to Frontend
-   200 OK
-   {
-     "did": "did:webvh:...8a7f3bc9",
-     "scid": "8a7f3bc9",
-     "versionId": "1",
-     "status": "witnessed",
-     "qr_code": "data:image/png;base64,..." // QR with DID
-   }
-
-8. Frontend Displays
-   ✓ "Window created successfully"
-   ✓ "DID: did:webvh:...8a7f3bc9"
-   ✓ "Witnessed by 3 validators"
-   ⏳ "Blockchain anchor pending (next batch)"
-   → Show QR code for printing
-
-═══════════════════════════════════════════════════════
- TIME: T+10 minutes - BATCH ANCHORING
-═══════════════════════════════════════════════════════
-
-9. Trust Engine (Cron Trigger)
-   a) Collect Pending Events
-      events = await db.query(`
-        SELECT scid, versionId, leafHash
-        FROM pending_anchors
-        WHERE anchor_status = 'pending'
-      `)
-      // Result: [
-      //   { scid: "8a7f3bc9", versionId: "1", leafHash: "e3b0c442..." },
-      //   { scid: "7f9e2da1", versionId: "5", leafHash: "3a8f7bc..." },
-      //   ... (100 more events from different DIDs)
-      // ]
-   
-   b) Build Merkle Tree
-      leaves = events.map(e => e.leafHash)
-      merkleTree = new MerkleTree(leaves)
-      merkleRoot = merkleTree.getRoot()
-      // Root: "9f2a8e3c1b5d4f7a6e8c2d9b3f1a5e7c4d2b8f6a3e9c1d5a7f2e4b6c8d3a9f1e"
-   
-   c) Anchor to Blockchain
-      tx = await contract.anchorBatch(merkleRoot)
-      receipt = await tx.wait()
-      blockNumber = receipt.blockNumber // e.g., 456789
-   
-   d) Update Database
-      for each (event, index) in events:
-        merkleProof = merkleTree.getProof(index)
-        await db.update(`
-          UPDATE pending_anchors
-          SET anchor_status = 'anchored',
-              block_number = ${blockNumber},
-              merkle_index = ${index},
-              merkle_proof = '${JSON.stringify(merkleProof)}'
-          WHERE scid = '${event.scid}' AND versionId = '${event.versionId}'
-        `)
-   
-   e) Update did-witness.json Files
-      for each event:
-        witnessFile = read(`/did-logs/${event.scid}/did-witness.json`)
-        witnessFile[0].merkleIndex = event.merkleIndex
-        witnessFile[0].merkleProof = event.merkleProof
-        write(`/did-logs/${event.scid}/did-witness.json`, witnessFile)
-
-═══════════════════════════════════════════════════════
- TIME: T+11 minutes - FULLY ANCHORED
-═══════════════════════════════════════════════════════
-
-10. Consumer Verification (when scanned)
-    User scans QR code → Frontend fetches:
-    
-    did.jsonl: 1 entry (create event)
-    did-witness.json: {
-      versionId: "1",
-      leafHash: "e3b0c442...",
-      merkleIndex: 0,
-      merkleProof: ["3a8f7bc...", "7f2e9da..."],
-      witnessProofs: [3 signatures]
-    }
-    
-    Client-side verification:
-      ✓ Hash chain valid
-      ✓ Controller signature valid
-      ✓ 3/3 witness signatures valid
-      ✓ Merkle proof reconstructs correct root
-      ✓ Root matches blockchain (Block #456789)
-    
-    Display: "✓ FULLY VERIFIED - Trust Score: 100/100"
-```
 
 **Code References** (see [PRODUCTION_CODE.md](./PRODUCTION_CODE.md)):
 - § Identity Service API Endpoints: `/api/products/create` implementation
