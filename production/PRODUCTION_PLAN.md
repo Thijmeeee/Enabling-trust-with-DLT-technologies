@@ -21,11 +21,15 @@ This document provides a **complete, production-ready architecture and deploymen
 | Component | Role | Rationale |
 | :--- | :--- | :--- |
 | **Frontend** | React + Vite | Client-side application for scanning and verifying passports. |
-| **Web Server** | **Caddy** | Secure Reverse Proxy & Automatic HTTPS. Serves static DID logs and routes API traffic. |
-| **Identity Service** | Node.js (Active) | **Active Server Process**. Manages DID creation, key rotation, and log chaining logic. |
-| **Trust Engine** | Node.js (Module) | Handles event batching, Merkle tree construction, and Ethereum anchoring. |
-| **Database** | SQLite | Local, persistent storage for events and identity state. Docker volume mounted. |
-| **Infrastructure** | **Docker Containers** | strict isolation of services to maintain VM hygiene. |
+| **Gateway** | **Caddy + Coraza WAF** | Secure Reverse Proxy with **OWASP Core Rule Set**. |
+| **Identity Service** | Node.js | Microservice: Manages DID creation and updates. |
+| **Witness Engine** | Node.js | Microservice: Verifies events and creates Merkle trees. |
+| **Watcher Engine** | Node.js | Microservice: Validates Merkle roots against Blockchain. |
+| **Backend Runtime** | **Node.js** | Unified runtime for both Identity logic and Trust logic. |
+| **DID Library** | **didwebvh-ts** | Official TypeScript library for did:webvh compliance and operations. |
+| **Database** | **PostgreSQL** | Robust relational DB for shared state (DPPs, Events). |
+| **Static Host** | **Caddy** | Dedicated lightweight servers for Frontend and DID Logs. |
+| **Infrastructure** | **Podman Pod** | Secure, rootless container pod sharing strict localhost network. |
 
 ### 1.2 Interaction Diagram
 
@@ -38,54 +42,114 @@ graph TD
     Wat([Watcher])
 
     %% Infrastructure
-    subgraph VM ["School VM (Host)"]
+    subgraph Pod ["Podman Pod (Shared Localhost)"]
         
-        %% Container 2 (Caddy)
-        subgraph DockerC2 ["Container 2: Web Server"]
-            Caddy[("Caddy Reverse Proxy")]
-            Frontend[("Frontend Static Files")]
-            Logs[("Static DID Logs (.well-known)")]
-        end
+        Gateway[("Container: Gateway (Caddy)")]
         
-        %% Container 1 (Backend)
-        subgraph DockerC1 ["Container 1: Backend (Node.js)"]
-            Identity[("Identity Service")]
-            Trust[("Trust Engine (Scheduler)")]
-            DB[(SQLite DB File)]
+        subgraph Static ["Static Content"]
+            Front[("Container: Frontend (Caddy)")]
+            Logs[("Container: DID Logs (Caddy)")]
         end
+
+        subgraph Logic ["Microservices"]
+            Identity[("Container: Identity Service")]
+            Witness[("Container: Witness Engine")]
+            Watcher[("Container: Watcher Engine")]
+        end
+
+        DB[("Container: PostgreSQL DB")]
     end
 
     %% External
     Sepolia[("External: Ethereum Node (Alchemy)")]
 
     %% Flows
-    Man -->|Create| Caddy
-    Ver -->|Verify| Caddy
-    Wit -->|Attest| Caddy
-    Wat -->|Audit| Caddy
+    Man -->|Create/Update| Gateway
+    Ver -->|Verify| Gateway
+    Wit -->|Attest| Gateway
+    Wat -->|Audit| Gateway
 
-    %% Caddy Internal Routing
-    Caddy -->|/api/*| Identity
-    Caddy -->|/.well-known/*| Logs
-    Caddy -->|/*| Frontend
+    %% Gateway Routing
+    Gateway -->|/api/identity/*| Identity
+    Gateway -->|/api/witness/*| Witness
+    Gateway -->|/api/watcher/*| Watcher
+    Gateway -->|/.well-known/*| Logs
+    Gateway -->|/*| Front
 
-    %% Backend Logic
+    %% Internal Data Logic
     Identity -->|Read/Write| DB
-    Identity -->|Append| Logs
+    Witness -->|Read/Write| DB
+    Watcher -->|Read Only| DB
     
-    %% Trust Engine Logic
-    Trust -->|Batch Read| DB
-    Trust -->|Anchor Transaction| Sepolia
+    Identity -->|Publish| Logs
+    
+    %% Trust Logic
+    Witness -->|Anchor Root| Sepolia
+    Watcher -->|Verify Root| Sepolia
 ```
 
-### 1.3 System Technology Stack
+### 1.3 System Data Flows
 
+To understand how components communicate, here are the detailed flows for each stakeholder:
+
+#### A. Manufacturer Creates a DID/Event
+**Flow**: `User` → `Gateway` → `Identity Service` → `Witness Service` → `Disk/DB`
+1.  **Manufacturer** sends "Create DID" request to **Gateway** (`/api/products/create`).
+2.  **Gateway** routes to **Identity Service**.
+3.  **Identity Service** creates the DID and keys.
+4.  **Identity Service** calls **Witness Service** (internal HTTP) to request an attestation (signature).
+5.  **Witness Service** signs the event hash and returns the proof.
+6.  **Identity Service** writes the full log entry (with proof) to disk (`did-logs` volume).
+7.  **Identity Service** saves the state to **PostgreSQL**.
+
+```mermaid
+sequenceDiagram
+    participant M as Manufacturer
+    participant G as Gateway
+    participant I as Identity Svc
+    participant W as Witness Svc
+    participant D as DB/Disk
+
+    M->>G: POST /api/products/create
+    G->>I: Proxy Request
+    I->>I: Generate Keys & DID
+    I->>W: POST /attest (Internal)
+    W->>W: Sign Event Hash
+    W-->>I: Return Witness Proof
+    I->>D: Write did.jsonl (Volume)
+    I->>D: Insert into Identities (DB)
+    I-->>G: JSON Response
+    G-->>M: 200 OK (DID Created)
+```
+
+#### B. Witness Anchors to Blockchain
+**Flow**: `Cron Job` → `DB` → `Ethereum`
+1.  **Witness Engine** runs a scheduled job (every 10 min).
+2.  It queries **PostgreSQL** for unanchored events.
+3.  It builds a Merkle Tree of these events.
+4.  It sends the Merkle Root to **Ethereum (Sepolia)** via RPC.
+5.  It updates **PostgreSQL** with the Transaction Hash.
+
+#### C. Verifier checks a DID
+**Flow**: `Verifier` → `Gateway` → `Static Host`
+1.  **Verifier** scans a QR Code (URL).
+2.  Browser requests `https://webvh.../.well-known/did/.../did.jsonl`.
+3.  **Gateway** routes to **DID Logs Container** (Static Caddy).
+4.  **DID Logs Container** serves the file significantly fast (no DB check needed).
+
+#### D. Watcher Audits the System
+**Flow**: `Watcher Engine` → `Ethereum` + `Gateway` → `DB`
+1.  **Watcher Engine** wakes up (hourly).
+2.  It fetches the latest Merkle Root from **Ethereum**.
+3.  It reads the DID Logs (via Volume or Gateway).
+4.  It recalculates the hashes and compares them to the Blockchain Root.
+5.  If a mismatch is found, it writes an **Alert** to **PostgreSQL**.
 | Component | Technology | Rationale |
 | :--- | :--- | :--- |
-| **Container Engine** | **Docker + Compose** | Ensures reproducible builds and prevents "it works on my machine" issues. Keeps the host VM clean. |
-| **Proxy / Web** | **Caddy** | Chosen over Nginx for its automatic HTTPS management and simpler configuration syntax. |
-| **Backend Runtime** | **Node.js** | Unified runtime for both Identity logic and Trust logic. |
-| **Database** | **SQLite** | Serverless, zero-config, file-based storage perfect for this scale and VM topology. |
+| **Container Engine** | **Podman (Rootless)** | More secure than Docker (no daemon), easier to manage permissions on shared VMs. |
+| **Gateway / WAF** | **Caddy + Coraza** | Automatic HTTPS + **OWASP Core Rule Set** for strict security. |
+| **Services** | **Node.js** | Split microservices architecture for scalability and fault isolation. |
+| **Database** | **PostgreSQL** | Robust RDBMS to handle concurrent writes from multiple services. |
 | **Blockchain** | **Ethereum Sepolia** | Industry standard for secure, immutable anchoring. |
 
 ### 1.4 Stakeholder Roles in Trust Model
@@ -837,24 +901,23 @@ Watcher Detection:
 4. Wait 5-10 minutes for propagation.
 
 ### 4.6 Server Preparation (On VM)
-**Purpose**: Ensure the School VM is ready to run containers.
+**Purpose**: Ensure the School VM is ready to run containers securely.
 1. SSH into your VM.
-2. Install Docker & Compose:
+2. Install Podman:
    ```bash
    sudo apt-get update
-   sudo apt-get install -y docker.io docker-compose
+   sudo apt-get install -y podman podman-compose
    ```
 3. Verify installation:
    ```bash
-   docker --version
-   docker-compose --version
+   podman --version
    ```
 
 ---
 
-## 5. Deployment Guide: Docker Strategy
+## 5. Deployment Guide: Podman Strategy
 
-We use Docker to isolate our dependencies (Node.js version, Caddy version) from the host VM. This prevents "pollution" of the School VM and makes the system easy to start/stop/clean.
+We use **Podman Pods** to group our containers. This allows them to share a network namespace (localhost communication) efficiently while staying isolated from the host.
 
 ### 5.1 Instructions
 (Detailed implementation logic is in **[PRODUCTION_CODE.md](./PRODUCTION_CODE.md)**)
@@ -864,18 +927,19 @@ We use Docker to isolate our dependencies (Node.js version, Caddy version) from 
     git clone <repo>
     cd deployment
     cp .env.example .env
-    # Edit .env with the keys gathered in Section 4
+    # Edit .env with keys
     ```
 
-2.  **Build & Run**:
+2.  **Run with Podman**:
     ```bash
-    docker-compose up --build -d
+    # Podman Compose (uses the compose.yaml file)
+    podman-compose up -d
     ```
 
 3.  **Verify**:
     - Frontend: `https://webvh.web3connect.nl`
-    - API Health: `https://webvh.web3connect.nl/health`
-    - DID Resolution: `https://webvh.web3connect.nl/.well-known/did/<did>/did.jsonl`
+    - Identity Health: `https://webvh.web3connect.nl/api/identity/health`
+    - Security Check: `curl -I https://webvh.web3connect.nl` (Check headers)
 
 ---
 
