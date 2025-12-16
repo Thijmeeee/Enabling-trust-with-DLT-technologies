@@ -473,25 +473,7 @@ sequenceDiagram
     end
 ```
 
-### 3.2 State Diagram: DPP Lifecycle
 
-```mermaid
-stateDiagram-v2
-    [*] --> Draft
-    Draft --> Created: Manufacturer Signs
-    Created --> Active: First Scan/Transport
-    Active --> EndOfLife: Recycled/Disposed
-    EndOfLife --> [*]
-
-    state Active {
-        [*] --> InTransit
-        InTransit --> InStock: Received
-        InStock --> Sold: Purchased
-        Sold --> InTransit: Resold/Returned
-    }
-
-    note right of Active : Events can be added<br/>at any sub-state
-```
 
 ---
 
