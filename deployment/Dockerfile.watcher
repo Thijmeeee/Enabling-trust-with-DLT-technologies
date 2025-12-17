@@ -1,12 +1,14 @@
-# Shared Multi-stage Build for Node Services
+# Watcher Service Dockerfile
 FROM node:18-alpine AS builder
 
 WORKDIR /app
-COPY package*.json ./
+
+# Copy backend package files only
+COPY backend/package*.json ./
 RUN npm ci
-# Install Code Dependencies (Manual add for production listing)
-RUN npm install didwebvh-ts merkletreejs ethers @noble/hashes @noble/ed25519
-COPY . .
+
+# Copy backend source code
+COPY backend/ ./
 RUN npm run build
 
 # --- Service Runtime Image ---

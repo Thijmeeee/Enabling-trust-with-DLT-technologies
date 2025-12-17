@@ -95,6 +95,22 @@ app.post('/api/products/create', async (req, res) => {
             [did, scid, publicKeyMultibase, 'active']
         );
 
+        // 5. DB - Store event for witness batching
+        const leafHash = crypto.createHash('sha256').update(JSON.stringify(logEntry)).digest('hex');
+        await pool.query(
+            `INSERT INTO events (did, event_type, payload, signature, leaf_hash, version_id, timestamp) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+                did,
+                'create',
+                JSON.stringify({ type, model, ...metadata }),
+                'pending', // Will be signed by witness
+                leafHash,
+                logEntry.versionId,
+                Date.now()
+            ]
+        );
+
         console.log(`✅ Created DID: ${did}`);
         return res.json({
             did,

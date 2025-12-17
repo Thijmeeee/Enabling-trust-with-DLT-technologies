@@ -69,13 +69,14 @@ services:
     environment:
       - SERVICE_ROLE=witness
       - DB_HOST=postgres
-      # Use internal service name for blockchain
-      - RPC_URL=http://blockchain:8545
+      # Use host machine's Hardhat node (running separately)
+      - RPC_URL=http://172.18.16.1:8545
     depends_on:
       - postgres
-      - blockchain
     networks:
       - shared_pod
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   watcher:
     build:
@@ -85,13 +86,17 @@ services:
     environment:
       - SERVICE_ROLE=watcher
       - DB_HOST=postgres
-      # Use internal service name for blockchain
-      - RPC_URL=http://blockchain:8545
+      # Use host machine's Hardhat node (running separately)
+      - RPC_URL=http://172.18.16.1:8545
+      - STORAGE_ROOT=/var/www/did-logs
     depends_on:
       - postgres
-      - blockchain
     networks:
       - shared_pod
+    volumes:
+      - ./did-logs:/var/www/did-logs:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # --- Local Blockchain (Included for Local Dev/Demo) ---
   blockchain:
