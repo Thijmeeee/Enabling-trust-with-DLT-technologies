@@ -1,0 +1,113 @@
+version: "3.8"
+
+services:
+  # --- Gateway ---
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - shared_pod
+
+  # --- Static Content Hosts ---
+  frontend-static:
+    image: caddy:alpine
+    command: caddy file-server --root /usr/share/caddy --listen :80
+    volumes:
+      - ./dist-app:/usr/share/caddy:ro
+    networks:
+      - shared_pod
+
+  did-static:
+    image: caddy:alpine
+    command: caddy file-server --root /usr/share/caddy --listen :80
+    volumes:
+      - ./did-logs:/usr/share/caddy/.well-known/did:ro
+    networks:
+      - shared_pod
+
+  # --- Data Layer ---
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: dpp_db
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - shared_pod
+
+  # --- Microservices ---
+  identity:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.identity
+    env_file: .env
+    environment:
+      - SERVICE_ROLE=identity
+      - DB_HOST=postgres
+      - STORAGE_ROOT=/var/www/did-logs
+    depends_on:
+      - postgres
+    networks:
+      - shared_pod
+    volumes:
+      - ./did-logs:/var/www/did-logs
+
+  witness:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.witness
+    env_file: .env
+    environment:
+      - SERVICE_ROLE=witness
+      - DB_HOST=postgres
+      # Use internal service name for blockchain
+      - RPC_URL=http://blockchain:8545
+    depends_on:
+      - postgres
+      - blockchain
+    networks:
+      - shared_pod
+
+  watcher:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.watcher
+    env_file: .env
+    environment:
+      - SERVICE_ROLE=watcher
+      - DB_HOST=postgres
+      # Use internal service name for blockchain
+      - RPC_URL=http://blockchain:8545
+    depends_on:
+      - postgres
+      - blockchain
+    networks:
+      - shared_pod
+
+  # --- Local Blockchain (Included for Local Dev/Demo) ---
+  blockchain:
+    image: ghcr.io/nomicfoundation/hardhat:latest
+    # Simple command to run standard node
+    command: ["npx", "hardhat", "node", "--hostname", "0.0.0.0"]
+    ports:
+      - "8545:8545" # Exposed for host interactions (Metamask/Remix)
+    networks:
+      - shared_pod
+
+volumes:
+  caddy_data:
+  caddy_config:
+  pg_data:
+
+networks:
+  shared_pod:
+    driver: bridge

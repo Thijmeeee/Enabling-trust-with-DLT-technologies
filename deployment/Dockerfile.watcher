@@ -1,0 +1,19 @@
+# Shared Multi-stage Build for Node Services
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+# Install Code Dependencies (Manual add for production listing)
+RUN npm install didwebvh-ts merkletreejs ethers @noble/hashes @noble/ed25519
+COPY . .
+RUN npm run build
+
+# --- Service Runtime Image ---
+FROM node:18-alpine
+WORKDIR /app
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./
+
+CMD ["node", "dist/services/watcher/index.js"]

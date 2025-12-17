@@ -1,0 +1,17 @@
+{
+    "name": "dpp-contracts",
+    "version": "1.0.0",
+    "description": "Smart contracts for DPP Trust Anchoring",
+    "type": "module",
+    "scripts": {
+        "compile": "hardhat compile",
+        "deploy:local": "hardhat run scripts/deploy.ts --network localhost",
+        "deploy:sepolia": "hardhat run scripts/deploy.ts --network sepolia",
+        "test": "hardhat test"
+    },
+    "devDependencies": {
+        "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+        "dotenv": "^16.3.1",
+        "hardhat": "^2.19.0"
+    }
+}
