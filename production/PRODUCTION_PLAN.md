@@ -923,5 +923,160 @@ We use **Podman Pods** to group our containers. This allows them to share a netw
     - Identity Health: `https://webvh.web3connect.nl/api/identity/health`
     - Security Check: `curl -I https://webvh.web3connect.nl` (Check headers)
 
+
 ---
+
+## 6. Detailed Implementation Phases
+
+This section breaks down the deployment of the production architecture into focused, verifiable phases.
+
+> **CRITICAL**: Do NOT proceed to the next phase until the Verification steps of the current phase are confirmed.
+
+## Phase 0: Manual Prerequisites (Mandatory)
+
+**These steps must be performed manually by the user BEFORE any code implementation begins.**
+
+1.  **Container Engine**: Ensure **Podman** (or Docker) is installed and running.
+    *   *Check*: `podman version` or `docker version`.
+2.  **Blockchain Access**:
+    *   **Option A (Testnet)**: Get an Alchemy/Infura URL for **Sepolia** and a Private Key with some Sepolia ETH.
+    *   **Option B (Local)**: We will run a local Hardhat node (included in the plan), so this is optional if you stay 100% local.
+3.  **Environment Secrets**:
+    *   You will need to create a `deployment/.env` file (we will provide the example in Phase 1).
+    *   **keys needed**: `RELAYER_PRIVATE_KEY`, `ALCHEMY_SEPOLIA_URL`, `DB_PASSWORD`.
+4.  **Network/DNS**:
+    *   If using the domain `webvh.web3connect.nl`, ensure your machine's `hosts` file or DNS points it to `127.0.0.1` for local testing.
+    *   *Windows*: `C:\Windows\System32\drivers\etc\hosts` -> `127.0.0.1 webvh.web3connect.nl`
+
+---
+
+## Phase 1: Infrastructure Foundations
+
+**Goal**: Setup the container pod, database, and gateway.
+
+### Proposed Changes
+#### [NEW] `deployment/compose.yaml` (or docker-compose.yml)
+- Defines services: `gateway` (Caddy), `postgres`, `identity`, `witness`, `watcher`.
+- Defines volumes: `caddy_data`, `pg_data`, `did_logs`.
+
+#### [NEW] `deployment/Caddyfile`
+- Configures Reverse Proxy routing.
+- Sets up WAF (Coraza) rules (if referencing OWASP CRS).
+- Routes `/api/*`, `/.well-known/*`, and `/*`.
+
+#### [NEW] `deployment/.env.example`
+- Template for all required environment variables.
+
+#### [NEW] `backend/db/schema.sql`
+- SQL script to create `identities`, `events`, `batches`, `audits` tables.
+
+### Verification Plan
+- [ ] Run `docker-compose up -d postgres gateway`.
+- [ ] Connect to PostgreSQL (`docker exec -it ... psql`) and check if tables exist.
+- [ ] Curl `http://localhost:80` (or configured port) to see if Caddy responds (even if 404/502).
+
+---
+
+## Phase 2: Smart Contract Layer
+
+**Goal**: Deploy the anchor registry to a blockchain.
+
+### Proposed Changes
+#### [NEW] `contracts/contracts/WitnessAnchorRegistry.sol`
+- The Solidity contract for storing Merkle roots.
+#### [NEW] `contracts/hardhat.config.ts` & `package.json`
+- Hardhat setup.
+#### [NEW] `contracts/scripts/deploy.ts`
+- Deployment script.
+
+### Verification Plan
+- [ ] Run `npx hardhat test` (if tests added) or `npx hardhat run scripts/deploy.ts --network localhost`.
+- [ ] **Capture the Contract Address**. This MUST be added to `deployment/.env` for the backend phases.
+
+---
+
+## Phase 3: Identity Service
+
+**Goal**: Enable DID creation and event logging.
+
+### Proposed Changes
+#### [NEW] `backend/services/identity/index.ts`
+- Express server.
+- Endpoints: `POST /api/products/create`, `POST /api/events/add`.
+- Integration with `didwebvh-ts` (or mock implementation if lib not avail).
+#### [NEW] `deployment/Dockerfile.identity`
+- Build instruction for this service.
+
+### Verification Plan
+- [ ] Start the service via Docker.
+- [ ] Send `POST` to create a product.
+- [ ] Check `did-logs` volume: File `did.jsonl` should exist.
+- [ ] Check DB: Table `identities` should have 1 row.
+
+---
+
+## Phase 4: Witness Engine
+
+**Goal**: Anchor events to the blockchain.
+
+### Proposed Changes
+#### [NEW] `backend/services/witness/index.ts`
+- Cron job impl (node-cron).
+- Merkle Tree construction.
+- Ethereum interaction (ethers.js).
+#### [NEW] `deployment/Dockerfile.witness`
+
+### Verification Plan
+- [ ] Create a few events via Identity Service.
+- [ ] Wait for Cron (or force run).
+- [ ] Check logs: "Anchored batch..."
+- [ ] Check DB: `batches` table should have a transaction hash.
+- [ ] Check DB: `events` table should have `version_id` populated.
+
+---
+
+## Phase 5: Watcher Engine
+
+**Goal**: Audit the system for fraud.
+
+### Proposed Changes
+#### [NEW] `backend/services/watcher/index.ts`
+- Cron job for auditing.
+- Logic to request `did.jsonl` and verify hashes.
+- Logic to check Blockchain Root vs Merkle Proof.
+#### [NEW] `deployment/Dockerfile.watcher`
+
+### Verification Plan
+- [ ] Let the system run normally.
+- [ ] Check DB: `audits` table should show "valid".
+- [ ] (Advanced) Manually corrupt a `did.jsonl` file in the volume and see if Watcher catches it (logs "invalid").
+
+---
+
+## Phase 6: Frontend Integration
+
+**Goal**: Visualize trust status in the UI.
+
+### Proposed Changes
+#### [MODIFY] `src/lib/utils/merkle.ts`
+- Add client-side Merkle proof verification code.
+#### [MODIFY] `src/components/TrustValidationTab.tsx`
+- Connect UI to the real backend data and static files.
+
+### Verification Plan
+- [ ] Browse the app via Caddy URL.
+- [ ] Scan a DID (or navigate to one).
+- [ ] Verify that "Trust Score" calculates correctly based on real backend data.
+
+---
+
+## Phase 7: End-to-End Verification
+
+**Goal**: Full system sign-off.
+
+### Verification Plan
+- [ ] Run the complete "Manufacturer -> Witness -> Watcher -> Consumer" flow.
+- [ ] Validate that all docker containers are healthy (`docker ps`).
+- [ ] Validate that no errors are in the logs (`docker-compose logs`).
+
 
