@@ -7,7 +7,7 @@ This document provides a **complete, production-ready architecture and deploymen
 **Key Objectives:**
 - **Zero-Cost Infrastructure**: Deploy on School VM (Ubuntu) using lightweight, open-source components.
 - **Verifiable Identity (`did:webvh`)**: Implement a compliant, self-hosted Identity Service with hash-chained logs.
-- **Trust Anchoring**: Batch and anchor event proofs to Ethereum Sepolia.
+- **Trust Anchoring**: Batch and anchor event proofs to a **Local Hardhat Blockchain**.
 - **Privacy & Security**: Run strictly containing services using Docker to prevent environment pollution.
 
 > **Note on Implementation Details**: All source code, configuration files (Caddyfile, Dockerfile), and smart contracts have been moved to **[PRODUCTION_CODE.md](./PRODUCTION_CODE.md)** to keep this strategic plan clean and readable.
@@ -61,7 +61,7 @@ graph TD
     end
 
     %% External
-    Sepolia[("External: Ethereum Node (Alchemy)")]
+    LocalChain[("Container: Local Blockchain (Hardhat)")]
 
     %% Flows
     Man -->|Create/Update| Gateway
@@ -84,8 +84,8 @@ graph TD
     Identity -->|Publish| Logs
     
     %% Trust Logic
-    Witness -->|Anchor Root| Sepolia
-    Watcher -->|Verify Root| Sepolia
+    Witness -->|Anchor Root| LocalChain
+    Watcher -->|Verify Root| LocalChain
 ```
 
 ### 1.3 System Data Flows
@@ -127,7 +127,7 @@ sequenceDiagram
 1.  **Witness Engine** runs a scheduled job (every 10 min).
 2.  It queries **PostgreSQL** for unanchored events.
 3.  It builds a Merkle Tree of these events.
-4.  It sends the Merkle Root to **Ethereum (Sepolia)** via RPC.
+4.  It sends the Merkle Root to **Local Blockchain (Hardhat)** via RPC.
 5.  It updates **PostgreSQL** with the Transaction Hash.
 
 #### C. Verifier checks a DID
@@ -150,7 +150,7 @@ sequenceDiagram
 | **Gateway / WAF** | **Caddy + Coraza** | Automatic HTTPS + **OWASP Core Rule Set** for strict security. |
 | **Services** | **Node.js** | Split microservices architecture for scalability and fault isolation. |
 | **Database** | **PostgreSQL** | Robust RDBMS to handle concurrent writes from multiple services. |
-| **Blockchain** | **Ethereum Sepolia** | Industry standard for secure, immutable anchoring. |
+| **Blockchain** | **Local Hardhat Node** | Simulates Ethereum for zero-cost, private anchoring validation. |
 
 ### 1.4 Stakeholder Roles in Trust Model
 
@@ -779,7 +779,7 @@ Watcher Detection:
        const root = reconstructMerkleRoot(leafHash, merkleProof);
        const onChainRoot = await contract.getMerkleRoot(blockNumber);
        if (root === onChainRoot) {
-         Display: "✓ Anchored on Ethereum Sepolia (Block #123456)"
+         Display: "✓ Anchored on Local Blockchain (Block #123456)"
        }
      } else {
        Display: "⏳ Pending blockchain anchor (next batch)"
@@ -839,40 +839,31 @@ Watcher Detection:
 
 **⚠️ You must complete these manual steps before deployment. These involve creating external accounts that cannot be automated.**
 
-### 6.1 Create Alchemy Account & Get RPC URL
-**Purpose**: Alchemy provides the connection to Ethereum Sepolia testnet without running your own node.
-1. Go to [alchemy.com](https://www.alchemy.com/)
-2. Sign up for a free account
-3. Create a new App:
-   - **Chain**: Ethereum
-   - **Network**: Sepolia
-   - **Name**: `DPP-Production`
-4. Copy the **HTTPS URL** (looks like `https://eth-sepolia.g.alchemy.com/v2/YOUR_API_KEY`)
-5. Save this as `ALCHEMY_SEPOLIA_URL` for your `.env` file.
+### 6.1 Setup Local Blockchain (Hardhat)
+**Purpose**: Run a local Ethereum node to simulate the Sepolia testnet without needing external API keys or real testnet ETH.
+1.  **Node.js**: Ensure Node.js is installed.
+2.  **Initialize Project**:
+    ```bash
+    mkdir hardhat-node
+    cd hardhat-node
+    npm init -y
+    npm install --save-dev hardhat
+    ```
+3.  **Run Node**:
+    ```bash
+    npx hardhat node
+    ```
+    *Keep this terminal window open.*
 
-### 4.2 Create Ethereum Wallet (Deployer)
-**Purpose**: You need a wallet with Sepolia ETH to deploy the smart contract.
-1. Install [MetaMask](https://metamask.io/)
-2. Create a new wallet and switch to **Sepolia Testnet**
-3. Export your **Private Key** (Settings -> Security -> Export Private Key)
-   - ⚠️ **NEVER share this or commit it to git!**
-4. Save this as `DEPLOYER_PRIVATE_KEY` for your `.env` file.
+### 6.2 Get Local Private Key
+**Purpose**: The local node gives you 10 generated accounts with 10,000 ETH each.
+1.  Look at the output of `npx hardhat node`.
+2.  Copy the **Private Key** for `Account #0`.
+3.  Save this as `DEPLOYER_PRIVATE_KEY` for your `.env` file.
+4.  Copy the **Private Key** for `Account #1`.
+5.  Save this as `RELAYER_PRIVATE_KEY` for your `.env` file.
 
-### 4.3 Get Sepolia Test ETH
-**Purpose**: Pay for gas fees (free on testnet).
-1. Use a Faucet:
-   - [Alchemy Sepolia Faucet](https://sepoliafaucet.com/)
-   - [Google Cloud Web3 Faucet](https://cloud.google.com/application/web3/faucet/ethereum/sepolia)
-2. Get at least **0.05 SepoliaETH**.
-
-### 4.4 Create Relayer Wallet (Operational)
-**Purpose**: A separate wallet for the backend to send daily anchor transactions.
-1. Create a second account in MetaMask named `DPP-Relayer`
-2. Export its Private Key.
-3. Save as `RELAYER_PRIVATE_KEY` for your `.env` file.
-4. Send **0.02 SepoliaETH** from your Deployer wallet to this Relayer wallet.
-
-### 4.5 Configure DNS (Crucial for HTTPS)
+### 6.3 Configure DNS (Crucial for HTTPS)
 **Purpose**: Point your domain to the VM so Caddy can provision an SSL certificate.
 1. Log in to your Domain Registrar (e.g., TransIP, GoDaddy).
 2. Go to DNS Management.
@@ -882,7 +873,7 @@ Watcher Detection:
    - **TTL**: 5 min / Automatic.
 4. Wait 5-10 minutes for propagation.
 
-### 4.6 Server Preparation (On VM)
+### 6.5 Server Preparation (On VM)
 **Purpose**: Ensure the School VM is ready to run containers securely.
 1. SSH into your VM.
 2. Install Podman:
@@ -938,12 +929,13 @@ This section breaks down the deployment of the production architecture into focu
 
 1.  **Container Engine**: Ensure **Podman** (or Docker) is installed and running.
     *   *Check*: `podman version` or `docker version`.
-2.  **Blockchain Access**:
-    *   **Option A (Testnet)**: Get an Alchemy/Infura URL for **Sepolia** and a Private Key with some Sepolia ETH.
-    *   **Option B (Local)**: We will run a local Hardhat node (included in the plan), so this is optional if you stay 100% local.
+2.  **Local Blockchain**:
+    *   Open a new terminal.
+    *   Run `npx hardhat node` (inside a temp folder or the contracts folder if ready).
+    *   *Keep this running* to simulate the blockchain.
 3.  **Environment Secrets**:
     *   You will need to create a `deployment/.env` file (we will provide the example in Phase 1).
-    *   **keys needed**: `RELAYER_PRIVATE_KEY`, `ALCHEMY_SEPOLIA_URL`, `DB_PASSWORD`.
+    *   **keys needed**: `RELAYER_PRIVATE_KEY` (from Hardhat output), `RPC_URL` (use `http://host.containers.internal:8545` or `http://blockchain:8545`), `DB_PASSWORD`.
 4.  **Network/DNS**:
     *   If using the domain `webvh.web3connect.nl`, ensure your machine's `hosts` file or DNS points it to `127.0.0.1` for local testing.
     *   *Windows*: `C:\Windows\System32\drivers\etc\hosts` -> `127.0.0.1 webvh.web3connect.nl`

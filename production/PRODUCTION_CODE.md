@@ -106,7 +106,7 @@ const config: HardhatUserConfig = {
   solidity: "0.8.20",
   networks: {
     sepolia: {
-      url: process.env.ALCHEMY_SEPOLIA_URL || "",
+      url: process.env.RPC_URL || "",
       accounts: process.env.DEPLOYER_PRIVATE_KEY 
         ? [process.env.DEPLOYER_PRIVATE_KEY] 
         : [],
@@ -368,7 +368,7 @@ const batchJob = new CronJob('*/10 * * * *', async () => {
   const root = tree.getHexRoot();
 
   // C. Anchor to Blockchain (Local Hardhat or Sepolia)
-  const rpcUrl = process.env.ALCHEMY_SEPOLIA_URL || "http://blockchain:8545";
+  const rpcUrl = process.env.RPC_URL || "http://blockchain:8545";
   const provider = new ethers.JsonRpcProvider(rpcUrl);
   
   // Use a predefined account from Hardhat or key from env
@@ -658,8 +658,11 @@ services:
     environment:
       - SERVICE_ROLE=witness
       - DB_HOST=postgres
+      # Use internal service name for blockchain
+      - RPC_URL=http://blockchain:8545
     depends_on:
       - postgres
+      - blockchain
     networks:
       - shared_pod
 
@@ -671,8 +674,21 @@ services:
     environment:
       - SERVICE_ROLE=watcher
       - DB_HOST=postgres
+      # Use internal service name for blockchain
+      - RPC_URL=http://blockchain:8545
     depends_on:
       - postgres
+      - blockchain
+    networks:
+      - shared_pod
+
+  # --- Local Blockchain (Included for Local Dev/Demo) ---
+  blockchain:
+    image: ghcr.io/nomicfoundation/hardhat:latest
+    # Simple command to run standard node
+    command: ["npx", "hardhat", "node", "--hostname", "0.0.0.0"]
+    ports:
+      - "8545:8545" # Exposed for host interactions (Metamask/Remix)
     networks:
       - shared_pod
 
@@ -680,17 +696,6 @@ volumes:
   caddy_data:
   caddy_config:
   pg_data:
-
-
-  # --- Local Blockchain (Optional: For "No Alchemy" Mode) ---
-  blockchain:
-    image: ghcr.io/nomicfoundation/hardhat:latest
-    # Or use a custom Dockerfile that runs `npx hardhat node`
-    command: ["npx", "hardhat", "node", "--hostname", "0.0.0.0"]
-    ports:
-      - "8545:8545" # Expose for debugging if needed
-    networks:
-      - shared_pod
 
 networks:
   shared_pod:
@@ -704,7 +709,7 @@ networks:
 ```bash
 # Blockchain (Local Hardhat Node)
 # Use 'http://blockchain:8545' for internal pod communication
-ALCHEMY_SEPOLIA_URL=http://blockchain:8545
+RPC_URL=http://blockchain:8545
 # Hardhat Account #0 Private Key (TEST ONLY)
 RELAYER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 CONTRACT_ADDRESS=0x...
