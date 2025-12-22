@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Clock, FileText, Shield, Link2, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Search, Filter } from 'lucide-react';
-import { enhancedDB } from '../lib/data/enhancedDataStore';
+import { hybridDataStore } from '../lib/data/hybridDataStore';
 import type { AnchoringEvent, WitnessAttestation } from '../lib/data/localData';
 
 interface DIDEvent {
@@ -44,7 +44,7 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
     const allEvents: DIDEvent[] = [];
 
     // Get DPP
-    const dpp = await enhancedDB.getDPPByDID(did);
+    const dpp = await hybridDataStore.getDPPByDID(did);
     console.log('DIDEventsLog: DPP found:', dpp);
     if (!dpp) {
       console.warn('DIDEventsLog: No DPP found for DID:', did);
@@ -69,7 +69,7 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
     });
 
     // Anchoring Events
-    const anchorings = await enhancedDB.getAnchoringEventsByDID(did);
+    const anchorings = await hybridDataStore.getAnchoringEventsByDID(did);
     console.log('DIDEventsLog: Anchoring events found:', anchorings.length);
     anchorings.forEach((anchor: AnchoringEvent) => {
       allEvents.push({
@@ -90,7 +90,7 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
     });
 
     // Attestations - separate DID events from lifecycle events
-    const attestations = await enhancedDB.getAttestationsByDID(did);
+    const attestations = await hybridDataStore.getAttestationsByDID(did);
     console.log('DIDEventsLog: Attestations found:', attestations.length, attestations);
     attestations.forEach((attestation: WitnessAttestation) => {
       // DID-related witness events (what witnesses actually monitor)
@@ -159,7 +159,7 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
     });
 
     // DID Document Verification Events
-    const didDoc = await enhancedDB.getDIDDocumentByDID(did);
+    const didDoc = await hybridDataStore.getDIDDocumentByDID(did);
     if (didDoc) {
       allEvents.push({
         id: `verification-${didDoc.id}`,

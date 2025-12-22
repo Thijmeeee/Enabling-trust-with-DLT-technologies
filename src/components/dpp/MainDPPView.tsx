@@ -159,7 +159,7 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
 
       // Build combined recent events (creation, anchorings, attestations, verification)
       try {
-        const { enhancedDB } = await import('../../lib/data/enhancedDataStore');
+        const { hybridDataStore } = await import('../../lib/data/hybridDataStore');
         const allEvents: any[] = [];
         // Creation
         if (dppData.dpp) {
@@ -172,7 +172,7 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
         }
 
         // Anchorings
-        const anchorings = await enhancedDB.getAnchoringEventsByDID(did);
+        const anchorings = await hybridDataStore.getAnchoringEventsByDID(did);
         anchorings.forEach((a: any) => {
           allEvents.push({
             id: `anchor-${a.id}`,
@@ -183,7 +183,7 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
         });
 
         // Attestations
-        const attestations = await enhancedDB.getAttestationsByDID(did);
+        const attestations = await hybridDataStore.getAttestationsByDID(did);
         attestations.forEach((att: any) => {
           // Skip pending/rejected DID events similar to DIDEventsLog
           const didEventTypes = ['did_creation', 'key_rotation', 'ownership_change', 'did_update', 'did_lifecycle_update'];
@@ -201,7 +201,7 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
         });
 
         // DID Document verification
-        const didDoc = await enhancedDB.getDIDDocumentByDID(did);
+        const didDoc = await hybridDataStore.getDIDDocumentByDID(did);
         if (didDoc) {
           allEvents.push({
             id: `verification-${didDoc.id}`,
@@ -240,8 +240,8 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
 
   async function loadPendingApprovals(didValue: string) {
     try {
-      const { enhancedDB } = await import('../../lib/data/enhancedDataStore');
-      const attestations = await enhancedDB.getAttestationsByDID(didValue);
+      const { hybridDataStore } = await import('../../lib/data/hybridDataStore');
+      const attestations = await hybridDataStore.getAttestationsByDID(didValue);
 
       console.log('MainDPPView: All attestations for DID:', attestations);
 
@@ -1164,3 +1164,4 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
     </div>
   );
 }
+

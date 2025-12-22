@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { FileCheck, CheckCircle, XCircle, Clock, Shield, Activity, Search, Filter as FilterIcon, X, ChevronDown, ChevronUp, Square, Maximize, Package, User, ArrowRight, Key, RefreshCw, FileText, Edit } from 'lucide-react';
-import { enhancedDB } from '../../lib/data/enhancedDataStore';
+import { FileCheck, CheckCircle, XCircle, Clock, Shield, Activity, Search, Filter as FilterIcon, X, ChevronDown, ChevronUp, Square, Maximize, Package, User, ArrowRight, Key, RefreshCw, FileText, Edit, Anchor, ExternalLink } from 'lucide-react';
+import { hybridDataStore as enhancedDB } from '../../lib/data/hybridDataStore';
 import { useRole } from '../../lib/utils/roleContext';
 import { getDIDOperationsHistory } from '../../lib/operations/didOperationsLocal';
+import { backendAPI, type BackendBatch } from '../../lib/api/backendAPI';
+import { etherscanTxUrl, etherscanBlockUrl } from '../../lib/api/config';
 
 interface PendingDIDEvent {
   id: string;
@@ -41,6 +43,9 @@ export default function WitnessDashboard() {
   const [expandedDPP, setExpandedDPP] = useState<string | null>(null);
   const [expandedComponents, setExpandedComponents] = useState<Set<string>>(new Set());
 
+  // Blockchain batches from backend
+  const [batches, setBatches] = useState<BackendBatch[]>([]);
+
   // Confirmation modal states
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'approve' | 'reject' | null>(null);
@@ -52,9 +57,23 @@ export default function WitnessDashboard() {
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [processedFilter, setProcessedFilter] = useState<'all' | 'processed' | 'unprocessed'>('all');
 
+  // Load blockchain batches from backend
+  async function loadBatches() {
+    try {
+      const batchData = await backendAPI.getBatches();
+      setBatches(batchData);
+    } catch (error) {
+      console.warn('Failed to load batches from backend:', error);
+    }
+  }
+
   useEffect(() => {
     loadEvents();
-    const interval = setInterval(loadEvents, 5000);
+    loadBatches();
+    const interval = setInterval(() => {
+      loadEvents();
+      loadBatches();
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -213,7 +232,7 @@ export default function WitnessDashboard() {
 
     // Verify previous hash reference
     if (previousState && event.data?.previousHash) {
-      const previousHash = previousState.operationHash || 'computed-hash-placeholder';
+      const previousHash = (previousState as any).operationHash || 'computed-hash-placeholder';
       if (event.data.previousHash !== previousHash && event.data.previousHash !== 'placeholder-hash') {
         return { valid: false, reason: 'Previous hash does not match' };
       }
@@ -252,7 +271,7 @@ export default function WitnessDashboard() {
       event_id: event.id,
       did: event.did,
       version: proposedVersion,
-      previous_hash: previousState?.operationHash || null,
+      previous_hash: (previousState as any)?.operationHash || null,
       verification: {
         previous_state_resolved: true,
         version_valid: true,
@@ -545,6 +564,62 @@ export default function WitnessDashboard() {
             </div>
           </div>
         </div>
+
+        {/* Blockchain Anchors - Real Backend Data */}
+        {batches.length > 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 mb-6 transition-colors">
+            <div className="flex items-center gap-3 mb-4">
+              <Anchor className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Blockchain Anchors</h2>
+              <span className="text-sm text-gray-500 dark:text-gray-400">({batches.length} batches confirmed)</span>
+            </div>
+            <div className="space-y-3">
+              {batches.slice(0, 5).map((batch) => {
+                const txUrl = etherscanTxUrl(batch.tx_hash);
+                const blockUrl = etherscanBlockUrl(batch.block_number);
+                return (
+                  <div key={batch.batch_id} className="flex items-center justify-between bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 p-4 rounded-lg border border-purple-100 dark:border-purple-800">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="w-5 h-5 text-green-500" />
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">Batch #{batch.batch_id}</span>
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        Block: <span className="font-mono">{batch.block_number}</span>
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        Status: <span className="text-green-600 dark:text-green-400 font-medium">{batch.status}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="text-xs font-mono text-gray-600 dark:text-gray-400">
+                        TX: {batch.tx_hash.slice(0, 10)}...{batch.tx_hash.slice(-8)}
+                      </div>
+                      {txUrl ? (
+                        <a
+                          href={txUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          Etherscan
+                        </a>
+                      ) : (
+                        <span className="text-xs text-gray-400">Local blockchain</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {batches.length > 5 && (
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-3 text-center">
+                + {batches.length - 5} more batches
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Search and Filter Bar */}
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-6 transition-colors">

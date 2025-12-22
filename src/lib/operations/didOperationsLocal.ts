@@ -1,4 +1,4 @@
-import { enhancedDB } from '../data/enhancedDataStore';
+import { hybridDataStore as enhancedDB } from '../data/hybridDataStore';
 import { localDB } from '../data/localData';
 
 /**
@@ -52,6 +52,7 @@ export async function transferOwnership(
       did: dpp.did,
       witness_did: 'did:webvh:example.com:witnesses:did-validator-1',
       attestation_type: 'ownership_change',
+      timestamp: new Date().toISOString(),
       attestation_data: {
         timestamp: new Date().toISOString(),
         witness: 'DID Validator Node 1',
@@ -120,6 +121,7 @@ export async function rotateKey(
       did: dpp.did,
       witness_did: 'did:webvh:example.com:witnesses:did-validator-2',
       attestation_type: 'key_rotation',
+      timestamp: new Date().toISOString(),
       attestation_data: {
         timestamp: new Date().toISOString(),
         witness: 'DID Validator Node 2',
@@ -186,6 +188,7 @@ export async function updateDIDDocument(
       did: dpp.did,
       witness_did: 'did:webvh:example.com:witnesses:did-validator-1',
       attestation_type: 'did_update',
+      timestamp: new Date().toISOString(),
       attestation_data: {
         timestamp: new Date().toISOString(),
         witness: 'DID Validator Node 1',
@@ -228,29 +231,29 @@ export async function getDIDOperationsHistory(dppId: string) {
     const attestations = await enhancedDB.getAttestationsByDID(dpp.did);
     console.log('getDIDOperationsHistory: raw attestations count', attestations.length);
     console.log('getDIDOperationsHistory: attestations preview', attestations.map(a => ({ id: a.id, type: a.attestation_type, approval_status: a.approval_status, signature: a.signature, timestamp: a.timestamp })));
-    
+
     // Filter DID-related operations that are approved (not pending or rejected)
     const didOperations = attestations.filter(att => {
       const isDIDOperation = ['ownership_change', 'key_rotation', 'did_update', 'did_creation'].includes(att.attestation_type);
-      
+
       // Explicitly exclude rejected operations
       if (att.approval_status === 'rejected') {
         return false;
       }
-      
+
       // Consider approved if:
       // 1. Explicitly marked as approved, OR
       // 2. No approval_status field (old data - consider approved), OR
       // 3. Signature doesn't start with 'pending-' and isn't a reject signature
-      const isApproved = 
-        att.approval_status === 'approved' || 
+      const isApproved =
+        att.approval_status === 'approved' ||
         (!att.approval_status && att.signature && !att.signature.startsWith('pending-') && !att.signature.startsWith('witness-reject-'));
-      
+
       return isDIDOperation && isApproved;
     });
 
     // Sort by timestamp descending
-    didOperations.sort((a, b) => 
+    didOperations.sort((a, b) =>
       new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
     console.log('getDIDOperationsHistory: filtered DID operations count', didOperations.length);
@@ -278,7 +281,7 @@ export async function getPendingAndRejectedOperations(did: string) {
 
     // Use enhancedDB for consistency
     const allAttestations = await enhancedDB.getAttestationsByDID(dpp.did);
-    
+
     const pending = allAttestations.filter((att: any) => att.approval_status === 'pending');
     const rejected = allAttestations.filter((att: any) => att.approval_status === 'rejected');
 

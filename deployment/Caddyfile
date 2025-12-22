@@ -1,30 +1,15 @@
-{
-    # Enable Coraza WAF
-    order coraza_waf first
-}
-
-webvh.web3connect.nl {
-    # 1. Apply OWASP Core Rule Set
-    coraza_waf {
-        directives `
-            Include /etc/caddy/coraza.conf-recommended
-            Include /etc/caddy/crs-setup.conf
-            Include /etc/caddy/rules/*.conf
-            SecRuleEngine On
-        `
-    }
-
-    # 2. Route to Static Content Containers
-    handle /.well-known/did/* {
-        reverse_proxy did-static:80
-    }
-
-    handle_path /app/* {
-        reverse_proxy frontend-static:80
-    }
-
-    # 3. Microservice Routing
+# Simplified Caddyfile for local development
+:80 {
+    # 1. Route API requests to microservices
     handle /api/identity/* {
+        reverse_proxy identity:3000
+    }
+
+    handle /api/products/* {
+        reverse_proxy identity:3000
+    }
+
+    handle /api/events/* {
         reverse_proxy identity:3000
     }
 
@@ -36,10 +21,21 @@ webvh.web3connect.nl {
         reverse_proxy watcher:3000
     }
 
-    # Default to Frontend
-    handle {
-        reverse_proxy frontend-static:80
+    # 2. DID resolution (static files)
+    handle /.well-known/did/* {
+        root * /usr/share/caddy/did
+        file_server
     }
 
-    tls email@example.com
+    # 3. Default to Frontend (SPA)
+    handle {
+        root * /usr/share/caddy/app
+        try_files {path} /index.html
+        file_server
+    }
+
+    # Enable logging
+    log {
+        output stdout
+    }
 }

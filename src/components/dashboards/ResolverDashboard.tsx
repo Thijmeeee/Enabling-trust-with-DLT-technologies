@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Search, CheckCircle, XCircle, AlertTriangle, Hash, Shield, FileText, Link as LinkIcon, ChevronDown, ChevronUp, Clock, Package, X } from 'lucide-react';
-import { enhancedDB } from '../../lib/data/enhancedDataStore';
+import { hybridDataStore as enhancedDB } from '../../lib/data/hybridDataStore';
 import { getDIDOperationsHistory } from '../../lib/operations/didOperationsLocal';
 import { useRole } from '../../lib/utils/roleContext';
 import { DPP } from '../../lib/data/localData';

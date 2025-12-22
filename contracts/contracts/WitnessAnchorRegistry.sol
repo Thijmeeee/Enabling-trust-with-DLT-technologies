@@ -5,8 +5,15 @@ pragma solidity ^0.8.20;
  * @title WitnessAnchorRegistry
  * @notice Stores Merkle roots of batched DPP events for immutable verification
  * @dev Each batch contains multiple events hashed into a Merkle tree
+ *      Only authorized witnesses can anchor new batches
  */
 contract WitnessAnchorRegistry {
+    /// @notice Contract owner (deployer)
+    address public owner;
+    
+    /// @notice Mapping of authorized witness addresses
+    mapping(address => bool) public authorizedWitnesses;
+    
     /// @notice Counter for batch IDs (auto-incrementing)
     uint256 public batchCount;
     
@@ -26,13 +33,69 @@ contract WitnessAnchorRegistry {
         uint256 timestamp,
         uint256 blockNumber
     );
+    
+    /// @notice Emitted when a witness is added
+    event WitnessAdded(address indexed witness);
+    
+    /// @notice Emitted when a witness is removed
+    event WitnessRemoved(address indexed witness);
+
+    /// @notice Only owner can call this function
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only owner can call this function");
+        _;
+    }
+    
+    /// @notice Only authorized witnesses can call this function
+    modifier onlyWitness() {
+        require(authorizedWitnesses[msg.sender], "Not an authorized witness");
+        _;
+    }
+    
+    /// @notice Constructor sets deployer as owner and first authorized witness
+    constructor() {
+        owner = msg.sender;
+        authorizedWitnesses[msg.sender] = true;
+        emit WitnessAdded(msg.sender);
+    }
+    
+    /**
+     * @notice Add a new authorized witness
+     * @param witness The address to authorize as witness
+     */
+    function addWitness(address witness) external onlyOwner {
+        require(witness != address(0), "Invalid witness address");
+        require(!authorizedWitnesses[witness], "Already a witness");
+        authorizedWitnesses[witness] = true;
+        emit WitnessAdded(witness);
+    }
+    
+    /**
+     * @notice Remove an authorized witness
+     * @param witness The address to remove from witnesses
+     */
+    function removeWitness(address witness) external onlyOwner {
+        require(authorizedWitnesses[witness], "Not a witness");
+        authorizedWitnesses[witness] = false;
+        emit WitnessRemoved(witness);
+    }
+    
+    /**
+     * @notice Check if an address is an authorized witness
+     * @param witness The address to check
+     * @return bool True if the address is a witness
+     */
+    function isWitness(address witness) external view returns (bool) {
+        return authorizedWitnesses[witness];
+    }
 
     /**
      * @notice Anchor a Merkle root to the blockchain
+     * @dev Only authorized witnesses can call this function
      * @param merkleRoot The root hash of the Merkle tree containing event hashes
      * @return batchId The ID assigned to this batch
      */
-    function anchor(bytes32 merkleRoot) external returns (uint256 batchId) {
+    function anchor(bytes32 merkleRoot) external onlyWitness returns (uint256 batchId) {
         batchId = batchCount++;
         roots[batchId] = merkleRoot;
         timestamps[batchId] = block.timestamp;

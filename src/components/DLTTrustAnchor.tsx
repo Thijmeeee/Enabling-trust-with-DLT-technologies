@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link2, Database, Hash, CheckCircle2, ExternalLink, Blocks } from 'lucide-react';
-import { localDB } from '../lib/data/localData';
+import { hybridDataStore } from '../lib/data/hybridDataStore';
 import type { AnchoringEvent } from '../lib/data/localData';
+import { etherscanTxUrl, etherscanBlockUrl } from '../lib/api';
 
 export default function DLTTrustAnchor({ did }: { did: string }) {
   const [anchorings, setAnchorings] = useState<AnchoringEvent[]>([]);
@@ -13,7 +14,7 @@ export default function DLTTrustAnchor({ did }: { did: string }) {
 
   async function loadAnchorings() {
     setLoading(true);
-    const data = await localDB.getAnchoringEventsByDID(did);
+    const data = await hybridDataStore.getAnchoringEventsByDID(did);
     setAnchorings(data as AnchoringEvent[]);
     setLoading(false);
   }

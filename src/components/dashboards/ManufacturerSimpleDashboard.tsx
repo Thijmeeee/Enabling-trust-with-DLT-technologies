@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Plus, Package, CheckCircle, Clock, ChevronRight, Copy } from 'lucide-react';
-import { enhancedDB } from '../../lib/data/enhancedDataStore';
+import { hybridDataStore as enhancedDB } from '../../lib/data/hybridDataStore';
 import { useRole } from '../../lib/utils/roleContext';
 import type { DPP } from '../../lib/data/localData';
 

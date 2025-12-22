@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Activity, AlertCircle, CheckCircle, TrendingUp, Shield, Eye, AlertTriangle, Info, ChevronDown, ChevronUp, Package, FileText, Hash } from 'lucide-react';
-import { enhancedDB } from '../../lib/data/enhancedDataStore';
+import { hybridDataStore as enhancedDB } from '../../lib/data/hybridDataStore';
 import { localDB } from '../../lib/data/localData';
 import { getDIDOperationsHistory } from '../../lib/operations/didOperationsLocal';
 import { useRole } from '../../lib/utils/roleContext';

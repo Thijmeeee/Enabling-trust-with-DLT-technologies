@@ -15,7 +15,7 @@ import WindowRegistrationWizard from './components/dashboards/WindowRegistration
 import IntroductionPage from './components/IntroductionPage';
 import { RoleProvider, useRole, type UserRole } from './lib/utils/roleContext';
 import { ThemeProvider, useTheme } from './lib/utils/ThemeContext';
-import { enhancedDB } from './lib/data/enhancedDataStore';
+import { hybridDataStore as enhancedDB } from './lib/data/hybridDataStore';
 import { generateMixedTestData } from './lib/operations/bulkOperations';
 import { User, ChevronDown, HelpCircle, Wallet, ToggleLeft, ToggleRight, Moon, Sun } from 'lucide-react';
 
@@ -46,24 +46,55 @@ function AppContent() {
     const initData = async () => {
       setIsInitializing(true);
 
-      // Check if data already exists
+      // Import hybridDataStore to check backend availability
+      const { hybridDataStore } = await import('./lib/data/hybridDataStore');
+
+      // Try to get data from backend first
+      try {
+        const backendData = await hybridDataStore.getAllDPPs();
+
+        if (cancelled) return;
+
+        if (backendData.length > 0) {
+          console.log('[App] Found', backendData.length, 'identities from backend, syncing to local store...');
+
+          // Sync backend data to enhancedDB so dashboards can use it
+          for (const dpp of backendData) {
+            try {
+              await enhancedDB.addDPP(dpp);
+            } catch (e) {
+              // Ignore duplicates
+            }
+          }
+
+          console.log('[App] Synced backend data to local store');
+          setIsInitializing(false);
+          return;
+        }
+
+        console.log('[App] No backend data, checking local fallback...');
+      } catch (err) {
+        console.log('[App] Backend unavailable, using local data:', err);
+      }
+
+      // If no backend data, check local and generate mock data if needed
       const existing = await enhancedDB.getAllDPPs();
 
       // Prevent double initialization in StrictMode
       if (cancelled) return;
 
       if (existing.length === 0) {
-        console.log('No data found, generating test data...');
+        console.log('[App] No data found, generating test data...');
         try {
           await generateMixedTestData();
-          console.log('Test data generated successfully');
+          console.log('[App] Test data generated successfully');
           const newDpps = await enhancedDB.getAllDPPs();
-          console.log('Total DPPs after generation:', newDpps.length);
+          console.log('[App] Total DPPs after generation:', newDpps.length);
         } catch (err) {
-          console.error('Error initializing data:', err);
+          console.error('[App] Error initializing data:', err);
         }
       } else {
-        console.log('Existing data found:', existing.length, 'DPPs');
+        console.log('[App] Existing local data found:', existing.length, 'DPPs');
       }
 
       setIsInitializing(false);

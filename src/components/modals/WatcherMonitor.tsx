@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AlertTriangle, CheckCircle, Info, X, ChevronDown, ChevronUp, Package, Shield } from 'lucide-react';
-import { localDB } from '../../lib/data/localData';
-import { enhancedDB } from '../../lib/data/enhancedDataStore';
+import { hybridDataStore } from '../../lib/data/hybridDataStore';
+
 import type { WatcherAlert } from '../../lib/data/localData';
 
 interface GroupedAlerts {
@@ -26,7 +26,7 @@ export default function WatcherMonitor({ onClose }: { onClose: () => void }) {
   async function loadAlerts() {
     setLoading(true);
 
-    let alerts = await localDB.getAlerts();
+    let alerts = await hybridDataStore.getAlerts();
 
     if (filter === 'unresolved') {
       alerts = alerts.filter(a => !a.resolved);
@@ -85,7 +85,7 @@ export default function WatcherMonitor({ onClose }: { onClose: () => void }) {
   };
 
   async function resolveAlert(alertId: string) {
-    await localDB.updateAlert(alertId, { resolved: true });
+    await hybridDataStore.updateAlert(alertId, { resolved: true });
     loadAlerts();
   }
 
@@ -324,3 +324,4 @@ export default function WatcherMonitor({ onClose }: { onClose: () => void }) {
     </div>
   );
 }
+

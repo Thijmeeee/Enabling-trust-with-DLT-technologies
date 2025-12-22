@@ -2,57 +2,35 @@
  * Adapter layer to make enhanced datastore compatible with existing components
  */
 
-import { enhancedDB } from '../data/enhancedDataStore';
+import { hybridDataStore as dataStore } from '../data/hybridDataStore';
 import { exportHierarchyToJSON } from '../operations/bulkOperations';
 
 export async function getDPPWithRelations(did: string) {
   console.log('getDPPWithRelations called for:', did);
-  const dpp = await enhancedDB.getDPPByDID(did);
+  const dpp = await dataStore.getDPPByDID(did);
   if (!dpp) {
     console.error('DPP not found:', did);
     return null;
   }
-  
+
   console.log('Found DPP:', dpp);
-  
-  const didDocument = await enhancedDB.getDIDDocumentByDID(did);
-  const relationships = await enhancedDB.getRelationshipsByParent(did);
-  const credentials = await enhancedDB.getCredentialsByDPPId(dpp.id);
-  const attestations = await enhancedDB.getAttestationsByDID(did);
-  const anchoringEvents = await enhancedDB.getAnchoringEventsByDID(did);
-  const specifications = await enhancedDB.getSpecificationsByDPPId(dpp.id);
-  
+
+  // Get data using available methods, with fallbacks for unavailable ones
+  const didDocument = await dataStore.getDIDDocumentByDID(did);
+  const attestations = await dataStore.getAttestationsByDID(did);
+  const anchoringEvents = await dataStore.getAnchoringEventsByDID(did);
+
+  // Methods not yet implemented - return empty arrays
+  const relationships: any[] = [];
+  const credentials: any[] = [];
+  const specifications: any[] = [];
+
   console.log('Specifications found:', specifications);
-  
-  // Get parent if this is a component
-  let parent = null;
-  if (dpp.type === 'component') {
-    const parentRels = await enhancedDB.getRelationshipsByChild(did);
-    if (parentRels.length > 0) {
-      const parentDpp = await enhancedDB.getDPPByDID(parentRels[0].parent_did);
-      if (parentDpp) {
-        parent = {
-          did: parentDpp.did,
-          model: parentDpp.model,
-        };
-      }
-    }
-  }
-  
-  // Get children with their full data
-  const children = [];
-  for (const rel of relationships) {
-    const childDpp = await enhancedDB.getDPPByDID(rel.child_did);
-    if (childDpp) {
-      const childDidDoc = await enhancedDB.getDIDDocumentByDID(rel.child_did);
-      children.push({
-        dpp: childDpp,
-        didDocument: childDidDoc,
-        relationship: rel,
-      });
-    }
-  }
-  
+
+  // No parent/child relationships in backend data yet
+  const parent = null;
+  const children: any[] = [];
+
   return {
     dpp,
     didDocument,
@@ -67,75 +45,31 @@ export async function getDPPWithRelations(did: string) {
   };
 }
 
-export async function updateDPP(id: string, updates: Partial<any>): Promise<any | null> {
-  return enhancedDB.updateDPP(id, updates);
+export async function updateDPP(_id: string, _updates: Partial<any>): Promise<any | null> {
+  // Not yet implemented in backend - return null for now
+  console.warn('updateDPP not yet implemented for backend');
+  return null;
 }
 
 export async function getAggregatedMetrics(dppId: string) {
-  const dpp = await enhancedDB.getDPPById(dppId);
+  // Simplified metrics without component relationships
+  const dpps = await dataStore.getAllDPPs();
+  const dpp = dpps.find(d => d.id === dppId);
   if (!dpp) return null;
-  
-  const relationships = await enhancedDB.getRelationshipsByParent(dpp.did);
-  const credentials = await enhancedDB.getCredentialsByDPPId(dppId);
-  const attestations = await enhancedDB.getAttestationsByDID(dpp.did);
-  const anchoringEvents = await enhancedDB.getAnchoringEventsByDID(dpp.did);
-  const specifications = await enhancedDB.getSpecificationsByDPPId(dppId);
-  
-  // Calculate aggregated sustainability metrics from specifications
-  let totalCO2 = 0;
-  let totalRecycledContent = 0;
-  let totalRecyclability = 0;
-  let sustainabilityCount = 0;
-  
-  for (const spec of specifications) {
-    if (spec.spec_type === 'sustainability' && spec.spec_data) {
-      const data = spec.spec_data as any;
-      if (data.carbonFootprint?.total) {
-        totalCO2 += parseFloat(data.carbonFootprint.total) || 0;
-      }
-      if (data.recycledContent) {
-        totalRecycledContent += parseFloat(data.recycledContent) || 0;
-      }
-      if (data.recyclability) {
-        totalRecyclability += parseFloat(data.recyclability) || 0;
-      }
-      sustainabilityCount++;
-    }
-  }
-  
-  // Also aggregate from child components
-  for (const rel of relationships) {
-    const childDpp = await enhancedDB.getDPPByDID(rel.child_did);
-    if (childDpp) {
-      const childSpecs = await enhancedDB.getSpecificationsByDPPId(childDpp.id);
-      for (const spec of childSpecs) {
-        if (spec.spec_type === 'sustainability' && spec.spec_data) {
-          const data = spec.spec_data as any;
-          if (data.carbonFootprint?.total) {
-            totalCO2 += parseFloat(data.carbonFootprint.total) || 0;
-          }
-          if (data.recycledContent) {
-            totalRecycledContent += parseFloat(data.recycledContent) || 0;
-          }
-          if (data.recyclability) {
-            totalRecyclability += parseFloat(data.recyclability) || 0;
-          }
-          sustainabilityCount++;
-        }
-      }
-    }
-  }
-  
+
+  const attestations = await dataStore.getAttestationsByDID(dpp.did);
+  const anchoringEvents = await dataStore.getAnchoringEventsByDID(dpp.did);
+
   return {
-    componentCount: relationships.length,
-    credentialCount: credentials.length,
+    componentCount: 0,
+    credentialCount: 0,
     attestationCount: attestations.length,
     anchoringCount: anchoringEvents.length,
-    verifiedCredentials: credentials.filter(c => c.verification_status === 'valid').length,
+    verifiedCredentials: 0,
     aggregatedSustainability: {
-      totalCO2Footprint: totalCO2,
-      avgRecycledContent: sustainabilityCount > 0 ? totalRecycledContent / sustainabilityCount : 0,
-      avgRecyclability: sustainabilityCount > 0 ? totalRecyclability / sustainabilityCount : 0,
+      totalCO2Footprint: 0,
+      avgRecycledContent: 0,
+      avgRecyclability: 0,
     },
   };
 }

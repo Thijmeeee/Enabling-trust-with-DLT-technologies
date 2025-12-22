@@ -1,6 +1,8 @@
 import { CronJob } from 'cron';
 import { Pool } from 'pg';
 import { ethers } from 'ethers';
+import { MerkleTree } from 'merkletreejs';
+import { sha256 } from '@noble/hashes/sha256';
 import * as fs from 'fs/promises';
 import * as crypto from 'crypto';
 import 'dotenv/config';
@@ -72,7 +74,12 @@ async function verifyHashChain(did: string, scid: string): Promise<{ valid: bool
 }
 
 // Audit Check 2: Verify Merkle proof against on-chain root
-async function verifyMerkleProof(batchId: number, leafHash: string): Promise<{ valid: boolean; details: string }> {
+async function verifyMerkleProof(
+    batchId: number,
+    leafHash: string,
+    merkleProof: string[],
+    expectedMerkleRoot: string
+): Promise<{ valid: boolean; details: string }> {
     try {
         const rpcUrl = process.env.RPC_URL || 'http://172.18.16.1:8545';
         const contractAddress = process.env.CONTRACT_ADDRESS;
@@ -81,20 +88,45 @@ async function verifyMerkleProof(batchId: number, leafHash: string): Promise<{ v
             return { valid: false, details: 'CONTRACT_ADDRESS not set' };
         }
 
+        // Step 1: Verify the proof locally using MerkleTree library
+        const leaf = Buffer.from(leafHash.slice(2), 'hex');
+        const proof = merkleProof.map(p => Buffer.from(p.slice(2), 'hex'));
+        const root = Buffer.from(expectedMerkleRoot.slice(2), 'hex');
+
+        // Verify proof is valid for this leaf and root
+        const isValidProof = MerkleTree.verify(proof, leaf, root, sha256, { sortPairs: true });
+
+        if (!isValidProof) {
+            return {
+                valid: false,
+                details: `Merkle proof verification failed locally for leaf ${leafHash.slice(0, 18)}...`
+            };
+        }
+
+        console.log(`[Watcher] Local Merkle proof valid for leaf ${leafHash.slice(0, 18)}...`);
+
+        // Step 2: Verify the root matches what's stored on-chain
         const provider = new ethers.JsonRpcProvider(rpcUrl);
         const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, provider);
 
-        // Get batch details from chain
-        const [root, timestamp, blockNum] = await contract.getBatch(batchId);
+        const [onChainRoot, timestamp, blockNum] = await contract.getBatch(batchId);
 
-        // For now, just verify the batch exists on chain
-        if (root === '0x0000000000000000000000000000000000000000000000000000000000000000') {
+        // Check if batch exists
+        if (onChainRoot === '0x0000000000000000000000000000000000000000000000000000000000000000') {
             return { valid: false, details: `Batch ${batchId} not found on chain` };
+        }
+
+        // Compare expected root with on-chain root
+        if (onChainRoot.toLowerCase() !== expectedMerkleRoot.toLowerCase()) {
+            return {
+                valid: false,
+                details: `Root mismatch: expected ${expectedMerkleRoot.slice(0, 18)}..., on-chain ${onChainRoot.slice(0, 18)}...`
+            };
         }
 
         return {
             valid: true,
-            details: `Batch ${batchId} verified on chain at block ${blockNum}`
+            details: `✅ Verified: proof valid, root matches on-chain at block ${blockNum}`
         };
     } catch (err: any) {
         return { valid: false, details: `Merkle verification error: ${err.message}` };
@@ -135,10 +167,15 @@ async function runAudit() {
 
             // Audit 2: Merkle proof check for each batched event
             for (const event of events) {
-                if (event.witness_proofs?.batchId !== undefined) {
+                const wp = event.witness_proofs;
+
+                // Check if we have all required proof data
+                if (wp?.batchId !== undefined && wp?.merkleProof && wp?.merkleRoot && wp?.leafHash) {
                     const merkleResult = await verifyMerkleProof(
-                        event.witness_proofs.batchId,
-                        event.leaf_hash
+                        wp.batchId,
+                        wp.leafHash,
+                        wp.merkleProof,
+                        wp.merkleRoot
                     );
 
                     await pool.query(
@@ -147,7 +184,10 @@ async function runAudit() {
                         [identity.did, 'merkle_proof', merkleResult.valid ? 'valid' : 'invalid', merkleResult.details]
                     );
 
-                    console.log(`[Watcher] Merkle proof for batch ${event.witness_proofs.batchId}: ${merkleResult.valid ? '✅ valid' : '❌ invalid'}`);
+                    console.log(`[Watcher] Merkle proof for batch ${wp.batchId}: ${merkleResult.valid ? '✅ valid' : '❌ invalid'}`);
+                } else if (wp?.batchId !== undefined) {
+                    // Legacy event without full proof data - just log warning
+                    console.log(`[Watcher] Event ${event.id} has batch ${wp.batchId} but missing merkleProof/merkleRoot - skipping verification`);
                 }
             }
         }

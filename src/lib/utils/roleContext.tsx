@@ -11,8 +11,8 @@ interface RoleContextType {
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
 
-// Define DID for each role
-const roleDIDs: Record<UserRole, string> = {
+// Define DID for each role - exported for use in transfer ownership
+export const roleDIDs: Record<UserRole, string> = {
   Recycler: 'did:webvh:example.com:roles:recycler-001',
   Manufacturer: 'did:webvh:example.com:organizations:window-manufacturer',
   'Manufacturer A': 'did:webvh:glass-solutions.com:organizations:manufacturer',

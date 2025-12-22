@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Play, Check, Loader, X } from 'lucide-react';
-import { localDB } from '../lib/data/localData';
+import { hybridDataStore } from '../lib/data/hybridDataStore';
 import { DPPWatcher, createWitnessAttestation } from '../lib/utils/watcherLocal';
 
 export default function DemoScenarios({ onClose, onRefresh }: { onClose: () => void; onRefresh: () => void }) {
@@ -14,7 +14,7 @@ export default function DemoScenarios({ onClose, onRefresh }: { onClose: () => v
     const newFrameDid = 'did:webvh:example.com:products:frame-F2025-888';
     const newWindowDid = 'did:webvh:example.com:products:window-W2025-100';
 
-    const glassData = await localDB.insertDPP({
+    const glassData = await hybridDataStore.insertDPP({
       did: newGlassDid,
       type: 'component',
       model: 'Glass-TripleGlazed-Premium',
@@ -37,7 +37,7 @@ export default function DemoScenarios({ onClose, onRefresh }: { onClose: () => v
 
     await new Promise((resolve) => setTimeout(resolve, 500));
 
-    const frameData = await localDB.insertDPP({
+    const frameData = await hybridDataStore.insertDPP({
       did: newFrameDid,
       type: 'component',
       model: 'Frame-UPVC-Insulated',
@@ -60,7 +60,7 @@ export default function DemoScenarios({ onClose, onRefresh }: { onClose: () => v
 
     await new Promise((resolve) => setTimeout(resolve, 500));
 
-    const windowData = await localDB.insertDPP({
+    const windowData = await hybridDataStore.insertDPP({
       did: newWindowDid,
       type: 'main',
       model: 'Window-Luxury-2025',
@@ -73,7 +73,7 @@ export default function DemoScenarios({ onClose, onRefresh }: { onClose: () => v
       previous_version_id: null,
     });
 
-    await localDB.insertRelationship({
+    await hybridDataStore.insertRelationship({
       parent_did: newWindowDid,
       child_did: newGlassDid,
       relationship_type: 'component',
@@ -81,7 +81,7 @@ export default function DemoScenarios({ onClose, onRefresh }: { onClose: () => v
       metadata: {},
     });
 
-    await localDB.insertRelationship({
+    await hybridDataStore.insertRelationship({
       parent_did: newWindowDid,
       child_did: newFrameDid,
       relationship_type: 'component',
@@ -89,7 +89,7 @@ export default function DemoScenarios({ onClose, onRefresh }: { onClose: () => v
       metadata: {},
     });
 
-    await localDB.insertDIDDocument({
+    await hybridDataStore.insertDIDDocument({
       dpp_id: windowData.id,
       did: newWindowDid,
       controller: windowData.owner,
@@ -181,3 +181,4 @@ export default function DemoScenarios({ onClose, onRefresh }: { onClose: () => v
     </div>
   );
 }
+

@@ -16,7 +16,7 @@ import {
   ArrowUp,
   ArrowDown
 } from 'lucide-react';
-import { enhancedDB } from '../../lib/data/enhancedDataStore';
+import { hybridDataStore as enhancedDB } from '../../lib/data/hybridDataStore';
 import type { DPP } from '../../lib/data/localData';
 
 interface SupervisorDashboardProps {

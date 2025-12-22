@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useRole } from '../lib/utils/roleContext';
+import { useRole, roleDIDs, type UserRole } from '../lib/utils/roleContext';
 import { transferOwnership, rotateKey, getDIDOperationsHistory, getPendingAndRejectedOperations } from '../lib/operations/didOperationsLocal';
 import type { DPP, WitnessAttestation } from '../lib/data/localData';
 import { Key, ArrowRightLeft, ChevronDown, ChevronUp, Clock, XCircle, CheckCircle } from 'lucide-react';
@@ -502,36 +502,58 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
       {/* Transfer Ownership Modal */}
       {showTransferModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-bold text-gray-800 mb-4">Transfer Ownership</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Enter the DID of the new owner. They will have full control over this DPP's DID document.
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4">Transfer Ownership</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Select the new owner role. They will have full control over this DPP's DID document.
             </p>
+
+            {/* Role Dropdown */}
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                New Owner DID
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Select New Owner Role
               </label>
-              <input
-                type="text"
+              <select
                 value={newOwnerDID}
                 onChange={(e) => setNewOwnerDID(e.target.value)}
-                placeholder="did:webvh:example.com:..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="">-- Select a role --</option>
+                {(Object.keys(roleDIDs) as UserRole[])
+                  .filter(role => roleDIDs[role] !== currentRoleDID) // Exclude current owner
+                  .map(role => (
+                    <option key={role} value={roleDIDs[role]}>
+                      {role}
+                    </option>
+                  ))
+                }
+              </select>
             </div>
+
+            {/* Show selected DID */}
+            {newOwnerDID && (
+              <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-md">
+                <span className="text-xs font-medium text-blue-700 dark:text-blue-300">New Owner DID:</span>
+                <p className="text-xs font-mono text-blue-600 dark:text-blue-400 break-all mt-1">
+                  {newOwnerDID}
+                </p>
+              </div>
+            )}
+
             <div className="flex gap-3 justify-end">
               <button
                 onClick={() => {
                   setShowTransferModal(false);
                   setNewOwnerDID('');
                 }}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+                className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleTransferOwnership}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+                disabled={!newOwnerDID}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Transfer
               </button>

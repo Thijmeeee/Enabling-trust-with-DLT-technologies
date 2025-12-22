@@ -13,7 +13,7 @@ import {
   Check,
   Trash2
 } from 'lucide-react';
-import { enhancedDB } from '../../lib/data/enhancedDataStore';
+import { hybridDataStore as enhancedDB } from '../../lib/data/hybridDataStore';
 import { DPPCard } from '../dpp/DPPCard';
 import type { DPP } from '../../lib/data/localData';
 import { useRole } from '../../lib/utils/roleContext';

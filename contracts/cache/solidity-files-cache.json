@@ -2,8 +2,8 @@
   "_format": "hh-sol-cache-2",
   "files": {
     "C:\\Users\\thijm\\OneDrive\\Documenten\\GitHub\\Leerjaar 4\\Enabling-trust-with-DLT-technologies\\contracts\\contracts\\WitnessAnchorRegistry.sol": {
-      "lastModificationDate": 1765979328634,
-      "contentHash": "c2fe54056b0da623d6f617c4c22c87a4",
+      "lastModificationDate": 1766225593157,
+      "contentHash": "4739414a157e63e56028d7997f54cbce",
       "sourceName": "contracts/WitnessAnchorRegistry.sol",
       "solcConfig": {
         "version": "0.8.20",

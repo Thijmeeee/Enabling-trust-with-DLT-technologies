@@ -9,6 +9,7 @@ import type {
   Result,
   Interface,
   EventFragment,
+  AddressLike,
   ContractRunner,
   ContractMethod,
   Listener,
@@ -25,18 +26,33 @@ import type {
 export interface WitnessAnchorRegistryInterface extends Interface {
   getFunction(
     nameOrSignature:
+      | "addWitness"
       | "anchor"
+      | "authorizedWitnesses"
       | "batchCount"
       | "blockNumbers"
       | "getBatch"
+      | "isWitness"
+      | "owner"
+      | "removeWitness"
       | "roots"
       | "timestamps"
       | "verify"
   ): FunctionFragment;
 
-  getEvent(nameOrSignatureOrTopic: "Anchored"): EventFragment;
+  getEvent(
+    nameOrSignatureOrTopic: "Anchored" | "WitnessAdded" | "WitnessRemoved"
+  ): EventFragment;
 
+  encodeFunctionData(
+    functionFragment: "addWitness",
+    values: [AddressLike]
+  ): string;
   encodeFunctionData(functionFragment: "anchor", values: [BytesLike]): string;
+  encodeFunctionData(
+    functionFragment: "authorizedWitnesses",
+    values: [AddressLike]
+  ): string;
   encodeFunctionData(
     functionFragment: "batchCount",
     values?: undefined
@@ -49,6 +65,15 @@ export interface WitnessAnchorRegistryInterface extends Interface {
     functionFragment: "getBatch",
     values: [BigNumberish]
   ): string;
+  encodeFunctionData(
+    functionFragment: "isWitness",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(functionFragment: "owner", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "removeWitness",
+    values: [AddressLike]
+  ): string;
   encodeFunctionData(functionFragment: "roots", values: [BigNumberish]): string;
   encodeFunctionData(
     functionFragment: "timestamps",
@@ -59,13 +84,24 @@ export interface WitnessAnchorRegistryInterface extends Interface {
     values: [BigNumberish, BytesLike]
   ): string;
 
+  decodeFunctionResult(functionFragment: "addWitness", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "anchor", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "authorizedWitnesses",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "batchCount", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "blockNumbers",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "getBatch", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "isWitness", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "removeWitness",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "roots", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "timestamps", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "verify", data: BytesLike): Result;
@@ -89,6 +125,30 @@ export namespace AnchoredEvent {
     root: string;
     timestamp: bigint;
     blockNumber: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace WitnessAddedEvent {
+  export type InputTuple = [witness: AddressLike];
+  export type OutputTuple = [witness: string];
+  export interface OutputObject {
+    witness: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace WitnessRemovedEvent {
+  export type InputTuple = [witness: AddressLike];
+  export type OutputTuple = [witness: string];
+  export interface OutputObject {
+    witness: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -139,7 +199,15 @@ export interface WitnessAnchorRegistry extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  addWitness: TypedContractMethod<[witness: AddressLike], [void], "nonpayable">;
+
   anchor: TypedContractMethod<[merkleRoot: BytesLike], [bigint], "nonpayable">;
+
+  authorizedWitnesses: TypedContractMethod<
+    [arg0: AddressLike],
+    [boolean],
+    "view"
+  >;
 
   batchCount: TypedContractMethod<[], [bigint], "view">;
 
@@ -157,6 +225,16 @@ export interface WitnessAnchorRegistry extends BaseContract {
     "view"
   >;
 
+  isWitness: TypedContractMethod<[witness: AddressLike], [boolean], "view">;
+
+  owner: TypedContractMethod<[], [string], "view">;
+
+  removeWitness: TypedContractMethod<
+    [witness: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
   roots: TypedContractMethod<[arg0: BigNumberish], [string], "view">;
 
   timestamps: TypedContractMethod<[arg0: BigNumberish], [bigint], "view">;
@@ -172,8 +250,14 @@ export interface WitnessAnchorRegistry extends BaseContract {
   ): T;
 
   getFunction(
+    nameOrSignature: "addWitness"
+  ): TypedContractMethod<[witness: AddressLike], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "anchor"
   ): TypedContractMethod<[merkleRoot: BytesLike], [bigint], "nonpayable">;
+  getFunction(
+    nameOrSignature: "authorizedWitnesses"
+  ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
   getFunction(
     nameOrSignature: "batchCount"
   ): TypedContractMethod<[], [bigint], "view">;
@@ -193,6 +277,15 @@ export interface WitnessAnchorRegistry extends BaseContract {
     ],
     "view"
   >;
+  getFunction(
+    nameOrSignature: "isWitness"
+  ): TypedContractMethod<[witness: AddressLike], [boolean], "view">;
+  getFunction(
+    nameOrSignature: "owner"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "removeWitness"
+  ): TypedContractMethod<[witness: AddressLike], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "roots"
   ): TypedContractMethod<[arg0: BigNumberish], [string], "view">;
@@ -214,6 +307,20 @@ export interface WitnessAnchorRegistry extends BaseContract {
     AnchoredEvent.OutputTuple,
     AnchoredEvent.OutputObject
   >;
+  getEvent(
+    key: "WitnessAdded"
+  ): TypedContractEvent<
+    WitnessAddedEvent.InputTuple,
+    WitnessAddedEvent.OutputTuple,
+    WitnessAddedEvent.OutputObject
+  >;
+  getEvent(
+    key: "WitnessRemoved"
+  ): TypedContractEvent<
+    WitnessRemovedEvent.InputTuple,
+    WitnessRemovedEvent.OutputTuple,
+    WitnessRemovedEvent.OutputObject
+  >;
 
   filters: {
     "Anchored(uint256,bytes32,uint256,uint256)": TypedContractEvent<
@@ -225,6 +332,28 @@ export interface WitnessAnchorRegistry extends BaseContract {
       AnchoredEvent.InputTuple,
       AnchoredEvent.OutputTuple,
       AnchoredEvent.OutputObject
+    >;
+
+    "WitnessAdded(address)": TypedContractEvent<
+      WitnessAddedEvent.InputTuple,
+      WitnessAddedEvent.OutputTuple,
+      WitnessAddedEvent.OutputObject
+    >;
+    WitnessAdded: TypedContractEvent<
+      WitnessAddedEvent.InputTuple,
+      WitnessAddedEvent.OutputTuple,
+      WitnessAddedEvent.OutputObject
+    >;
+
+    "WitnessRemoved(address)": TypedContractEvent<
+      WitnessRemovedEvent.InputTuple,
+      WitnessRemovedEvent.OutputTuple,
+      WitnessRemovedEvent.OutputObject
+    >;
+    WitnessRemoved: TypedContractEvent<
+      WitnessRemovedEvent.InputTuple,
+      WitnessRemovedEvent.OutputTuple,
+      WitnessRemovedEvent.OutputObject
     >;
   };
 }

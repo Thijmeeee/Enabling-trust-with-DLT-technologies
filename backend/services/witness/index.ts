@@ -31,14 +31,11 @@ async function processBatch() {
     console.log(`[${new Date().toISOString()}] Starting batch processing...`);
 
     try {
-        // A. Fetch unanchored events (events not in any batch)
+        // A. Fetch unanchored events (events with NULL witness_proofs)
         const { rows: events } = await pool.query(`
       SELECT e.id, e.did, e.event_type, e.leaf_hash, e.version_id 
       FROM events e
-      LEFT JOIN batches b ON e.version_id = ANY(
-        SELECT json_array_elements_text(b.merkle_root::json->'leaves')
-      )
-      WHERE b.batch_id IS NULL
+      WHERE e.witness_proofs IS NULL
       LIMIT 100
     `);
 
@@ -92,19 +89,36 @@ async function processBatch() {
         const batchId = batchResult.rows[0].batch_id;
         console.log(`✅ Anchored batch ${batchId} with root ${root} in tx ${receipt.hash}`);
 
-        // E. Update events with batch reference (via version_id tracking)
-        for (const event of events) {
+        // E. Update events with batch reference AND individual Merkle proofs
+        for (let i = 0; i < events.length; i++) {
+            const event = events[i];
+
+            // Get the Merkle proof for this specific leaf
+            const proof = tree.getProof(leaves[i]);
+            const proofHashes = proof.map(p => '0x' + p.data.toString('hex'));
+            const leafHash = '0x' + leaves[i].toString('hex');
+
+            // Store complete witness proof data
+            const witnessProofData = {
+                batchId: batchId,
+                merkleRoot: root,
+                leafHash: leafHash,
+                merkleProof: proofHashes,
+                leafIndex: i,
+                txHash: receipt.hash,
+                blockNumber: receipt.blockNumber,
+                timestamp: new Date().toISOString()
+            };
+
             await pool.query(
-                `UPDATE events SET witness_proofs = jsonb_set(
-          COALESCE(witness_proofs, '{}'::jsonb),
-          '{batchId}',
-          $1::jsonb
-        ) WHERE id = $2`,
-                [JSON.stringify(batchId), event.id]
+                `UPDATE events SET witness_proofs = $1::jsonb WHERE id = $2`,
+                [JSON.stringify(witnessProofData), event.id]
             );
+
+            console.log(`[Witness] Stored proof for event ${event.id}: leaf ${i}/${events.length}`);
         }
 
-        console.log(`[Witness] Updated ${events.length} events with batch ${batchId}`);
+        console.log(`[Witness] Updated ${events.length} events with batch ${batchId} and individual Merkle proofs`);
 
     } catch (err) {
         console.error('[Witness] Batch processing failed:', err);

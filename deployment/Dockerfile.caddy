@@ -1,0 +1,13 @@
+# Caddy Gateway Dockerfile with frontend files
+FROM caddy:alpine
+
+# Copy Caddyfile configuration
+COPY Caddyfile /etc/caddy/Caddyfile
+
+# Copy frontend app
+COPY dist-app /usr/share/caddy/app
+
+# Copy DID logs for resolution
+COPY did-logs /usr/share/caddy/did
+
+EXPOSE 80 443
