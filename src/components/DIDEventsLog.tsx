@@ -94,11 +94,19 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
     console.log('DIDEventsLog: Attestations found:', attestations.length, attestations);
     attestations.forEach((attestation: WitnessAttestation) => {
       // DID-related witness events (what witnesses actually monitor)
-      const didEventTypes = ['did_creation', 'key_rotation', 'ownership_change', 'did_update', 'did_lifecycle_update'];
+      const didEventTypes = [
+        'did_creation', 
+        'key_rotation', 
+        'ownership_change', 
+        'ownership_transfer', 
+        'did_update', 
+        'did_lifecycle_update',
+        'create'
+      ];
       const isDIDEvent = didEventTypes.includes(attestation.attestation_type);
 
       // Skip pending DID events - they should only appear after witness approval
-      if (isDIDEvent && attestation.approval_status === 'pending') {
+      if (isDIDEvent && attestation.approval_status === 'pending' && attestation.attestation_type !== 'create') {
         return;
       }
 
@@ -121,13 +129,19 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
       if (isDIDEvent) {
         // These are witness attestations of DID operations
         const eventNames: Record<string, string> = {
-          'did_creation': 'DID Created & Registered',
-          'key_rotation': 'Cryptographic Key Rotated',
+          'did_creation': 'Product Identity Registered',
+          'create': 'Product Identity Registered',
+          'key_rotation': 'Security Key Rotated',
+          'rotate_key': 'Security Key Rotated',
           'ownership_change': 'Ownership Transferred',
-          'did_update': 'DID Document Updated',
-          'did_lifecycle_update': 'DID Lifecycle Stage Change'
+          'ownership_transfer': 'Ownership Transferred',
+          'transfer_ownership': 'Ownership Transferred',
+          'did_update': 'Identity Document Updated',
+          'update': 'Identity Document Updated',
+          'did_lifecycle_update': 'Lifecycle Status Changed'
         };
-        description = eventNames[attestation.attestation_type] || attestation.attestation_type;
+        description = eventNames[attestation.attestation_type.toLowerCase()] || 
+                      attestation.attestation_type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
         color = 'green'; // Witness events are green
       } else if (isLifecycleEvent) {
         // These are product lifecycle events (not DID events)

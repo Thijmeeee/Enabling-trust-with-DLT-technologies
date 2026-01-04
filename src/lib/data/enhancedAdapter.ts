@@ -29,7 +29,40 @@ export async function getDPPWithRelations(did: string) {
 
   // No parent/child relationships in backend data yet
   const parent = null;
+
+  // Parse children from metadata.components if available
   const children: any[] = [];
+  if (dpp.metadata && Array.isArray(dpp.metadata.components)) {
+    console.log('Found components in metadata:', dpp.metadata.components);
+    // Map components to the expected child format
+    // We try to find the full DPP for each component if possible, otherwise use the metadata
+    for (const comp of dpp.metadata.components) {
+      if (comp.did) {
+        const childDpp = await dataStore.getDPPByDID(comp.did);
+        if (childDpp) {
+          children.push(childDpp);
+        } else {
+          // If we can't find the full DPP (e.g. strict permissioning), create a skeleton from the metadata reference
+          children.push({
+            id: 'unknown-id-' + Math.random(), // Temporary ID
+            did: comp.did,
+            type: comp.type || 'component',
+            model: comp.description || 'Verified Component', // Use description as model name fallack
+            owner: 'Unknown',
+            status: 'active',
+            compliance_status: 'compliant',
+            lifecycle_status: 'installed', // Assume installed if part of a product
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            metadata: {
+              productType: comp.type,
+              ...comp
+            }
+          });
+        }
+      }
+    }
+  }
 
   return {
     dpp,

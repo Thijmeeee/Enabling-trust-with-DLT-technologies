@@ -12,6 +12,7 @@ export interface Identity {
   did: string;
   scid: string;
   public_key: string;
+  owner?: string;
   status: 'active' | 'deactivated';
   created_at: string;
   updated_at: string;
@@ -32,6 +33,13 @@ export interface DIDEvent {
 
 export interface WitnessProof {
   batchId?: number;
+  merkleRoot?: string;
+  leafHash?: string;
+  merkleProof?: string[];
+  leafIndex?: number;
+  txHash?: string;
+  blockNumber?: number;
+  timestamp?: string;
   witnesses?: Array<{
     witnessDid: string;
     signature: string;
@@ -72,11 +80,11 @@ export interface ApiError {
 
 // HTTP helper with error handling
 async function fetchApi<T>(
-  endpoint: string, 
+  endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
   const url = apiUrl(endpoint);
-  
+
   const response = await fetch(url, {
     ...options,
     headers: {
@@ -86,8 +94,8 @@ async function fetchApi<T>(
   });
 
   if (!response.ok) {
-    const error: ApiError = await response.json().catch(() => ({ 
-      error: `HTTP ${response.status}: ${response.statusText}` 
+    const error: ApiError = await response.json().catch(() => ({
+      error: `HTTP ${response.status}: ${response.statusText}`
     }));
     throw new Error(error.error || 'API request failed');
   }

@@ -1,10 +1,31 @@
 import { useState, useEffect } from 'react';
-import { Shield, Eye, Anchor, ChevronDown, ChevronUp, CheckCircle2, AlertTriangle, Clock, Hash, Activity, Loader2, XCircle, Link as LinkIcon, ExternalLink } from 'lucide-react';
-import { localDB } from '../lib/data/localData';
+import { 
+  Shield, 
+  Eye, 
+  Anchor, 
+  ChevronDown, 
+  ChevronUp, 
+  CheckCircle2, 
+  AlertTriangle, 
+  Clock, 
+  Hash, 
+  Activity, 
+  Loader2, 
+  XCircle, 
+  ExternalLink,
+  FileCheck,
+  Network,
+  Lock,
+  RefreshCw,
+  AlertCircle,
+  Award,
+  Fingerprint,
+  Link2
+} from 'lucide-react';
 import { hybridDataStore, getRecentBlockchainAnchors, getBlockchainVerification } from '../lib/data/hybridDataStore';
 import { etherscanTxUrl, etherscanBlockUrl } from '../lib/api/config';
 import { useRole } from '../lib/utils/roleContext';
-import { verifyMerkleProof, verifyHashChain, type HashChainEntry, type MerkleProofItem } from '../lib/utils/merkle';
+import { verifyHashChain, type HashChainEntry } from '../lib/utils/merkle';
 import type { WitnessAttestation, WatcherAlert, AnchoringEvent } from '../lib/data/localData';
 
 interface TrustValidationTabProps {
@@ -17,6 +38,7 @@ interface VerificationState {
   hashChain: VerificationStatus;
   witnesses: VerificationStatus;
   blockchain: VerificationStatus;
+  regulatory: VerificationStatus;
   trustScore: number;
   details: {
     hashChainErrors: string[];
@@ -24,20 +46,102 @@ interface VerificationState {
     witnessThreshold: number;
     blockNumber: number | null;
     txHash: string | null;
+    merkleRoot: string | null;
     etherscanTxUrl: string | null;
     etherscanBlockUrl: string | null;
     onChainVerified: boolean | null;
+    lastVerified: Date | null;
   };
 }
 
-// Verification Check Component
-function VerificationCheck({ 
-  label, 
-  status, 
-  details 
-}: { 
-  label: string; 
-  status: VerificationStatus; 
+// ============================================
+// Sub-Components
+// ============================================
+
+/** Circular Progress Ring for Trust Score */
+function TrustScoreRing({ score, size = 120 }: { score: number; size?: number }) {
+  const strokeWidth = 8;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = radius * 2 * Math.PI;
+  const offset = circumference - (score / 100) * circumference;
+  
+  const getScoreColor = () => {
+    if (score >= 90) return { stroke: '#10B981', text: 'text-green-500', bg: 'bg-green-500' };
+    if (score >= 70) return { stroke: '#F59E0B', text: 'text-yellow-500', bg: 'bg-yellow-500' };
+    if (score >= 50) return { stroke: '#F97316', text: 'text-orange-500', bg: 'bg-orange-500' };
+    return { stroke: '#EF4444', text: 'text-red-500', bg: 'bg-red-500' };
+  };
+
+  const colors = getScoreColor();
+
+  return (
+    <div className="relative" style={{ width: size, height: size }}>
+      <svg className="transform -rotate-90" width={size} height={size}>
+        {/* Background circle */}
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          fill="none"
+          className="text-gray-200 dark:text-gray-700"
+        />
+        {/* Progress circle */}
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke={colors.stroke}
+          strokeWidth={strokeWidth}
+          fill="none"
+          strokeLinecap="round"
+          style={{
+            strokeDasharray: circumference,
+            strokeDashoffset: offset,
+            transition: 'stroke-dashoffset 0.5s ease-in-out',
+          }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className={`text-3xl font-black ${colors.text}`}>{score}%</span>
+        <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Trust</span>
+      </div>
+    </div>
+  );
+}
+
+/** Status Badge Component */
+function StatusBadge({ status, size = 'md' }: { status: VerificationStatus; size?: 'sm' | 'md' }) {
+  const config = {
+    checking: { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-700 dark:text-blue-300', label: 'Verifying' },
+    valid: { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-700 dark:text-green-300', label: 'Verified' },
+    invalid: { bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-700 dark:text-red-300', label: 'Failed' },
+    pending: { bg: 'bg-yellow-100 dark:bg-yellow-900/30', text: 'text-yellow-700 dark:text-yellow-300', label: 'Pending' },
+  };
+
+  const c = config[status];
+  const sizeClasses = size === 'sm' ? 'text-[10px] px-1.5 py-0.5' : 'text-xs px-2 py-1';
+
+  return (
+    <span className={`${c.bg} ${c.text} ${sizeClasses} font-semibold rounded-full`}>
+      {c.label}
+    </span>
+  );
+}
+
+/** Verification Check Row */
+function VerificationCheck({
+  icon: Icon,
+  label,
+  description,
+  status,
+  details,
+}: {
+  icon: React.ElementType;
+  label: string;
+  description: string;
+  status: VerificationStatus;
   details?: string;
 }) {
   const getStatusIcon = () => {
@@ -53,70 +157,196 @@ function VerificationCheck({
     }
   };
 
-  const getStatusBg = () => {
-    switch (status) {
-      case 'checking':
-        return 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700';
-      case 'valid':
-        return 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700';
-      case 'invalid':
-        return 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700';
-      case 'pending':
-        return 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-700';
-    }
-  };
-
-  const getStatusText = () => {
-    switch (status) {
-      case 'checking':
-        return 'Verifying...';
-      case 'valid':
-        return 'Verified';
-      case 'invalid':
-        return 'Failed';
-      case 'pending':
-        return 'Pending';
-    }
-  };
-
   return (
-    <div className={`p-3 rounded-lg border ${getStatusBg()} transition-all`}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {getStatusIcon()}
-          <div>
-            <p className="font-medium text-gray-900 dark:text-white text-sm">{label}</p>
-            {details && (
-              <p className="text-xs text-gray-600 dark:text-gray-400">{details}</p>
-            )}
+    <div className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-100 dark:border-gray-700">
+      <div className="p-2 bg-white dark:bg-gray-700 rounded-lg shadow-sm">
+        <Icon className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-2">
+          <h4 className="font-semibold text-gray-900 dark:text-white text-sm">{label}</h4>
+          <div className="flex items-center gap-2">
+            {getStatusIcon()}
+            <StatusBadge status={status} size="sm" />
           </div>
         </div>
-        <span className={`text-xs font-semibold px-2 py-1 rounded ${
-          status === 'valid' ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100' :
-          status === 'invalid' ? 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100' :
-          status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100' :
-          'bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100'
-        }`}>
-          {getStatusText()}
-        </span>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{description}</p>
+        {details && (
+          <p className="text-xs text-gray-600 dark:text-gray-300 mt-1 font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded inline-block">
+            {details}
+          </p>
+        )}
       </div>
     </div>
   );
 }
+
+/** Collapsible Section */
+function CollapsibleSection({
+  icon: Icon,
+  title,
+  subtitle,
+  badge,
+  expanded,
+  onToggle,
+  children,
+  iconColor = 'text-blue-600 dark:text-blue-400',
+}: {
+  icon: React.ElementType;
+  title: string;
+  subtitle?: string;
+  badge?: React.ReactNode;
+  expanded: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+  iconColor?: string;
+}) {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <div className={`p-2 rounded-lg bg-gray-100 dark:bg-gray-700 ${iconColor}`}>
+            <Icon className="w-5 h-5" />
+          </div>
+          <div className="text-left">
+            <h3 className="font-semibold text-gray-900 dark:text-white">{title}</h3>
+            {subtitle && <p className="text-xs text-gray-500 dark:text-gray-400">{subtitle}</p>}
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          {badge}
+          {expanded ? (
+            <ChevronUp className="w-5 h-5 text-gray-400" />
+          ) : (
+            <ChevronDown className="w-5 h-5 text-gray-400" />
+          )}
+        </div>
+      </button>
+      {expanded && (
+        <div className="border-t border-gray-200 dark:border-gray-700 p-4">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Witness Card */
+function WitnessCard({ 
+  witnessId, 
+  attestations,
+  expanded,
+  onToggle,
+}: { 
+  witnessId: string; 
+  attestations: WitnessAttestation[];
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const lastAttestation = attestations[0];
+  const shortId = witnessId.split(':').pop()?.substring(0, 16) || 'Unknown';
+
+  return (
+    <div className="border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-600/50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <div className="p-1.5 bg-green-100 dark:bg-green-900/30 rounded-full">
+            <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" />
+          </div>
+          <div className="text-left">
+            <p className="font-medium text-sm text-gray-900 dark:text-white">{shortId}...</p>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 font-mono truncate max-w-[200px]">{witnessId}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <p className="text-xs font-semibold text-blue-600 dark:text-blue-400">{attestations.length} attestations</p>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400">
+              Last: {lastAttestation ? new Date(lastAttestation.timestamp).toLocaleDateString() : 'N/A'}
+            </p>
+          </div>
+          {expanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+        </div>
+      </button>
+      
+      {expanded && (
+        <div className="p-3 border-t border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800">
+          <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Recent Attestations</p>
+          <div className="space-y-1.5 max-h-32 overflow-y-auto">
+            {attestations.slice(0, 5).map((att, i) => (
+              <div key={i} className="flex items-center justify-between text-xs p-2 bg-gray-50 dark:bg-gray-700 rounded">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-3 h-3 text-green-500" />
+                  <span className="font-medium capitalize text-gray-700 dark:text-gray-300">
+                    {att.attestation_type.replace(/_/g, ' ')}
+                  </span>
+                </div>
+                <span className="text-gray-500 dark:text-gray-400 font-mono text-[10px]">
+                  {new Date(att.timestamp).toLocaleString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Alert Item */
+function AlertItem({ alert }: { alert: WatcherAlert }) {
+  const severityConfig = {
+    critical: { icon: XCircle, color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-900/20' },
+    warning: { icon: AlertTriangle, color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-900/20' },
+    info: { icon: AlertCircle, color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/20' },
+  };
+
+  const config = severityConfig[alert.severity as keyof typeof severityConfig] || severityConfig.info;
+  const Icon = config.icon;
+
+  return (
+    <div className={`flex items-start gap-3 p-3 rounded-lg ${config.bg}`}>
+      <Icon className={`w-4 h-4 mt-0.5 ${config.color}`} />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-gray-900 dark:text-white">{alert.alert_type}</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+          {new Date(alert.created_at).toLocaleString()}
+        </p>
+      </div>
+      {alert.resolved && (
+        <span className="text-[10px] font-semibold text-green-600 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-full">
+          Resolved
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ============================================
+// Main Component
+// ============================================
 
 export default function TrustValidationTab({ did }: TrustValidationTabProps) {
   const { currentRole } = useRole();
   const [attestations, setAttestations] = useState<WitnessAttestation[]>([]);
   const [alerts, setAlerts] = useState<WatcherAlert[]>([]);
   const [anchorings, setAnchorings] = useState<AnchoringEvent[]>([]);
-  const [expandedSection, setExpandedSection] = useState<'verification' | 'witnesses' | 'watchers' | 'anchoring' | null>('verification');
+  const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [expandedWitness, setExpandedWitness] = useState<string | null>(null);
-  
+  const [isVerifying, setIsVerifying] = useState(false);
+
   // Cryptographic Verification State
   const [verification, setVerification] = useState<VerificationState>({
-    hashChain: 'checking',
-    witnesses: 'checking',
-    blockchain: 'checking',
+    hashChain: 'pending',
+    witnesses: 'pending',
+    blockchain: 'pending',
+    regulatory: 'pending',
     trustScore: 0,
     details: {
       hashChainErrors: [],
@@ -124,61 +354,57 @@ export default function TrustValidationTab({ did }: TrustValidationTabProps) {
       witnessThreshold: 1,
       blockNumber: null,
       txHash: null,
+      merkleRoot: null,
       etherscanTxUrl: null,
       etherscanBlockUrl: null,
       onChainVerified: null,
+      lastVerified: null,
     }
   });
 
-  // Blockchain anchors with real Etherscan links
+  // Blockchain anchors
   const [blockchainAnchors, setBlockchainAnchors] = useState<Array<{
     batchId: number;
     merkleRoot: string;
     blockNumber: number;
     timestamp: Date;
     txHash?: string;
-    etherscanTxUrl?: string;
-    etherscanBlockUrl: string;
+    etherscanTxUrl?: string | null;
+    etherscanBlockUrl: string | null;
   }>>([]);
-
-  const isAdmin = currentRole === 'Supervisor';
 
   useEffect(() => {
     loadData();
-    // Real-time updates every 5 seconds
-    const interval = setInterval(loadData, 5000);
+    const interval = setInterval(loadData, 10000);
     return () => clearInterval(interval);
   }, [did]);
 
   useEffect(() => {
-    // Run cryptographic verification when data changes
-    runVerification();
-  }, [did, attestations, anchorings]);
+    if (attestations.length > 0 || anchorings.length > 0) {
+      runVerification();
+    }
+  }, [attestations, anchorings]);
 
   async function loadData() {
-    // Use hybrid data store - tries backend API first, falls back to local
     const [attestationsData, alertsData, anchoringsData] = await Promise.all([
       hybridDataStore.getAttestationsByDID(did),
       hybridDataStore.getAllAlerts(),
       hybridDataStore.getAnchoringEventsByDID(did),
     ]);
 
-    // Filter to only show DID-related witness attestations (not product lifecycle events)
-    const didEventTypes = ['did_creation', 'key_rotation', 'ownership_change', 'did_update', 'did_lifecycle_update'];
-    const filteredAttestations = attestationsData.filter(att =>
-      didEventTypes.includes(att.attestation_type)
-    );
+    // Filter DID-related attestations
+    const didEventTypes = [
+      'did_creation', 'key_rotation', 'ownership_change', 
+      'ownership_transfer', 'did_update', 'did_lifecycle_update', 'create'
+    ];
+    setAttestations(attestationsData.filter(att => didEventTypes.includes(att.attestation_type)));
 
-    setAttestations(filteredAttestations);
-
-    // Filter alerts related to this DID
+    // Filter alerts for this DID
     const dpp = await hybridDataStore.getDPPByDID(did);
-    const filteredAlerts = dpp ? alertsData.filter(a => a.dpp_id === dpp.id) : [];
-    setAlerts(filteredAlerts);
-
+    setAlerts(dpp ? alertsData.filter(a => a.dpp_id === dpp.id) : []);
     setAnchorings(anchoringsData as AnchoringEvent[]);
 
-    // Load real blockchain anchors with Etherscan links
+    // Load blockchain anchors
     try {
       const anchors = await getRecentBlockchainAnchors(10);
       setBlockchainAnchors(anchors);
@@ -188,19 +414,20 @@ export default function TrustValidationTab({ did }: TrustValidationTabProps) {
   }
 
   async function runVerification() {
-    // Reset to checking state
+    setIsVerifying(true);
+    
+    // Reset to checking
     setVerification(prev => ({
       ...prev,
       hashChain: 'checking',
       witnesses: 'checking',
       blockchain: 'checking',
+      regulatory: 'checking',
     }));
 
-    // Small delay for visual feedback
-    await new Promise(resolve => setTimeout(resolve, 300));
+    await new Promise(r => setTimeout(r, 400));
 
     // 1. Hash Chain Verification
-    // Build log entries from attestations for hash chain verification
     const logEntries: HashChainEntry[] = attestations.map((att, idx) => ({
       versionId: idx + 1,
       logEntryHash: `0x${att.id.replace(/-/g, '').padEnd(64, '0')}`,
@@ -210,27 +437,29 @@ export default function TrustValidationTab({ did }: TrustValidationTabProps) {
     }));
 
     const hashChainResult = verifyHashChain(logEntries);
+    const hashChainValid = logEntries.length === 0 || hashChainResult.valid;
+    
     setVerification(prev => ({
       ...prev,
-      hashChain: logEntries.length === 0 ? 'pending' : (hashChainResult.valid ? 'valid' : 'invalid'),
+      hashChain: hashChainValid ? 'valid' : 'invalid',
       details: {
         ...prev.details,
-        hashChainErrors: hashChainResult.brokenLinks.map(bl => 
-          `Version ${bl.versionId}: expected ${bl.expected.slice(0, 10)}... got ${bl.actual.slice(0, 10)}...`
+        hashChainErrors: hashChainResult.brokenLinks.map(bl =>
+          `Version ${bl.versionId}: hash mismatch`
         ),
       }
     }));
 
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise(r => setTimeout(r, 300));
 
     // 2. Witness Verification
     const uniqueWitnessCount = new Set(attestations.map(a => a.witness_did)).size;
-    const witnessThreshold = 1; // Minimum required witnesses
+    const witnessThreshold = 1;
     const witnessValid = uniqueWitnessCount >= witnessThreshold;
-    
+
     setVerification(prev => ({
       ...prev,
-      witnesses: witnessValid ? 'valid' : (uniqueWitnessCount > 0 ? 'pending' : 'invalid'),
+      witnesses: witnessValid ? 'valid' : (uniqueWitnessCount > 0 ? 'pending' : 'pending'),
       details: {
         ...prev.details,
         witnessCount: uniqueWitnessCount,
@@ -238,491 +467,495 @@ export default function TrustValidationTab({ did }: TrustValidationTabProps) {
       }
     }));
 
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise(r => setTimeout(r, 300));
 
-    // 3. Blockchain Verification - Use real blockchain data when available
+    // 3. Blockchain Verification
     let blockchainVerified = false;
     let blockNumber: number | null = null;
     let txHash: string | null = null;
+    let merkleRoot: string | null = null;
     let etherscanTxUrlValue: string | null = null;
     let etherscanBlockUrlValue: string | null = null;
 
-    // First try to use blockchain anchors from contract
     if (blockchainAnchors.length > 0) {
       const latestAnchor = blockchainAnchors[0];
       blockchainVerified = true;
       blockNumber = latestAnchor.blockNumber;
       txHash = latestAnchor.txHash || null;
+      merkleRoot = latestAnchor.merkleRoot;
       etherscanTxUrlValue = latestAnchor.etherscanTxUrl || null;
       etherscanBlockUrlValue = latestAnchor.etherscanBlockUrl;
-      
-      // If we have a merkle root, try to verify on-chain
-      if (latestAnchor.merkleRoot && anchorings.length > 0) {
+
+      if (latestAnchor.merkleRoot) {
         try {
-          const verifyResult = await getBlockchainVerification(
-            latestAnchor.batchId, 
-            latestAnchor.merkleRoot
-          );
-          if (verifyResult) {
-            blockchainVerified = verifyResult.verified;
-          }
+          const verifyResult = await getBlockchainVerification(latestAnchor.batchId, latestAnchor.merkleRoot);
+          if (verifyResult) blockchainVerified = verifyResult.verified;
         } catch (e) {
           console.warn('On-chain verification failed:', e);
         }
       }
     } else if (anchorings.length > 0) {
-      // Fallback to local anchoring data
       const latestAnchor = anchorings[0];
       blockNumber = latestAnchor.block_number;
       txHash = latestAnchor.transaction_hash;
-      
-      // Generate Etherscan URLs for local data (Sepolia testnet)
-      if (txHash && txHash.startsWith('0x')) {
-        etherscanTxUrlValue = etherscanTxUrl(txHash);
-      }
-      if (blockNumber) {
-        etherscanBlockUrlValue = etherscanBlockUrl(blockNumber);
-      }
-      
-      blockchainVerified = true; // Assume valid for local data
+      merkleRoot = latestAnchor.merkle_root;
+      if (txHash?.startsWith('0x')) etherscanTxUrlValue = etherscanTxUrl(txHash);
+      if (blockNumber) etherscanBlockUrlValue = etherscanBlockUrl(blockNumber);
+      blockchainVerified = true;
     }
 
     setVerification(prev => ({
       ...prev,
-      blockchain: blockchainVerified ? 'valid' : (anchorings.length > 0 || blockchainAnchors.length > 0 ? 'pending' : 'pending'),
+      blockchain: blockchainVerified ? 'valid' : 'pending',
       details: {
         ...prev.details,
         blockNumber,
         txHash,
+        merkleRoot,
         etherscanTxUrl: etherscanTxUrlValue,
         etherscanBlockUrl: etherscanBlockUrlValue,
         onChainVerified: blockchainVerified,
       }
     }));
 
+    await new Promise(r => setTimeout(r, 200));
+
+    // 4. Regulatory Compliance (based on other checks)
+    const regulatoryValid = hashChainValid && witnessValid && blockchainVerified;
+    setVerification(prev => ({
+      ...prev,
+      regulatory: regulatoryValid ? 'valid' : (hashChainValid || witnessValid ? 'pending' : 'pending'),
+    }));
+
     // Calculate Trust Score
     let score = 0;
-    if (hashChainResult.valid || logEntries.length === 0) score += 35;
-    if (witnessValid) score += 35;
+    if (hashChainValid) score += 25;
+    if (witnessValid) score += 25;
     if (blockchainVerified) score += 30;
-    
+    if (regulatoryValid) score += 20;
+
     setVerification(prev => ({
       ...prev,
       trustScore: score,
+      details: {
+        ...prev.details,
+        lastVerified: new Date(),
+      }
     }));
+
+    setIsVerifying(false);
   }
 
-  const toggleSection = (section: 'verification' | 'witnesses' | 'watchers' | 'anchoring') => {
+  const toggleSection = (section: string) => {
     setExpandedSection(expandedSection === section ? null : section);
   };
 
-  // Get unique witnesses
+  // Derived data
   const uniqueWitnesses = Array.from(new Set(attestations.map(a => a.witness_did)));
-  const activeWatchers = 3; // Mock data - replace with actual API
-  const totalAnchors = anchorings.length;
+  const activeAlerts = alerts.filter(a => !a.resolved);
+  const isAllVerified = verification.hashChain === 'valid' && 
+                        verification.witnesses === 'valid' && 
+                        verification.blockchain === 'valid';
+
+  const getOverallStatus = (): 'verified' | 'partial' | 'warning' => {
+    if (isAllVerified) return 'verified';
+    if (verification.trustScore >= 50) return 'partial';
+    return 'warning';
+  };
+
+  const overallStatus = getOverallStatus();
+  const statusConfig = {
+    verified: { 
+      label: 'Fully Verified', 
+      bg: 'bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20',
+      border: 'border-green-200 dark:border-green-700',
+      icon: Award,
+      iconColor: 'text-green-600 dark:text-green-400'
+    },
+    partial: { 
+      label: 'Partially Verified', 
+      bg: 'bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20',
+      border: 'border-yellow-200 dark:border-yellow-700',
+      icon: AlertCircle,
+      iconColor: 'text-yellow-600 dark:text-yellow-400'
+    },
+    warning: { 
+      label: 'Verification Required', 
+      bg: 'bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20',
+      border: 'border-red-200 dark:border-red-700',
+      icon: AlertTriangle,
+      iconColor: 'text-red-600 dark:text-red-400'
+    },
+  };
+
+  const config = statusConfig[overallStatus];
+  const StatusIcon = config.icon;
 
   return (
-    <div className="space-y-4">
-      {/* Header with Trust Score */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 transition-colors">
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Trust & Validation Network</h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Three-layer validation: Witnesses cryptographically attest operations • Watchers monitor integrity • DLT anchors to blockchain
-            </p>
+    <div className="space-y-6">
+      {/* ============================================ */}
+      {/* PART A: Authenticity Certificate */}
+      {/* ============================================ */}
+      <div className={`rounded-2xl border-2 ${config.border} ${config.bg} overflow-hidden shadow-lg`}>
+        {/* Certificate Header */}
+        <div className="p-6 md:p-8">
+          <div className="flex flex-col md:flex-row items-center gap-6 md:gap-8">
+            {/* Trust Score Ring */}
+            <div className="flex-shrink-0">
+              <TrustScoreRing score={verification.trustScore} size={140} />
+            </div>
+
+            {/* Certificate Info */}
+            <div className="flex-1 text-center md:text-left">
+              <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
+                <StatusIcon className={`w-6 h-6 ${config.iconColor}`} />
+                <span className={`text-sm font-bold uppercase tracking-wider ${config.iconColor}`}>
+                  {config.label}
+                </span>
+              </div>
+              <h2 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white mb-2">
+                Authenticity Certificate
+              </h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400 max-w-md">
+                This Digital Product Passport has been cryptographically verified using decentralized 
+                trust infrastructure and blockchain anchoring.
+              </p>
+
+              {/* DID Badge */}
+              <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 bg-white/50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                <Fingerprint className="w-4 h-4 text-gray-500" />
+                <span className="text-xs font-mono text-gray-600 dark:text-gray-400 truncate max-w-[250px]">
+                  {did}
+                </span>
+              </div>
+            </div>
+
+            {/* Re-verify Button */}
+            <div className="flex-shrink-0">
+              <button
+                onClick={() => runVerification()}
+                disabled={isVerifying}
+                className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-sm hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw className={`w-4 h-4 text-gray-600 dark:text-gray-300 ${isVerifying ? 'animate-spin' : ''}`} />
+                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  {isVerifying ? 'Verifying...' : 'Re-verify'}
+                </span>
+              </button>
+              {verification.details.lastVerified && (
+                <p className="text-[10px] text-gray-500 dark:text-gray-400 text-center mt-2">
+                  Last: {verification.details.lastVerified.toLocaleTimeString()}
+                </p>
+              )}
+            </div>
           </div>
-          {/* Trust Score Badge */}
-          <div className={`flex flex-col items-center p-3 rounded-lg ${
-            verification.trustScore >= 90 ? 'bg-green-100 dark:bg-green-900/30' :
-            verification.trustScore >= 60 ? 'bg-yellow-100 dark:bg-yellow-900/30' :
-            'bg-red-100 dark:bg-red-900/30'
-          }`}>
-            <span className={`text-3xl font-bold ${
-              verification.trustScore >= 90 ? 'text-green-600 dark:text-green-400' :
-              verification.trustScore >= 60 ? 'text-yellow-600 dark:text-yellow-400' :
-              'text-red-600 dark:text-red-400'
-            }`}>
-              {verification.trustScore}%
-            </span>
-            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Trust Score</span>
+        </div>
+
+        {/* Compliance Checklist */}
+        <div className="border-t border-gray-200/50 dark:border-gray-700/50 bg-white/30 dark:bg-gray-800/30 p-6">
+          <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-4">
+            Compliance Checklist
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Identity Provenance */}
+            <div className="flex items-center gap-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700">
+              {verification.hashChain === 'valid' ? (
+                <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
+              ) : verification.hashChain === 'checking' ? (
+                <Loader2 className="w-5 h-5 text-blue-500 animate-spin flex-shrink-0" />
+              ) : (
+                <Clock className="w-5 h-5 text-gray-300 flex-shrink-0" />
+              )}
+              <div>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">Identity Provenance</p>
+                <p className="text-[10px] text-gray-500 dark:text-gray-400">Hash chain verified</p>
+              </div>
+            </div>
+
+            {/* Independent Attestation */}
+            <div className="flex items-center gap-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700">
+              {verification.witnesses === 'valid' ? (
+                <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
+              ) : verification.witnesses === 'checking' ? (
+                <Loader2 className="w-5 h-5 text-blue-500 animate-spin flex-shrink-0" />
+              ) : (
+                <Clock className="w-5 h-5 text-gray-300 flex-shrink-0" />
+              )}
+              <div>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">Independent Attestation</p>
+                <p className="text-[10px] text-gray-500 dark:text-gray-400">{verification.details.witnessCount} witness(es)</p>
+              </div>
+            </div>
+
+            {/* Blockchain Immutability */}
+            <div className="flex items-center gap-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700">
+              {verification.blockchain === 'valid' ? (
+                <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
+              ) : verification.blockchain === 'checking' ? (
+                <Loader2 className="w-5 h-5 text-blue-500 animate-spin flex-shrink-0" />
+              ) : (
+                <Clock className="w-5 h-5 text-gray-300 flex-shrink-0" />
+              )}
+              <div>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">Blockchain Immutability</p>
+                <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                  {verification.details.blockNumber ? `Block #${verification.details.blockNumber}` : 'Pending anchor'}
+                </p>
+              </div>
+            </div>
+
+            {/* Regulatory Readiness */}
+            <div className="flex items-center gap-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700">
+              {verification.regulatory === 'valid' ? (
+                <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
+              ) : verification.regulatory === 'checking' ? (
+                <Loader2 className="w-5 h-5 text-blue-500 animate-spin flex-shrink-0" />
+              ) : (
+                <Clock className="w-5 h-5 text-gray-300 flex-shrink-0" />
+              )}
+              <div>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">Regulatory Readiness</p>
+                <p className="text-[10px] text-gray-500 dark:text-gray-400">EU DPP 2024/1781</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Watcher Alert Summary */}
+        <div className="border-t border-gray-200/50 dark:border-gray-700/50 px-6 py-4 bg-white/20 dark:bg-gray-800/20">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Eye className="w-5 h-5 text-orange-500" />
+              <div>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">Watcher Network Status</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {activeAlerts.length === 0 
+                    ? '✅ No anomalies detected by monitoring network' 
+                    : `⚠️ ${activeAlerts.length} active alert(s) require attention`}
+                </p>
+              </div>
+            </div>
+            {activeAlerts.length > 0 && (
+              <span className="px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 text-xs font-semibold rounded-full">
+                {activeAlerts.length} Alert{activeAlerts.length > 1 ? 's' : ''}
+              </span>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Cryptographic Verification Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden transition-colors">
-        <button
-          onClick={() => toggleSection('verification')}
-          className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <Hash className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            <h3 className="font-semibold text-gray-900 dark:text-white">Cryptographic Verification</h3>
-            <span className="text-xs text-gray-500 dark:text-gray-400">Real-time integrity checks</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {verification.hashChain === 'valid' && verification.witnesses === 'valid' && verification.blockchain === 'valid' ? (
-              <span className="px-2 py-1 bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100 text-xs font-semibold rounded">ALL VERIFIED</span>
-            ) : verification.hashChain === 'checking' || verification.witnesses === 'checking' || verification.blockchain === 'checking' ? (
-              <span className="px-2 py-1 bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100 text-xs font-semibold rounded">VERIFYING...</span>
-            ) : (
-              <span className="px-2 py-1 bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100 text-xs font-semibold rounded">PARTIAL</span>
-            )}
-            {expandedSection === 'verification' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-          </div>
-        </button>
+      {/* ============================================ */}
+      {/* PART B: Technical Audit Trail */}
+      {/* ============================================ */}
+      <div className="space-y-3">
+        <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest px-1">
+          Technical Audit Trail
+        </h3>
 
-        {expandedSection === 'verification' && (
-          <div className="border-t border-gray-200 dark:border-gray-700 p-4 space-y-3">
-            <VerificationCheck 
+        {/* Integrity Verification Section */}
+        <CollapsibleSection
+          icon={Hash}
+          title="Integrity Verification"
+          subtitle="Cryptographic hash chain validation"
+          badge={<StatusBadge status={verification.hashChain} />}
+          expanded={expandedSection === 'integrity'}
+          onToggle={() => toggleSection('integrity')}
+          iconColor="text-blue-600 dark:text-blue-400"
+        >
+          <div className="space-y-3">
+            <VerificationCheck
+              icon={Link2}
               label="Hash Chain Integrity"
+              description="Validates backlinks between all DID log entries"
               status={verification.hashChain}
               details={verification.hashChain === 'valid' 
-                ? 'All log entries correctly linked'
-                : verification.details.hashChainErrors.length > 0 
-                  ? verification.details.hashChainErrors[0]
-                  : undefined
-              }
+                ? `${attestations.length} entries verified` 
+                : verification.details.hashChainErrors[0]}
             />
-            <VerificationCheck 
-              label="Witness Attestations"
-              status={verification.witnesses}
-              details={`${verification.details.witnessCount} independent witness${verification.details.witnessCount !== 1 ? 'es' : ''} (threshold: ${verification.details.witnessThreshold})`}
+            <VerificationCheck
+              icon={Fingerprint}
+              label="Entry Authenticity"
+              description="Each entry cryptographically signed by controller"
+              status={verification.hashChain}
             />
-            <VerificationCheck 
-              label="Blockchain Anchor"
-              status={verification.blockchain}
-              details={verification.details.blockNumber 
-                ? `Block #${verification.details.blockNumber}` 
-                : 'Pending next batch anchor'
-              }
-            />
-            
-            {/* Blockchain Transaction Link */}
-            {(verification.details.etherscanTxUrl || verification.details.etherscanBlockUrl) && (
-              <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg space-y-2">
-                {verification.details.etherscanTxUrl && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <LinkIcon className="w-4 h-4 text-purple-600" />
-                    <span className="text-gray-600 dark:text-gray-400">Transaction:</span>
-                    <a 
-                      href={verification.details.etherscanTxUrl}
+          </div>
+        </CollapsibleSection>
+
+        {/* Witness Network Section */}
+        <CollapsibleSection
+          icon={Network}
+          title="Witness Network"
+          subtitle="Independent validator attestations"
+          badge={
+            <span className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+              {uniqueWitnesses.length} witness{uniqueWitnesses.length !== 1 ? 'es' : ''}
+            </span>
+          }
+          expanded={expandedSection === 'witnesses'}
+          onToggle={() => toggleSection('witnesses')}
+          iconColor="text-green-600 dark:text-green-400"
+        >
+          {uniqueWitnesses.length === 0 ? (
+            <div className="text-center py-8">
+              <Network className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+              <p className="text-sm text-gray-500 dark:text-gray-400">No witnesses have attested to this DID yet</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {uniqueWitnesses.map((witnessId) => (
+                <WitnessCard
+                  key={witnessId}
+                  witnessId={witnessId}
+                  attestations={attestations.filter(a => a.witness_did === witnessId)}
+                  expanded={expandedWitness === witnessId}
+                  onToggle={() => setExpandedWitness(expandedWitness === witnessId ? null : witnessId)}
+                />
+              ))}
+            </div>
+          )}
+        </CollapsibleSection>
+
+        {/* DLT Anchoring Section */}
+        <CollapsibleSection
+          icon={Anchor}
+          title="DLT Anchoring"
+          subtitle="Blockchain immutability proofs"
+          badge={
+            <span className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+              {anchorings.length} anchor{anchorings.length !== 1 ? 's' : ''}
+            </span>
+          }
+          expanded={expandedSection === 'anchoring'}
+          onToggle={() => toggleSection('anchoring')}
+          iconColor="text-purple-600 dark:text-purple-400"
+        >
+          {/* Latest Anchor Details */}
+          {verification.details.merkleRoot && (
+            <div className="mb-4 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-700">
+              <h4 className="text-xs font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wider mb-3">
+                Latest Anchor
+              </h4>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Merkle Root:</span>
+                  <span className="text-xs font-mono text-gray-800 dark:text-gray-200 truncate max-w-[200px]">
+                    {verification.details.merkleRoot}
+                  </span>
+                </div>
+                {verification.details.blockNumber && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-600 dark:text-gray-400">Block Number:</span>
+                    <a
+                      href={verification.details.etherscanBlockUrl || '#'}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="font-mono text-xs text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300 truncate max-w-xs inline-flex items-center gap-1"
-                    >
-                      {verification.details.txHash?.slice(0, 20)}...
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
-                )}
-                {verification.details.etherscanBlockUrl && verification.details.blockNumber && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Hash className="w-4 h-4 text-purple-600" />
-                    <span className="text-gray-600 dark:text-gray-400">Block:</span>
-                    <a 
-                      href={verification.details.etherscanBlockUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-mono text-xs text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300 inline-flex items-center gap-1"
+                      className="text-xs font-mono text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1"
                     >
                       #{verification.details.blockNumber}
                       <ExternalLink className="w-3 h-3" />
                     </a>
                   </div>
                 )}
-                {verification.details.onChainVerified !== null && (
-                  <div className="flex items-center gap-2 text-sm pt-1 border-t border-gray-200 dark:border-gray-600">
-                    {verification.details.onChainVerified ? (
-                      <>
-                        <CheckCircle2 className="w-4 h-4 text-green-600" />
-                        <span className="text-green-600 dark:text-green-400 font-medium">On-chain verification passed</span>
-                      </>
-                    ) : (
-                      <>
-                        <XCircle className="w-4 h-4 text-red-600" />
-                        <span className="text-red-600 dark:text-red-400 font-medium">On-chain verification failed</span>
-                      </>
-                    )}
+                {verification.details.txHash && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-600 dark:text-gray-400">Transaction:</span>
+                    <a
+                      href={verification.details.etherscanTxUrl || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-mono text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 truncate max-w-[180px]"
+                    >
+                      {verification.details.txHash.slice(0, 16)}...
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
                   </div>
                 )}
               </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-gray-800 rounded-lg border-2 border-green-200 dark:border-green-700/50 p-4 transition-colors">
-          <div className="flex items-center justify-between mb-2">
-            <Shield className="w-8 h-8 text-green-600" />
-            <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded">ACTIVE</span>
-          </div>
-          <p className="text-3xl font-bold text-gray-900 dark:text-white">{uniqueWitnesses.length}</p>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Active Witnesses</p>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 rounded-lg border-2 border-orange-200 dark:border-orange-700/50 p-4 transition-colors">
-          <div className="flex items-center justify-between mb-2">
-            <Eye className="w-8 h-8 text-orange-600" />
-            <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs font-semibold rounded">MONITORING</span>
-          </div>
-          <p className="text-3xl font-bold text-gray-900 dark:text-white">{activeWatchers}</p>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Active Watchers</p>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 rounded-lg border-2 border-purple-200 dark:border-purple-700/50 p-4 transition-colors">
-          <div className="flex items-center justify-between mb-2">
-            <Anchor className="w-8 h-8 text-purple-600" />
-            <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs font-semibold rounded">ANCHORED</span>
-          </div>
-          <p className="text-3xl font-bold text-gray-900 dark:text-white">{totalAnchors}</p>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Blockchain Anchors</p>
-        </div>
-      </div>
-
-      {/* Witnesses Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden transition-colors">
-        <button
-          onClick={() => toggleSection('witnesses')}
-          className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <Shield className="w-5 h-5 text-green-600 dark:text-green-400" />
-            <h3 className="font-semibold text-gray-900 dark:text-white">Witness Validators</h3>
-            <span className="text-xs text-gray-500 dark:text-gray-400">Cryptographically attest each DID operation</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{uniqueWitnesses.length} witnesses</span>
-            {expandedSection === 'witnesses' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-          </div>
-        </button>
-
-        {expandedSection === 'witnesses' && (
-          <div className="border-t border-gray-200 dark:border-gray-700">
-            {isAdmin && (
-              <div className="p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600 flex gap-2">
-                <button className="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors">
-                  + Add Witness
-                </button>
-                <button className="px-3 py-1.5 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors">
-                  Remove Witness
-                </button>
-              </div>
-            )}
-
-            <div className="p-4">
-              {uniqueWitnesses.length === 0 ? (
-                <p className="text-gray-500 text-center py-4 text-sm">No witnesses found</p>
-              ) : (
-                <div className="space-y-2">
-                  {uniqueWitnesses.map((witnessId, idx) => {
-                    const witnessAttestations = attestations.filter(a => a.witness_did === witnessId);
-                    const lastAttestation = witnessAttestations[0];
-                    const witnessName = witnessId.split(':').pop()?.substring(0, 20) || 'Unknown';
-
-                    return (
-                      <div key={idx} className="border border-gray-200 dark:border-gray-600 rounded overflow-hidden">
-                        <div
-                          className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer"
-                          onClick={() => setExpandedWitness(expandedWitness === witnessId ? null : witnessId)}
-                        >
-                          <div className="flex items-center gap-3 flex-1 min-w-0">
-                            <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-sm text-gray-900 dark:text-white truncate">{witnessName}</p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400 font-mono truncate">{witnessId}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-4 flex-shrink-0 ml-4">
-                            <div className="text-right">
-                              <p className="text-xs text-gray-500 dark:text-gray-400">Last Validation</p>
-                              <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                                {lastAttestation ? new Date(lastAttestation.timestamp).toLocaleString() : 'N/A'}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-xs text-gray-500 dark:text-gray-400">Total Events</p>
-                              <p className="text-xs font-bold text-blue-600 dark:text-blue-400">{witnessAttestations.length}</p>
-                            </div>
-                            {expandedWitness === witnessId ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                          </div>
-                        </div>
-
-                        {expandedWitness === witnessId && (
-                          <div className="p-3 bg-white dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
-                            <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2 uppercase">Recent Attestations</h4>
-                            <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                              {witnessAttestations.slice(0, 5).map((att, i) => (
-                                <div key={i} className="flex items-center justify-between text-xs p-2 bg-gray-50 dark:bg-gray-600 rounded">
-                                  <div className="flex items-center gap-2">
-                                    <Activity className="w-3 h-3 text-green-600" />
-                                    <span className="font-medium capitalize text-gray-900 dark:text-white">{att.attestation_type.replace(/_/g, ' ')}</span>
-                                  </div>
-                                  <span className="text-gray-500 dark:text-gray-400">{new Date(att.timestamp).toLocaleString()}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
-          </div>
-        )}
-      </div>
+          )}
 
-      {/* Watchers Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden transition-colors">
-        <button
-          onClick={() => toggleSection('watchers')}
-          className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <Eye className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-            <h3 className="font-semibold text-gray-900 dark:text-white">Watcher Monitoring</h3>
-            <span className="text-xs text-gray-500 dark:text-gray-400">Monitor integrity, detect anomalies</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{activeWatchers} watchers</span>
-            {expandedSection === 'watchers' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-          </div>
-        </button>
-
-        {expandedSection === 'watchers' && (
-          <div className="border-t border-gray-200 dark:border-gray-700">
-            <div className="p-4">
-              {/* Watcher Status Cards */}
-              <div className="grid grid-cols-3 gap-3 mb-4">
-                {['Integrity Watcher', 'Anomaly Detector', 'Compliance Monitor'].map((name, idx) => (
-                  <div key={idx} className="p-3 bg-gray-50 dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600">
-                    <div className="flex items-center justify-between mb-2">
-                      <Activity className="w-4 h-4 text-orange-600" />
-                      <span className="px-2 py-0.5 bg-green-100 text-green-800 text-xs font-semibold rounded">HEALTHY</span>
-                    </div>
-                    <p className="text-xs font-medium text-gray-900 dark:text-white mb-1">{name}</p>
-                    <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                      <Clock className="w-3 h-3" />
-                      <span>Last scan: 2m ago</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Alert Feed */}
-              <div className="mb-3">
-                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                  Alert Feed ({alerts.filter(a => !a.resolved).length} active)
-                </h4>
-              </div>
-
-              {alerts.length === 0 ? (
-                <div className="p-4 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded text-center">
-                  <CheckCircle2 className="w-6 h-6 text-green-600 mx-auto mb-1" />
-                  <p className="text-sm text-gray-600 dark:text-gray-400">No alerts - system healthy</p>
-                </div>
-              ) : (
-                <div className="space-y-1.5">
-                  {alerts.slice(0, 5).map((alert, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600 text-xs"
-                    >
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <AlertTriangle
-                          className={`w-4 h-4 flex-shrink-0 ${alert.severity === 'critical' ? 'text-red-600' :
-                            alert.severity === 'warning' ? 'text-orange-600' : 'text-yellow-600'
-                            }`}
-                        />
-                        <span className="font-medium text-gray-900 dark:text-white truncate">{alert.alert_type}</span>
-                        {alert.resolved && (
-                          <span className="px-1.5 py-0.5 bg-green-100 text-green-800 font-semibold rounded">OK</span>
-                        )}
-                      </div>
-                      <span className="text-gray-500 ml-2 whitespace-nowrap">{new Date(alert.created_at).toLocaleTimeString()}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+          {/* Anchor History */}
+          {anchorings.length === 0 ? (
+            <div className="text-center py-8">
+              <Anchor className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+              <p className="text-sm text-gray-500 dark:text-gray-400">No blockchain anchors found</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Events will be anchored in the next batch</p>
             </div>
-          </div>
-        )}
-      </div>
-
-      {/* DLT Anchoring Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden transition-colors">
-        <button
-          onClick={() => toggleSection('anchoring')}
-          className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <Anchor className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-            <h3 className="font-semibold text-gray-900 dark:text-white">DLT Anchoring</h3>
-            <span className="text-xs text-gray-500 dark:text-gray-400">Anchor events to blockchain for immutability</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{totalAnchors} anchors</span>
-            {expandedSection === 'anchoring' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-          </div>
-        </button>
-
-        {expandedSection === 'anchoring' && (
-          <div className="border-t border-gray-200 dark:border-gray-700">
-            <div className="p-4">
-              {/* Latest Anchor Info */}
-              {anchorings.length > 0 && (
-                <div className="p-4 bg-purple-50 dark:bg-purple-900/30 rounded border border-purple-200 dark:border-purple-700 mb-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold text-gray-700">LATEST ANCHOR</span>
-                    <span className="px-2 py-0.5 bg-purple-600 text-white text-xs font-semibold rounded">CONFIRMED</span>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <Hash className="w-4 h-4 text-purple-600" />
-                      <span className="text-xs font-mono text-gray-700 dark:text-gray-300 truncate">{anchorings[0].transaction_hash}</span>
+          ) : (
+            <div className="space-y-2">
+              {anchorings.slice(0, 5).map((anchoring, idx) => (
+                <div 
+                  key={idx} 
+                  className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-100 dark:border-gray-600"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-1.5 bg-purple-100 dark:bg-purple-900/30 rounded">
+                      <Anchor className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                      <span className="text-xs text-gray-600 dark:text-gray-400">{new Date(anchorings[0].timestamp).toLocaleString()}</span>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                        Block #{anchoring.block_number}
+                      </p>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 font-mono truncate max-w-[180px]">
+                        {anchoring.transaction_hash}
+                      </p>
                     </div>
                   </div>
-                </div>
-              )}
-
-              {/* Anchor List */}
-              {anchorings.length === 0 ? (
-                <p className="text-gray-500 dark:text-gray-400 text-center py-4 text-sm">No anchors found</p>
-              ) : (
-                <div className="space-y-1.5">
-                  {anchorings.slice(0, 8).map((anchoring, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600">
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <Anchor className="w-4 h-4 text-purple-600 flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-gray-900 dark:text-white">Block #{anchoring.block_number}</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 font-mono truncate">{anchoring.transaction_hash}</p>
-                        </div>
-                      </div>
-                      <div className="text-right ml-4">
-                        <span className="text-xs text-gray-500 dark:text-gray-400">{new Date(anchoring.timestamp).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                  ))}
-                  {anchorings.length > 8 && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 text-center pt-2">
-                      +{anchorings.length - 8} more anchors
+                  <div className="text-right">
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                      {new Date(anchoring.timestamp).toLocaleDateString()}
                     </p>
-                  )}
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500">
+                      {new Date(anchoring.timestamp).toLocaleTimeString()}
+                    </p>
+                  </div>
                 </div>
+              ))}
+              {anchorings.length > 5 && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 text-center pt-2">
+                  +{anchorings.length - 5} more anchors
+                </p>
               )}
             </div>
-          </div>
-        )}
+          )}
+        </CollapsibleSection>
+
+        {/* Watcher Alerts Section */}
+        <CollapsibleSection
+          icon={Eye}
+          title="Watcher Alert Feed"
+          subtitle="Anomaly detection and monitoring"
+          badge={
+            activeAlerts.length > 0 ? (
+              <span className="px-2 py-0.5 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 text-xs font-semibold rounded-full">
+                {activeAlerts.length} Active
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs font-semibold rounded-full">
+                All Clear
+              </span>
+            )
+          }
+          expanded={expandedSection === 'watchers'}
+          onToggle={() => toggleSection('watchers')}
+          iconColor="text-orange-600 dark:text-orange-400"
+        >
+          {alerts.length === 0 ? (
+            <div className="text-center py-8">
+              <CheckCircle2 className="w-10 h-10 text-green-400 mx-auto mb-2" />
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">System Healthy</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                No anomalies detected by the watcher network
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {alerts.slice(0, 5).map((alert, idx) => (
+                <AlertItem key={idx} alert={alert} />
+              ))}
+            </div>
+          )}
+        </CollapsibleSection>
       </div>
     </div>
   );

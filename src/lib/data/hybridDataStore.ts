@@ -92,7 +92,7 @@ export async function getAllDPPs(): Promise<DPP[]> {
               model: payload?.model || `Product-${identity.scid.substring(0, 8)}`,
               parent_did: null,
               lifecycle_status: identity.status,
-              owner: 'did:webvh:glass-solutions.com:organizations:manufacturer',
+              owner: identity.owner || 'did:webvh:unknown:owner',
               custodian: null,
               metadata: payload || {},
               version: 1,
@@ -150,7 +150,7 @@ export async function getDPPByDID(did: string): Promise<DPP | null> {
             model: payload?.model || `Product-${identity.scid.substring(0, 8)}`,
             parent_did: null,
             lifecycle_status: identity.status,
-            owner: 'did:webvh:glass-solutions.com:organizations:manufacturer',
+            owner: identity.owner || 'did:webvh:unknown:owner',
             custodian: null,
             metadata: payload || {},
             version: 1,
@@ -312,17 +312,23 @@ export async function getRecentBlockchainAnchors(count: number = 10): Promise<Ar
 
 /**
  * Get attestations for a DID
+ * Merges backend attestations (from events) with local attestations (UI-added)
  */
 export async function getAttestationsByDID(did: string): Promise<WitnessAttestation[]> {
+  // Always get local attestations (includes UI-added approved operations)
+  const localAttestations = await localDB.getAttestationsByDID(did);
+
+  // If backend is available, also fetch backend attestations and merge
   if (useBackendApi && backendAvailable) {
     try {
       const events = await api.identity.getEvents(did);
-      const attestations: WitnessAttestation[] = [];
+      const backendAttestations: WitnessAttestation[] = [];
 
       for (const event of events) {
+        // Handle events with explicit witnesses array (legacy format)
         if (event.witness_proofs?.witnesses) {
           for (const witness of event.witness_proofs.witnesses) {
-            attestations.push({
+            backendAttestations.push({
               id: `${event.id}-${witness.witnessDid}`,
               dpp_id: '', // Will be filled by caller if needed
               did: event.did,
@@ -332,18 +338,80 @@ export async function getAttestationsByDID(did: string): Promise<WitnessAttestat
               signature: witness.signature,
               timestamp: witness.timestamp,
               created_at: event.created_at,
+              approval_status: 'approved' as const, // Backend events are considered approved
             });
           }
         }
+        
+        // Handle events with batchId (new format from witness service)
+        // These events have been anchored to blockchain
+        if (event.witness_proofs?.batchId !== undefined) {
+          backendAttestations.push({
+            id: `backend-${event.id}`,
+            dpp_id: '',
+            did: event.did,
+            witness_did: 'did:webvh:witness:network',
+            attestation_type: event.event_type,
+            attestation_data: {
+              ...event.payload as object,
+              batchId: event.witness_proofs.batchId,
+              merkleRoot: event.witness_proofs.merkleRoot,
+              txHash: event.witness_proofs.txHash,
+              blockNumber: event.witness_proofs.blockNumber,
+            },
+            signature: event.witness_proofs.txHash || 'anchored',
+            timestamp: event.witness_proofs.timestamp || event.created_at,
+            created_at: event.created_at,
+            approval_status: 'approved' as const,
+            witness_status: 'anchored' as const,
+          });
+        }
+        
+        // Also include events without witness_proofs as pending attestations
+        if (!event.witness_proofs) {
+          backendAttestations.push({
+            id: `pending-${event.id}`,
+            dpp_id: '',
+            did: event.did,
+            witness_did: 'did:webvh:witness:pending',
+            attestation_type: event.event_type,
+            attestation_data: event.payload,
+            signature: `pending-${event.id}`,
+            timestamp: event.created_at,
+            created_at: event.created_at,
+            approval_status: 'pending' as const,
+            witness_status: 'pending' as const,
+          });
+        }
       }
 
-      return attestations;
+      // Merge: combine backend + local, avoiding duplicates by ID
+      const seen = new Set<string>();
+      const merged: WitnessAttestation[] = [];
+
+      // Local attestations take priority (they're more recent)
+      for (const att of localAttestations) {
+        if (!seen.has(att.id)) {
+          seen.add(att.id);
+          merged.push(att);
+        }
+      }
+
+      // Add backend attestations that weren't in local
+      for (const att of backendAttestations) {
+        if (!seen.has(att.id)) {
+          seen.add(att.id);
+          merged.push(att);
+        }
+      }
+
+      return merged;
     } catch (e) {
-      console.warn('Backend fetch failed, using local:', e);
+      console.warn('Backend fetch failed, using local only:', e);
     }
   }
 
-  return localDB.getAttestationsByDID(did);
+  return localAttestations;
 }
 
 // ============================================
@@ -531,7 +599,7 @@ function identityToDPP(identity: Identity): DPP {
     model: 'Unknown', // Would need additional metadata
     parent_did: null,
     lifecycle_status: identity.status,
-    owner: 'Unknown',
+    owner: identity.owner || 'Unknown',
     custodian: null,
     metadata: {},
     version: 1,
@@ -542,18 +610,23 @@ function identityToDPP(identity: Identity): DPP {
 }
 
 function eventToAnchoringEvent(event: DIDEvent): AnchoringEvent {
-  const batchId = event.witness_proofs?.batchId;
+  const wp = event.witness_proofs;
   return {
     id: String(event.id),
     dpp_id: '',
     did: event.did,
-    transaction_hash: '', // Would need to fetch from batch
-    block_number: 0, // Would need to fetch from batch
-    merkle_root: null,
-    component_hashes: null,
+    transaction_hash: wp?.txHash || '',
+    block_number: wp?.blockNumber || 0,
+    merkle_root: wp?.merkleRoot || null,
+    component_hashes: wp?.leafHash ? [wp.leafHash] : null,
     anchor_type: event.event_type,
-    timestamp: new Date(event.timestamp).toISOString(),
-    metadata: { batchId, versionId: event.version_id },
+    timestamp: wp?.timestamp || new Date(event.timestamp).toISOString(),
+    metadata: { 
+      batchId: wp?.batchId, 
+      versionId: event.version_id,
+      merkleProof: wp?.merkleProof,
+      leafIndex: wp?.leafIndex,
+    },
   };
 }
 
@@ -683,12 +756,17 @@ async function clearAll(): Promise<void> {
 async function getDPPById(id: string): Promise<DPP | null> {
   try {
     const allDPPs = await getCachedDPPs();
-    // ID could be the scid or internal id
-    const found = allDPPs.find(d => d.id === id || extractScidFromDid(d.did) === id);
+    // ID could be the scid, internal id, or the full DID
+    const found = allDPPs.find(d => 
+      d.id === id || 
+      extractScidFromDid(d.did) === id ||
+      d.did === id
+    );
     if (found) {
       console.log('[HybridDataStore] getDPPById: Found:', id);
       return found;
     }
+    console.log('[HybridDataStore] getDPPById: Not found in cached DPPs, id:', id);
   } catch (e) {
     console.warn('[HybridDataStore] getDPPById: Error:', e);
   }

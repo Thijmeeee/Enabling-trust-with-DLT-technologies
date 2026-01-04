@@ -56,7 +56,7 @@ Write-Host ""
 # 1. PostgreSQL Database (Podman)
 # ============================================================
 if (-not $SkipDatabase) {
-    Write-Host "[1/4] PostgreSQL Database" -ForegroundColor Yellow
+    Write-Host "[1/6] PostgreSQL Database" -ForegroundColor Yellow
     Write-Host "      Checking container status..." -ForegroundColor Gray
     
     $containerExists = podman ps -a --filter "name=dpp-postgres" --format "{{.Names}}" 2>$null
@@ -90,15 +90,20 @@ if (-not $SkipDatabase) {
         $seedPath = Join-Path $ProjectRoot "backend\db\seed.sql"
         if (Test-Path $seedPath) {
             Get-Content $seedPath | podman exec -i dpp-postgres psql -U dpp_admin -d dpp_db 2>$null
-            Write-Host "      > Created with demo products on port 5432" -ForegroundColor Green
         }
-        else {
-            Write-Host "      > Created and initialized on port 5432" -ForegroundColor Green
-        }
+        
+        # Generate demo did.jsonl files for Watcher verification
+        Write-Host "      Generating demo DID log files..." -ForegroundColor Gray
+        $backendPath = Join-Path $ProjectRoot "backend"
+        Push-Location $backendPath
+        npm run generate-demo-logs 2>$null
+        Pop-Location
+        
+        Write-Host "      > Created with demo products on port 5432" -ForegroundColor Green
     }
 }
 else {
-    Write-Host "[1/4] PostgreSQL Database - SKIPPED" -ForegroundColor DarkGray
+    Write-Host "[1/6] PostgreSQL Database - SKIPPED" -ForegroundColor DarkGray
 }
 
 # ============================================================
@@ -106,7 +111,7 @@ else {
 # ============================================================
 if (-not $SkipBlockchain) {
     Write-Host ""
-    Write-Host "[2/4] Hardhat Blockchain Node" -ForegroundColor Yellow
+    Write-Host "[2/6] Hardhat Blockchain Node" -ForegroundColor Yellow
     
     if (Test-PortInUse -Port 8545) {
         Write-Host "      > Already running on port 8545" -ForegroundColor Green
@@ -122,14 +127,13 @@ if (-not $SkipBlockchain) {
         $started = Wait-ForPort -Port 8545 -TimeoutSeconds 15
         
         if ($started) {
-            # Deploy contract if requested
-            if ($DeployContract) {
-                Write-Host "      Deploying smart contract..." -ForegroundColor Gray
-                Push-Location $contractsPath
-                npx hardhat run scripts/deploy.ts --network localhost 2>$null
-                Pop-Location
-                Write-Host "      > Contract deployed" -ForegroundColor Green
-            }
+            # Always deploy contract when Hardhat starts fresh
+            # (fresh Hardhat = empty chain, contract must exist for witness/watcher to work)
+            Write-Host "      Deploying smart contract..." -ForegroundColor Gray
+            Push-Location $contractsPath
+            npx hardhat run scripts/deploy.ts --network localhost 2>$null
+            Pop-Location
+            Write-Host "      > Contract deployed" -ForegroundColor Green
             Write-Host "      > Started on port 8545" -ForegroundColor Green
         }
         else {
@@ -139,7 +143,7 @@ if (-not $SkipBlockchain) {
 }
 else {
     Write-Host ""
-    Write-Host "[2/4] Hardhat Blockchain Node - SKIPPED" -ForegroundColor DarkGray
+    Write-Host "[2/6] Hardhat Blockchain Node - SKIPPED" -ForegroundColor DarkGray
 }
 
 # ============================================================
@@ -147,7 +151,7 @@ else {
 # ============================================================
 if (-not $SkipBackend) {
     Write-Host ""
-    Write-Host "[3/4] Backend Identity Service" -ForegroundColor Yellow
+    Write-Host "[3/6] Backend Identity Service" -ForegroundColor Yellow
     
     if (Test-PortInUse -Port 3000) {
         Write-Host "      > Already running on port 3000" -ForegroundColor Green
@@ -156,7 +160,7 @@ if (-not $SkipBackend) {
         Write-Host "      Starting in new window..." -ForegroundColor Gray
         
         $backendPath = Join-Path $ProjectRoot "backend"
-        $proc = Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$backendPath'; Write-Host 'Backend Identity Service' -ForegroundColor Cyan; npm run dev:identity" -WindowStyle Normal -PassThru
+        $proc = Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$backendPath'; `$env:DB_HOST='localhost'; Write-Host 'Backend Identity Service' -ForegroundColor Cyan; npm run dev:identity" -WindowStyle Normal -PassThru
         Add-Content -Path $PidFile -Value "backend:$($proc.Id)"
         
         Write-Host "      Waiting for Backend to start..." -ForegroundColor Gray
@@ -172,15 +176,28 @@ if (-not $SkipBackend) {
 }
 else {
     Write-Host ""
-    Write-Host "[3/4] Backend Identity Service - SKIPPED" -ForegroundColor DarkGray
+    Write-Host "[3/6] Backend Identity Service - SKIPPED" -ForegroundColor DarkGray
 }
 
 # ============================================================
-# 4. Frontend Vite Dev Server
+# 4. Witness Service (Blockchain Anchoring)
+# ============================================================
+Write-Host ""
+Write-Host "[4/6] Witness Service (Blockchain Anchoring)" -ForegroundColor Yellow
+Write-Host "      Starting in new window..." -ForegroundColor Gray
+
+$backendPath = Join-Path $ProjectRoot "backend"
+# Use Hardhat's default test account #0 private key for local development (DO NOT use in production!)
+$proc = Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$backendPath'; `$env:DB_HOST='localhost'; `$env:RPC_URL='http://localhost:8545'; `$env:CONTRACT_ADDRESS='0x5FbDB2315678afecb367f032d93F642f64180aa3'; `$env:RELAYER_PRIVATE_KEY='0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'; Write-Host 'Witness Service' -ForegroundColor Cyan; npm run dev:witness" -WindowStyle Normal -PassThru
+Add-Content -Path $PidFile -Value "witness:$($proc.Id)"
+Write-Host "      > Started (batching every 10 seconds)" -ForegroundColor Green
+
+# ============================================================
+# 5. Frontend Vite Dev Server
 # ============================================================
 if (-not $SkipFrontend) {
     Write-Host ""
-    Write-Host "[4/4] Frontend Development Server" -ForegroundColor Yellow
+    Write-Host "[5/6] Frontend Development Server" -ForegroundColor Yellow
     
     if (Test-PortInUse -Port 5173) {
         Write-Host "      > Already running on port 5173" -ForegroundColor Green
@@ -204,8 +221,20 @@ if (-not $SkipFrontend) {
 }
 else {
     Write-Host ""
-    Write-Host "[4/4] Frontend Development Server - SKIPPED" -ForegroundColor DarkGray
+    Write-Host "[5/6] Frontend Development Server - SKIPPED" -ForegroundColor DarkGray
 }
+
+# ============================================================
+# 6. Watcher Service (Audit & Verification)
+# ============================================================
+Write-Host ""
+Write-Host "[6/6] Watcher Service (Audit & Verification)" -ForegroundColor Yellow
+Write-Host "      Starting in new window..." -ForegroundColor Gray
+
+$backendPath = Join-Path $ProjectRoot "backend"
+$proc = Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$backendPath'; `$env:DB_HOST='localhost'; `$env:RPC_URL='http://localhost:8545'; `$env:CONTRACT_ADDRESS='0x5FbDB2315678afecb367f032d93F642f64180aa3'; `$env:STORAGE_ROOT='./did-logs'; Write-Host 'Watcher Service' -ForegroundColor Cyan; npm run dev:watcher" -WindowStyle Normal -PassThru
+Add-Content -Path $PidFile -Value "watcher:$($proc.Id)"
+Write-Host "      > Started (auditing every 5 minutes)" -ForegroundColor Green
 
 # ============================================================
 # Final Status Check

@@ -13,33 +13,36 @@ TRUNCATE audits, events, batches, identities CASCADE;
 -- ============================================================
 
 -- Window 1: Triple Glass Premium Window
-INSERT INTO identities (did, scid, public_key, status, created_at, updated_at)
+INSERT INTO identities (did, scid, public_key, owner, status, created_at, updated_at)
 VALUES (
     'did:webvh:localhost:3000:z-demo-window-001',
     'z-demo-window-001',
     'z7QFeDemoKey001LBZxY6Mv1sFm_s1TrbyEpjYdyOU58YhcA',
+    'did:webvh:glass-solutions.com:organizations:manufacturer',
     'active',
     NOW() - INTERVAL '7 days',
     NOW()
 ) ON CONFLICT (did) DO NOTHING;
 
 -- Window 2: Double Glass Standard Window
-INSERT INTO identities (did, scid, public_key, status, created_at, updated_at)
+INSERT INTO identities (did, scid, public_key, owner, status, created_at, updated_at)
 VALUES (
     'did:webvh:localhost:3000:z-demo-window-002',
     'z-demo-window-002',
     'z7QFeDemoKey002qRYqQiSgvZQdnBytw86Qbs2ZWUkGv22od',
+    'did:webvh:glass-solutions.com:organizations:manufacturer',
     'active',
     NOW() - INTERVAL '5 days',
     NOW()
 ) ON CONFLICT (did) DO NOTHING;
 
 -- Window 3: Smart Window with Sensors
-INSERT INTO identities (did, scid, public_key, status, created_at, updated_at)
+INSERT INTO identities (did, scid, public_key, owner, status, created_at, updated_at)
 VALUES (
     'did:webvh:localhost:3000:z-demo-window-003',
     'z-demo-window-003',
     'z7QFeDemoKey003HQo3fRRohk44dsbE76CuiTpBmyMWq2VV',
+    'did:webvh:frame-masters.com:organizations:manufacturer',
     'active',
     NOW() - INTERVAL '3 days',
     NOW()
@@ -49,11 +52,12 @@ VALUES (
 -- 2. Demo Glass Components
 -- ============================================================
 
-INSERT INTO identities (did, scid, public_key, status, created_at, updated_at)
+INSERT INTO identities (did, scid, public_key, owner, status, created_at, updated_at)
 VALUES (
     'did:webvh:localhost:3000:z-demo-glass-001',
     'z-demo-glass-001',
     'z7QFeDemoKey004ByVyhQM7aLgxQWJzXg4nPo8hgcPqgNz8',
+    'did:webvh:glass-solutions.com:organizations:manufacturer',
     'active',
     NOW() - INTERVAL '10 days',
     NOW()
@@ -63,11 +67,12 @@ VALUES (
 -- 3. Demo Frame Components
 -- ============================================================
 
-INSERT INTO identities (did, scid, public_key, status, created_at, updated_at)
+INSERT INTO identities (did, scid, public_key, owner, status, created_at, updated_at)
 VALUES (
     'did:webvh:localhost:3000:z-demo-frame-001',
     'z-demo-frame-001',
     'z7QFeDemoKey005THR8VNsBxYAAWHut2Geadd9jSwuBV8xR',
+    'did:webvh:frame-masters.com:organizations:manufacturer',
     'active',
     NOW() - INTERVAL '12 days',
     NOW()
@@ -77,12 +82,30 @@ VALUES (
 -- 4. Demo Events (Create events for each identity)
 -- ============================================================
 
--- Event for Window 1
+-- Event for Window 1 (Main Product with Components)
 INSERT INTO events (did, event_type, payload, signature, leaf_hash, version_id, timestamp)
 VALUES (
     'did:webvh:localhost:3000:z-demo-window-001',
     'create',
-    '{"type": "window", "model": "Triple Glass Premium Window", "manufacturer": "EcoGlass BV", "dimensions": {"width": 1200, "height": 1500}, "specifications": {"uValue": 0.8, "glassLayers": 3}}',
+    '{
+        "type": "window", 
+        "model": "Triple Glass Premium Window", 
+        "manufacturer": "EcoGlass BV", 
+        "dimensions": {"width": 1200, "height": 1500}, 
+        "specifications": {"uValue": 0.8, "glassLayers": 3},
+        "components": [
+            {
+                "did": "did:webvh:localhost:3000:z-demo-glass-001",
+                "type": "glass",
+                "description": "Inner Glass Layer"
+            },
+            {
+                "did": "did:webvh:localhost:3000:z-demo-frame-001",
+                "type": "frame",
+                "description": "Main Supported Frame"
+            }
+        ]
+    }',
     'z-demo-sig-window-001',
     '0xabc123window001demo',
     '1',

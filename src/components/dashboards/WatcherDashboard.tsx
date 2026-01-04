@@ -120,16 +120,23 @@ export default function WatcherDashboard() {
 
   function verifyHashChainContinuous(operations: any[], existingAlerts: WatcherAlert[], dpp: DPP): boolean {
     // Check if hash chain is intact
-    if (operations.length === 0) return true;
+    if (operations.length <= 1) return true;
 
-    // In a real implementation: recompute hash for each entry and verify chain
-    // For now: check if entries are sequential
-    for (let i = 1; i < operations.length; i++) {
-      const current = operations[i];
-      const previous = operations[i - 1];
+    // Sort operations by timestamp ascending for chain verification
+    // (getDIDOperationsHistory returns them descending)
+    const sortedOps = [...operations].sort((a, b) =>
+      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
 
-      // Check if timestamps are sequential
-      if (new Date(current.timestamp) < new Date(previous.timestamp)) {
+    for (let i = 1; i < sortedOps.length; i++) {
+      const current = sortedOps[i];
+      const previous = sortedOps[i - 1];
+
+      // Check if timestamps are sequential (with 1s tolerance for clock drift)
+      const currentTime = new Date(current.timestamp).getTime();
+      const previousTime = new Date(previous.timestamp).getTime();
+
+      if (currentTime < previousTime - 1000) {
         // Create alert if not already exists
         const alertExists = existingAlerts.some(a =>
           a.alert_type === 'hash_chain_broken' && a.status === 'active'

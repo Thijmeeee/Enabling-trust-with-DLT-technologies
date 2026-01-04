@@ -320,11 +320,6 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
                 }`}
               >
                 {tab.label}
-                {tab.id === 'events' && pendingApprovals.length > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-yellow-500 text-white text-xs font-bold rounded-full flex items-center justify-center animate-pulse">
-                    {pendingApprovals.length}
-                  </span>
-                )}
               </button>
             ))}
           </div>
@@ -997,38 +992,6 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
 
         {activeTab === 'events' && (
           <>
-            {/* Pending Approvals Banner */}
-            {pendingApprovals.length > 0 && (
-              <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <div className="flex items-start gap-3">
-                  <Clock className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-yellow-900 mb-1">
-                      {pendingApprovals.length} DID Event{pendingApprovals.length > 1 ? 's' : ''} Awaiting Witness Approval
-                    </h3>
-                    <p className="text-sm text-yellow-700 mb-2">
-                      The following DID operations are pending validation by a witness node before they will appear in the event history:
-                    </p>
-                    <div className="space-y-2">
-                      {pendingApprovals.map((att) => (
-                        <div key={att.id} className="flex items-center gap-2 text-sm">
-                          <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
-                          <span className="font-medium text-yellow-900">
-                            {att.attestation_type === 'key_rotation' && 'Key Rotation'}
-                            {att.attestation_type === 'ownership_change' && 'Ownership Transfer'}
-                            {att.attestation_type === 'did_update' && 'DID Document Update'}
-                          </span>
-                          <span className="text-yellow-600">
-                            • Submitted {new Date(att.timestamp).toLocaleString()}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-            
             <LifecycleControls 
               dppId={dpp.id}
               did={did}

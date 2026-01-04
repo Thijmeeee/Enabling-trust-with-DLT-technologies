@@ -104,6 +104,7 @@ export type WitnessAttestation = {
   timestamp: string;
   created_at: string;
   approval_status?: 'pending' | 'approved' | 'rejected';
+  witness_status?: 'pending' | 'anchored';
 };
 
 export type Specification = {

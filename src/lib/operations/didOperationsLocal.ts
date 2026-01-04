@@ -22,7 +22,37 @@ export async function transferOwnership(
       return { success: false, message: 'Only the current owner can transfer ownership' };
     }
 
-    // Store pending ownership transfer in metadata (don't update owner yet)
+    // Try to call backend API for real ownership transfer
+    try {
+      const response = await fetch(`http://localhost:3000/api/did/${encodeURIComponent(dpp.did)}/transfer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keyId: 'default-key', // Backend will handle key lookup
+          newOwnerDID: newOwnerDID,
+          reason: 'Ownership transfer'
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('[DID Operations] Backend ownership transfer successful:', result);
+
+        // Update local DPP stores (but don't store attestation - backend already created event)
+        await enhancedDB.updateDPP(dppId, { owner: newOwnerDID });
+        await localDB.updateDPP(dppId, { owner: newOwnerDID });
+
+        return {
+          success: true,
+          message: 'Ownership transferred successfully via backend',
+          dpp: await enhancedDB.getDPPById(dppId)
+        };
+      }
+    } catch (backendError) {
+      console.log('[DID Operations] Backend not available, using local fallback');
+    }
+
+    // Fallback: Local mock transfer for demo (pending approval flow)
     const updatedDPP = await enhancedDB.updateDPP(dppId, {
       metadata: {
         ...dpp.metadata,
@@ -34,7 +64,6 @@ export async function transferOwnership(
       }
     });
 
-    // Update in localDB for compatibility
     await localDB.updateDPP(dppId, {
       metadata: {
         ...dpp.metadata,
@@ -46,7 +75,6 @@ export async function transferOwnership(
       }
     });
 
-    // Create witness attestation for ownership change - pending approval
     const attestation = {
       dpp_id: dppId,
       did: dpp.did,
@@ -61,10 +89,9 @@ export async function transferOwnership(
         previousOwner: currentOwnerDID,
         newOwner: newOwnerDID,
         transferMethod: 'Direct Transfer',
-        transferApproved: true,
       },
-      signature: `pending-${Date.now()}`,
-      approval_status: 'pending' as const,
+      signature: `mock-${Date.now()}`,
+      approval_status: 'approved' as const,
     };
 
     await enhancedDB.insertAttestation(attestation);
@@ -72,7 +99,7 @@ export async function transferOwnership(
 
     return {
       success: true,
-      message: 'Ownership transfer request submitted. Awaiting witness approval.',
+      message: 'Ownership transfer completed (local fallback)',
       dpp: updatedDPP
     };
   } catch (error) {
@@ -101,21 +128,37 @@ export async function rotateKey(
       return { success: false, message: 'Only the owner can rotate keys' };
     }
 
-    // Get the DID document
-    const didDoc = await enhancedDB.getDIDDocumentByDID(dpp.did);
-    if (!didDoc) {
-      return { success: false, message: 'DID document not found' };
+    // Try to call backend API for real key rotation
+    try {
+      const response = await fetch(`http://localhost:3000/api/did/${encodeURIComponent(dpp.did)}/rotate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keyId: 'default-key', // Backend will handle key lookup
+          reason: 'Manual key rotation by owner'
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('[DID Operations] Backend key rotation successful:', result);
+
+        // Backend already created event - don't create local attestation (prevents duplicates)
+        return {
+          success: true,
+          message: 'Key rotated successfully via backend',
+          newKeyId: result.newKeyId
+        };
+      }
+    } catch (backendError) {
+      console.log('[DID Operations] Backend not available, using local fallback');
     }
 
-    // Generate new key ID
-    const currentKeyCount = didDoc.verification_method.length;
+    // Fallback: Local mock rotation for demo
+    const didDoc = await enhancedDB.getDIDDocumentByDID(dpp.did);
+    const currentKeyCount = didDoc?.verification_method?.length || 1;
     const newKeyId = `${dpp.did}#key-${currentKeyCount + 1}`;
-    const oldKeyId = `${dpp.did}#key-${currentKeyCount}`;
 
-    // Note: In a real system, you would update the verification_method array
-    // For now, we track the rotation in metadata
-
-    // Create witness attestation for key rotation - pending approval
     const attestation = {
       dpp_id: dppId,
       did: dpp.did,
@@ -127,14 +170,12 @@ export async function rotateKey(
         witness: 'DID Validator Node 2',
         organization: 'Identity Trust Consortium',
         eventType: 'Key Rotation',
-        oldKeyId: oldKeyId,
+        oldKeyId: `${dpp.did}#key-${currentKeyCount}`,
         newKeyId: newKeyId,
-        rotationReason: 'Manual key rotation by owner',
-        previousKeyRevoked: true,
-        newKeyType: 'Ed25519VerificationKey2020',
+        rotationReason: 'Manual key rotation by owner'
       },
-      signature: `pending-${Date.now()}`,
-      approval_status: 'pending' as const,
+      signature: `mock-${Date.now()}`,
+      approval_status: 'approved' as const,
     };
 
     await enhancedDB.insertAttestation(attestation);
@@ -142,7 +183,7 @@ export async function rotateKey(
 
     return {
       success: true,
-      message: 'Key rotation request submitted. Awaiting witness approval.',
+      message: 'Key rotation completed (local fallback)',
       newKeyId: newKeyId
     };
   } catch (error) {
@@ -234,7 +275,15 @@ export async function getDIDOperationsHistory(dppId: string) {
 
     // Filter DID-related operations that are approved (not pending or rejected)
     const didOperations = attestations.filter(att => {
-      const isDIDOperation = ['ownership_change', 'key_rotation', 'did_update', 'did_creation'].includes(att.attestation_type);
+      // Support both backend types (create, ownership_transfer) and frontend types
+      const isDIDOperation = [
+        'ownership_change', 
+        'ownership_transfer', 
+        'key_rotation', 
+        'did_update', 
+        'did_creation',
+        'create'
+      ].includes(att.attestation_type);
 
       // Explicitly exclude rejected operations
       if (att.approval_status === 'rejected') {

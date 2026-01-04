@@ -64,14 +64,18 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
   // Load DID operations history
   useEffect(() => {
     const loadHistory = async () => {
-      setLoading(true);
       const result = await getDIDOperationsHistory(dpp.id);
       if (result.success) {
         setHistory(result.operations);
       }
       setLoading(false);
     };
+    
     loadHistory();
+    
+    // Auto-refresh history every 10 seconds to catch anchoring updates
+    const interval = setInterval(loadHistory, 10000);
+    return () => clearInterval(interval);
   }, [dpp.id]);
 
   // Poll for status changes on current pending operation
@@ -161,19 +165,19 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
 
     const result = await transferOwnership(dpp.id, currentRoleDID, newOwnerDID);
     if (result.success) {
-      // Remove success message - only show pending notification
       setMessage(null);
       setNewOwnerDID('');
       setShowTransferModal(false);
 
-      // Clear any existing approved/rejected notifications from both state and localStorage
+      // Clear any existing notifications
+      localStorage.removeItem(`pending_op_${dpp.did}`);
       localStorage.removeItem(`approved_op_${dpp.did}`);
       localStorage.removeItem(`rejected_op_${dpp.did}`);
+      setCurrentPendingOp(null);
       setCurrentApprovedOp(null);
       setCurrentRejectedOp(null);
 
-      // Show orange pending notification
-      const pendingOp = {
+      const opDetails = {
         type: 'ownership_change',
         details: {
           from: currentRoleDID,
@@ -181,8 +185,25 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
           timestamp: new Date().toISOString()
         }
       };
-      localStorage.setItem(`pending_op_${dpp.did}`, JSON.stringify(pendingOp));
-      setCurrentPendingOp(pendingOp);
+
+      // Check if backend processed it (message contains 'via backend')
+      if (result.message.includes('via backend')) {
+        // Backend success = immediately approved (green)
+        localStorage.setItem(`approved_op_${dpp.did}`, JSON.stringify(opDetails));
+        setCurrentApprovedOp(opDetails);
+        setMessage({ type: 'success', text: '✅ Ownership transferred and anchored to blockchain!' });
+      } else {
+        // Fallback mode = pending (orange)
+        localStorage.setItem(`pending_op_${dpp.did}`, JSON.stringify(opDetails));
+        setCurrentPendingOp(opDetails);
+      }
+
+      // Refresh history
+      const historyResult = await getDIDOperationsHistory(dpp.id);
+      if (historyResult.success) {
+        setHistory(historyResult.operations);
+      }
+      onUpdate();
     } else {
       setMessage({ type: 'error', text: result.message });
     }
@@ -195,25 +216,42 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
 
     const result = await rotateKey(dpp.id, currentRoleDID);
     if (result.success) {
-      // Remove success message - only show pending notification
       setMessage(null);
 
-      // Clear any existing approved/rejected notifications from both state and localStorage
+      // Clear any existing notifications
+      localStorage.removeItem(`pending_op_${dpp.did}`);
       localStorage.removeItem(`approved_op_${dpp.did}`);
       localStorage.removeItem(`rejected_op_${dpp.did}`);
+      setCurrentPendingOp(null);
       setCurrentApprovedOp(null);
       setCurrentRejectedOp(null);
 
-      // Show orange pending notification
-      const pendingOp = {
+      const opDetails = {
         type: 'key_rotation',
         details: {
           owner: currentRoleDID,
           timestamp: new Date().toISOString()
         }
       };
-      localStorage.setItem(`pending_op_${dpp.did}`, JSON.stringify(pendingOp));
-      setCurrentPendingOp(pendingOp);
+
+      // Check if backend processed it (message contains 'via backend')
+      if (result.message.includes('via backend')) {
+        // Backend success = immediately approved (green)
+        localStorage.setItem(`approved_op_${dpp.did}`, JSON.stringify(opDetails));
+        setCurrentApprovedOp(opDetails);
+        setMessage({ type: 'success', text: '✅ Key rotated and anchored to blockchain!' });
+      } else {
+        // Fallback mode = pending (orange)
+        localStorage.setItem(`pending_op_${dpp.did}`, JSON.stringify(opDetails));
+        setCurrentPendingOp(opDetails);
+      }
+
+      // Refresh history
+      const historyResult = await getDIDOperationsHistory(dpp.id);
+      if (historyResult.success) {
+        setHistory(historyResult.operations);
+      }
+      onUpdate();
     } else {
       setMessage({ type: 'error', text: result.message });
     }
@@ -232,16 +270,18 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
   const formatAttestation = (attestation: WitnessAttestation) => {
     const typeLabels: Record<string, string> = {
       did_creation: 'DID Creation',
+      create: 'DID Creation',
       key_rotation: 'Key Rotation',
-      ownership_change: 'Ownership Transfer',
+      ownership_change: 'Ownership Transferred',
+      ownership_transfer: 'Ownership Transferred',
       did_update: 'DID Update',
     };
 
     return {
       label: typeLabels[attestation.attestation_type] || attestation.attestation_type,
-      icon: attestation.attestation_type === 'did_creation' ? '🆕' :
+      icon: (attestation.attestation_type === 'did_creation' || attestation.attestation_type === 'create') ? '🆕' :
         attestation.attestation_type === 'key_rotation' ? '🔑' :
-          attestation.attestation_type === 'ownership_change' ? '👤' : '📝',
+          (attestation.attestation_type === 'ownership_change' || attestation.attestation_type === 'ownership_transfer') ? '👤' : '📝',
     };
   };
 
@@ -414,72 +454,140 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                   Submitted: {new Date(currentPendingOp.details.timestamp).toLocaleString()}
                 </p>
               </div>
+              <button
+                onClick={() => {
+                  localStorage.removeItem(`pending_op_${dpp.did}`);
+                  setCurrentPendingOp(null);
+                }}
+                className="text-orange-600 hover:text-orange-800 p-1 rounded hover:bg-orange-100"
+                title="Dismiss notification"
+              >
+                <XCircle size={20} />
+              </button>
             </div>
           </div>
         )}
       </div>
       {/* DID Operations History */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-6 transition-colors">
-        <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">DID Operations History</h2>
-        {loading ? (
-          <p className="text-gray-600 dark:text-gray-400 text-center py-8">Loading...</p>
-        ) : history.length === 0 ? (
-          <p className="text-gray-600 dark:text-gray-400 text-center py-8">No DID operations yet</p>
-        ) : (
-          <div className="space-y-3">
-            {history.map((attestation, index) => {
-              const formatted = formatAttestation(attestation);
-              const keyFields = getKeyFields(attestation);
-              const isExpanded = expandedItems.has(index);
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden transition-colors">
+        <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+          <h2 className="text-xl font-bold text-gray-800 dark:text-white">DID Operations History</h2>
+          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+            <Clock size={14} />
+            <span>Last updated: {new Date().toLocaleTimeString()}</span>
+          </div>
+        </div>
 
-              return (
-                <div key={index} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-3 flex-1">
-                      <span className="text-2xl">{formatted.icon}</span>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-gray-800 dark:text-white">{formatted.label}</h4>
+        <div className="p-6">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
+              <p className="text-gray-600 dark:text-gray-400">Loading history...</p>
+            </div>
+          ) : history.length === 0 ? (
+            <div className="text-center py-12 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
+              <Clock size={40} className="mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+              <p className="text-gray-600 dark:text-gray-400">No DID operations recorded yet</p>
+            </div>
+          ) : (
+            <div className="relative">
+              {/* Vertical Line */}
+              <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200 dark:bg-gray-700 z-0"></div>
 
-                        {/* Key Fields */}
-                        {keyFields.length > 0 && (
-                          <div className="mt-2 space-y-1">
-                            {keyFields.map((field, idx) => (
-                              <div key={idx} className="text-sm">
-                                <span className="text-gray-600 dark:text-gray-400 font-medium">{field.label}:</span>{' '}
-                                <span className="text-gray-800 dark:text-gray-200 font-mono text-xs break-all">
-                                  {field.value.length > 60 ? `${field.value.substring(0, 60)}...` : field.value}
+              <div className="space-y-8 relative z-10">
+                {history.map((attestation, index) => {
+                  const formatted = formatAttestation(attestation);
+                  const keyFields = getKeyFields(attestation);
+                  const isExpanded = expandedItems.has(index);
+                  const isAnchored = attestation.witness_status === 'anchored';
+
+                  return (
+                    <div key={index} className="flex gap-6">
+                      {/* Timeline Icon */}
+                      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center z-10 shadow-sm ${
+                        formatted.label.toLowerCase().includes('create') ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' :
+                        formatted.label.toLowerCase().includes('transfer') || formatted.label.toLowerCase().includes('ownership') ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' :
+                        'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400'
+                      }`}>
+                        {formatted.icon === '🆕' ? <CheckCircle size={18} /> : 
+                         formatted.icon === '🔑' ? <Key size={18} /> : 
+                         formatted.icon === '🔄' ? <ArrowRightLeft size={18} /> : 
+                         <Clock size={18} />}
+                      </div>
+
+                      {/* Content Card */}
+                      <div className="flex-1 bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl p-5 hover:shadow-md transition-all group">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-4">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-bold text-gray-900 dark:text-white text-lg">{formatted.label}</h4>
+                              {isAnchored ? (
+                                <span className="px-2 py-0.5 bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 text-[10px] font-bold uppercase tracking-wider rounded-full flex items-center gap-1">
+                                  <CheckCircle size={10} /> Anchored
                                 </span>
+                              ) : (
+                                <span className="px-2 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 text-[10px] font-bold uppercase tracking-wider rounded-full flex items-center gap-1">
+                                  <Clock size={10} /> Pending
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                              {new Date(attestation.timestamp).toLocaleString(undefined, { 
+                                dateStyle: 'medium', 
+                                timeStyle: 'short' 
+                              })}
+                            </p>
+                          </div>
+                          
+                          <div className="text-right">
+                            <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase font-semibold tracking-widest">Witness Node</p>
+                            <p className="text-xs font-mono text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-900 px-2 py-1 rounded mt-1">
+                              {attestation.witness_did.substring(0, 15)}...{attestation.witness_did.substring(attestation.witness_did.length - 4)}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Key Fields Grid */}
+                        {keyFields.length > 0 && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 bg-gray-50 dark:bg-gray-900/30 p-4 rounded-lg border border-gray-100 dark:border-gray-800">
+                            {keyFields.map((field, idx) => (
+                              <div key={idx} className="space-y-1">
+                                <span className="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 tracking-wider">{field.label}</span>
+                                <p className="text-xs font-mono text-gray-800 dark:text-gray-200 break-all leading-relaxed">
+                                  {field.value}
+                                </p>
                               </div>
                             ))}
                           </div>
                         )}
 
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 break-all">
-                          Witness: <span className="font-mono">{attestation.witness_did}</span>
-                        </p>
-
                         {/* Toggle for full JSON */}
                         {attestation.attestation_data && Object.keys(attestation.attestation_data).length > 0 && (
-                          <div className="mt-3">
+                          <div className="mt-2">
                             <button
                               onClick={() => toggleExpanded(index)}
-                              className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                              className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
                             >
                               {isExpanded ? (
                                 <>
                                   <ChevronUp size={14} />
-                                  Hide full data
+                                  Hide Technical Details
                                 </>
                               ) : (
                                 <>
                                   <ChevronDown size={14} />
-                                  Show full data
+                                  View Technical Details
                                 </>
                               )}
                             </button>
+                            
                             {isExpanded && (
-                              <div className="text-xs text-gray-700 dark:text-gray-300 mt-2 bg-gray-50 dark:bg-gray-700 p-3 rounded border border-gray-200 dark:border-gray-600">
-                                <pre className="whitespace-pre-wrap break-all overflow-x-auto">
+                              <div className="mt-3 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+                                <div className="bg-gray-100 dark:bg-gray-800 px-3 py-1.5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Raw Attestation Data</span>
+                                  <span className="text-[10px] text-gray-400 font-mono">JSON</span>
+                                </div>
+                                <pre className="text-[11px] text-gray-700 dark:text-gray-300 p-4 bg-gray-50 dark:bg-gray-900/80 whitespace-pre-wrap break-all overflow-x-auto font-mono leading-relaxed">
                                   {JSON.stringify(attestation.attestation_data, null, 2)}
                                 </pre>
                               </div>
@@ -488,15 +596,12 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                         )}
                       </div>
                     </div>
-                    <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap ml-4">
-                      {new Date(attestation.timestamp).toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Transfer Ownership Modal */}
@@ -563,4 +668,48 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
       )}
     </div>
   );
+}
+
+// ============================================
+// Helper Functions
+// ============================================
+
+function formatAttestation(attestation: WitnessAttestation) {
+  const type = attestation.attestation_type.toLowerCase();
+  
+  if (type === 'create' || type === 'did_creation') {
+    return { label: 'Product Identity Registered', icon: '🆕' };
+  }
+  if (type === 'key_rotation' || type === 'rotate_key') {
+    return { label: 'Security Key Rotated', icon: '🔑' };
+  }
+  if (type === 'ownership_transfer' || type === 'ownership_change' || type === 'transfer_ownership') {
+    return { label: 'Ownership Transferred', icon: '🔄' };
+  }
+  if (type === 'did_update' || type === 'update') {
+    return { label: 'Identity Document Updated', icon: '📝' };
+  }
+  
+  // Fallback: capitalize and replace underscores
+  const label = attestation.attestation_type
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+    
+  return { label, icon: '📝' };
+}
+
+function getKeyFields(attestation: WitnessAttestation): { label: string; value: string }[] {
+  const data = attestation.attestation_data;
+  if (!data) return [];
+
+  const fields: { label: string; value: string }[] = [];
+
+  if (data.controller) fields.push({ label: 'Controller', value: data.controller });
+  if (data.newOwner) fields.push({ label: 'New Owner', value: data.newOwner });
+  if (data.to) fields.push({ label: 'To', value: data.to });
+  if (data.newPublicKey) fields.push({ label: 'New Public Key', value: data.newPublicKey });
+  if (data.versionId) fields.push({ label: 'Version', value: String(data.versionId) });
+
+  return fields;
 }

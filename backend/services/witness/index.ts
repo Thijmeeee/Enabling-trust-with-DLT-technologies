@@ -20,10 +20,16 @@ const CONTRACT_ABI = [
     "event Anchored(uint256 indexed batchId, bytes32 indexed root, uint256 timestamp, uint256 blockNumber)"
 ];
 
-// Helper: Hash function for Merkle tree leaves
-function hashLeaf(data: string): Buffer {
-    const hash = sha256(Buffer.from(data, 'utf8'));
+// Helper: Hash function for Merkle tree nodes
+const sha256Buffer = (data: Buffer | string): Buffer => {
+    const hash = sha256(typeof data === 'string' ? Buffer.from(data) : data);
     return Buffer.from(hash);
+};
+
+// Helper: Convert a hex string (with or without 0x) to a Buffer
+function hexToBuffer(hex: string): Buffer {
+    const cleanHex = hex.startsWith('0x') ? hex.slice(2) : hex;
+    return Buffer.from(cleanHex, 'hex');
 }
 
 // Main batch processing function
@@ -47,8 +53,17 @@ async function processBatch() {
         console.log(`[Witness] Found ${events.length} unanchored events`);
 
         // B. Build Merkle Tree
-        const leaves = events.map(e => hashLeaf(e.leaf_hash || e.version_id));
-        const tree = new MerkleTree(leaves, sha256, { sortPairs: true });
+        // Use the leaf_hash directly as the leaf (it's already a SHA256 hash)
+        const leaves = events.map(e => {
+            if (e.leaf_hash) {
+                return hexToBuffer(e.leaf_hash);
+            }
+            // Fallback for old events without leaf_hash
+            const hash = sha256(Buffer.from(e.version_id, 'utf8'));
+            return Buffer.from(hash);
+        });
+        
+        const tree = new MerkleTree(leaves, sha256Buffer, { sortPairs: true });
         const root = tree.getHexRoot();
 
         console.log(`[Witness] Merkle root: ${root}`);
@@ -78,18 +93,58 @@ async function processBatch() {
         console.log(`[Witness] Transaction confirmed: ${receipt.hash}`);
         console.log(`[Witness] Block number: ${receipt.blockNumber}`);
 
-        // D. Store Batch in Database
-        const batchResult = await pool.query(
+        // D. Parse the Anchored event to get the REAL batch ID from the contract
+        // The contract returns batchId via the Anchored event
+        let contractBatchId: number;
+        
+        const iface = new ethers.Interface(CONTRACT_ABI);
+        const anchoredLog = receipt.logs.find((log: any) => {
+            try {
+                const parsed = iface.parseLog({ topics: log.topics as string[], data: log.data });
+                return parsed?.name === 'Anchored';
+            } catch {
+                return false;
+            }
+        });
+
+        if (anchoredLog) {
+            const parsedEvent = iface.parseLog({ topics: anchoredLog.topics as string[], data: anchoredLog.data });
+            contractBatchId = Number(parsedEvent?.args?.batchId ?? 0);
+            console.log(`[Witness] Contract returned batchId: ${contractBatchId}`);
+        } else {
+            // Fallback: query contract for latest batch count (less reliable)
+            console.warn('[Witness] Could not parse Anchored event, using fallback');
+            contractBatchId = (await pool.query('SELECT COALESCE(MAX(batch_id), -1) + 1 as next_id FROM batches')).rows[0].next_id;
+        }
+
+        // If we are anchoring batch 0 but the DB already has batches, the blockchain was reset.
+        // We must clear all old batch references from events to avoid invalid proofs.
+        if (contractBatchId === 0) {
+            const existingBatches = await pool.query('SELECT COUNT(*) FROM batches');
+            if (parseInt(existingBatches.rows[0].count) > 0) {
+                console.warn('[Witness] ⚠️ Blockchain reset detected (Batch 0 anchored but DB has existing batches). Clearing old batch references...');
+                await pool.query("UPDATE events SET witness_proofs = NULL");
+                await pool.query('DELETE FROM batches');
+            }
+        }
+
+        // E. Store Batch in Database using the CONTRACT's batch ID
+        // Use ON CONFLICT to handle potential race conditions
+        await pool.query(
             `INSERT INTO batches (batch_id, merkle_root, tx_hash, block_number, status, timestamp) 
-       VALUES ((SELECT COALESCE(MAX(batch_id), -1) + 1 FROM batches), $1, $2, $3, 'confirmed', NOW())
-       RETURNING batch_id`,
-            [root, receipt.hash, receipt.blockNumber]
+             VALUES ($1, $2, $3, $4, 'confirmed', NOW())
+             ON CONFLICT (batch_id) DO UPDATE SET 
+               merkle_root = EXCLUDED.merkle_root,
+               tx_hash = EXCLUDED.tx_hash,
+               block_number = EXCLUDED.block_number,
+               status = EXCLUDED.status`,
+            [contractBatchId, root, receipt.hash, receipt.blockNumber]
         );
 
-        const batchId = batchResult.rows[0].batch_id;
+        const batchId = contractBatchId;
         console.log(`✅ Anchored batch ${batchId} with root ${root} in tx ${receipt.hash}`);
 
-        // E. Update events with batch reference AND individual Merkle proofs
+        // F. Update events with batch reference AND individual Merkle proofs
         for (let i = 0; i < events.length; i++) {
             const event = events[i];
 
@@ -136,11 +191,11 @@ setTimeout(async () => {
     await processBatch();
 }, 5000);
 
-// Schedule: Run every 10 minutes
-const batchJob = new CronJob('*/10 * * * *', async () => {
+// Schedule: Run every 10 seconds for testing (change to '*/10 * * * *' for production = every 10 min)
+const batchJob = new CronJob('*/10 * * * * *', async () => {
     await processBatch();
 });
 
 batchJob.start();
-console.log('🔄 Witness Engine scheduled: every 10 minutes');
+console.log('🔄 Witness Engine scheduled: every 10 seconds (testing mode)');
 console.log('   (First run in 5 seconds for immediate testing)');

@@ -696,6 +696,340 @@ app.get('/api/did/:did/verify', async (req, res) => {
 });
 
 // ============================================
+// KEY ROTATION
+// ============================================
+
+/**
+ * Rotate the controller key for a DID
+ * POST /api/did/:did/rotate
+ * 
+ * Generates a new key pair, updates the DID document with the new key,
+ * and invalidates the old key. Creates a new log entry with the rotation.
+ */
+app.post('/api/did/:did/rotate', async (req, res) => {
+    const { did } = req.params;
+    const { keyId, reason } = req.body;
+
+    try {
+        console.log('[Identity] Rotating key for DID:', did);
+
+        if (!keyId) {
+            return res.status(400).json({ error: 'keyId is required for authorization' });
+        }
+
+        // Load existing log
+        const scid = extractScidFromDid(did);
+        const log = await loadDIDLog(scid);
+
+        if (!log || log.length === 0) {
+            return res.status(404).json({ error: 'DID not found' });
+        }
+
+        // Verify old key exists and is valid
+        const oldSigner = await keyManagementService.createSigner(keyId);
+        if (!oldSigner) {
+            return res.status(403).json({ error: 'Invalid keyId - not authorized' });
+        }
+
+        // Generate new key pair
+        const newKeyResult = await keyManagementService.generateKeyPair();
+        const newKeyId = newKeyResult.keyId;
+        const newPublicKeyMultibase = newKeyResult.publicKeyMultibase;
+
+        if (!newKeyId) {
+            return res.status(500).json({ error: 'Failed to generate new key' });
+        }
+
+        // Get current DID document
+        const currentEntry = log[log.length - 1];
+        const currentDoc = currentEntry.state || currentEntry.didDocument;
+
+        if (!currentDoc) {
+            return res.status(500).json({ error: 'No DID document found in log' });
+        }
+
+        // Build new verification method
+        const newVerificationMethod = {
+            id: `${did}#key-${log.length + 1}`,
+            type: 'Multikey',
+            controller: did,
+            publicKeyMultibase: newPublicKeyMultibase
+        };
+
+        // Update DID document - add new key, keep old key in history
+        const updatedDoc = {
+            ...currentDoc,
+            verificationMethod: [
+                newVerificationMethod,
+                ...(currentDoc.verificationMethod || []).map((vm: any) => ({
+                    ...vm,
+                    // Mark old keys as revoked in metadata
+                    revoked: vm.id !== newVerificationMethod.id ? new Date().toISOString() : undefined
+                }))
+            ],
+            authentication: [newVerificationMethod.id],
+            assertionMethod: [newVerificationMethod.id],
+            updated: new Date().toISOString()
+        };
+
+        // Calculate previous hash
+        const previousEntry = log[log.length - 1];
+        const previousHash = crypto.createHash('sha256')
+            .update(JSON.stringify(previousEntry))
+            .digest('hex');
+
+        const timestamp = new Date().toISOString();
+        const newVersionId = String(log.length + 1);
+
+        // Sign with OLD key (proving ownership for rotation)
+        const rotationData = {
+            type: 'keyRotation',
+            previousKeyId: keyId,
+            newKeyId: newKeyId,
+            reason: reason || 'Manual key rotation',
+            timestamp
+        };
+        const dataToSign = new TextEncoder().encode(JSON.stringify(rotationData));
+        const signature = await oldSigner.sign(dataToSign);
+        const proofValue = 'z' + Buffer.from(signature).toString('base64url');
+
+        // Create new log entry
+        const newEntry = {
+            versionId: newVersionId,
+            versionTime: timestamp,
+            parameters: {
+                prevVersionHash: previousHash,
+                updateKeys: [newVerificationMethod.publicKeyMultibase],
+                method: 'did:webvh:1.0'
+            },
+            state: updatedDoc,
+            proof: [{
+                type: 'DataIntegrityProof',
+                cryptosuite: 'eddsa-jcs-2022',
+                verificationMethod: `${did}#key-${log.length}`, // Signed with OLD key
+                proofPurpose: 'authentication',
+                created: timestamp,
+                proofValue
+            }]
+        };
+
+        // Append to log
+        log.push(newEntry);
+        await saveDIDLog(scid, log);
+
+        // Update database
+        await pool.query(
+            `UPDATE identities SET public_key = $1, updated_at = NOW() WHERE did = $2`,
+            [newPublicKeyMultibase, did]
+        );
+
+        // Store rotation event
+        await pool.query(
+            `INSERT INTO events (did, event_type, payload, signature, leaf_hash, version_id, timestamp) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+                did,
+                'key_rotation',
+                JSON.stringify({
+                    previousKeyId: keyId,
+                    newKeyId: newKeyId,
+                    reason: reason || 'Manual key rotation'
+                }),
+                proofValue,
+                previousHash,
+                newVersionId,
+                Date.now()
+            ]
+        );
+
+        console.log(`✅ Key rotated for DID: ${did}, new key: ${newKeyId}`);
+
+        return res.json({
+            did,
+            oldKeyId: keyId,
+            newKeyId: newKeyId,
+            versionId: newVersionId,
+            status: 'rotated'
+        });
+
+    } catch (err: any) {
+        console.error('[Identity] Error rotating key:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ============================================
+// OWNERSHIP TRANSFER
+// ============================================
+
+/**
+ * Transfer ownership of a DID to a new controller
+ * POST /api/did/:did/transfer
+ * 
+ * Updates the controller field and adds the new owner's key
+ * to the verification methods. The old owner signs the transfer.
+ */
+app.post('/api/did/:did/transfer', async (req, res) => {
+    const { did } = req.params;
+    const { keyId, newOwnerDID, newOwnerPublicKey, reason } = req.body;
+
+    try {
+        console.log('[Identity] Transferring ownership of DID:', did, 'to:', newOwnerDID);
+
+        if (!keyId) {
+            return res.status(400).json({ error: 'keyId is required for authorization' });
+        }
+        if (!newOwnerDID) {
+            return res.status(400).json({ error: 'newOwnerDID is required' });
+        }
+
+        // Load existing log
+        const scid = extractScidFromDid(did);
+        const log = await loadDIDLog(scid);
+
+        if (!log || log.length === 0) {
+            return res.status(404).json({ error: 'DID not found' });
+        }
+
+        // Verify current owner's key
+        const currentSigner = await keyManagementService.createSigner(keyId);
+        if (!currentSigner) {
+            return res.status(403).json({ error: 'Invalid keyId - not authorized' });
+        }
+
+        // Get current DID document
+        const currentEntry = log[log.length - 1];
+        const currentDoc = currentEntry.state || currentEntry.didDocument;
+
+        if (!currentDoc) {
+            return res.status(500).json({ error: 'No DID document found in log' });
+        }
+
+        // Build new owner's verification method (if public key provided)
+        let newVerificationMethod;
+        if (newOwnerPublicKey) {
+            newVerificationMethod = {
+                id: `${did}#key-${log.length + 1}`,
+                type: 'Multikey',
+                controller: newOwnerDID,
+                publicKeyMultibase: newOwnerPublicKey
+            };
+        }
+
+        // Update DID document - change controller
+        const updatedDoc = {
+            ...currentDoc,
+            controller: newOwnerDID,
+            verificationMethod: newVerificationMethod
+                ? [newVerificationMethod, ...(currentDoc.verificationMethod || [])]
+                : currentDoc.verificationMethod,
+            authentication: newVerificationMethod
+                ? [newVerificationMethod.id]
+                : currentDoc.authentication,
+            assertionMethod: newVerificationMethod
+                ? [newVerificationMethod.id]
+                : currentDoc.assertionMethod,
+            updated: new Date().toISOString()
+        };
+
+        // Calculate previous hash
+        const previousEntry = log[log.length - 1];
+        const previousHash = crypto.createHash('sha256')
+            .update(JSON.stringify(previousEntry))
+            .digest('hex');
+
+        const timestamp = new Date().toISOString();
+        const newVersionId = String(log.length + 1);
+
+        // Sign with current owner's key (proving authorization for transfer)
+        const transferData = {
+            type: 'ownershipTransfer',
+            previousOwner: currentDoc.controller || did,
+            newOwner: newOwnerDID,
+            reason: reason || 'Ownership transfer',
+            timestamp
+        };
+        const dataToSign = new TextEncoder().encode(JSON.stringify(transferData));
+        const signature = await currentSigner.sign(dataToSign);
+        const proofValue = 'z' + Buffer.from(signature).toString('base64url');
+
+        // Create new log entry
+        const newEntry = {
+            versionId: newVersionId,
+            versionTime: timestamp,
+            parameters: {
+                prevVersionHash: previousHash,
+                controller: newOwnerDID,
+                method: 'did:webvh:1.0'
+            },
+            state: updatedDoc,
+            proof: [{
+                type: 'DataIntegrityProof',
+                cryptosuite: 'eddsa-jcs-2022',
+                verificationMethod: `${did}#key-${log.length}`, // Signed by old owner
+                proofPurpose: 'authentication',
+                created: timestamp,
+                proofValue
+            }]
+        };
+
+        // Append to log
+        log.push(newEntry);
+        await saveDIDLog(scid, log);
+
+        // Update database - change owner
+        await pool.query(
+            `UPDATE identities SET owner = $1, updated_at = NOW() WHERE did = $2`,
+            [newOwnerDID, did]
+        );
+
+        // Also update products table if it exists
+        try {
+            await pool.query(
+                `UPDATE products SET owner_did = $1, updated_at = NOW() WHERE did = $2`,
+                [newOwnerDID, did]
+            );
+        } catch (e) {
+            // Products table might not exist or have different structure
+            console.log('[Identity] Note: Could not update products table');
+        }
+
+        // Store transfer event
+        await pool.query(
+            `INSERT INTO events (did, event_type, payload, signature, leaf_hash, version_id, timestamp) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+                did,
+                'ownership_transfer',
+                JSON.stringify({
+                    previousOwner: currentDoc.controller || did,
+                    newOwner: newOwnerDID,
+                    reason: reason || 'Ownership transfer'
+                }),
+                proofValue,
+                previousHash,
+                newVersionId,
+                Date.now()
+            ]
+        );
+
+        console.log(`✅ Ownership transferred for DID: ${did} to ${newOwnerDID}`);
+
+        return res.json({
+            did,
+            previousOwner: currentDoc.controller || did,
+            newOwner: newOwnerDID,
+            versionId: newVersionId,
+            status: 'transferred'
+        });
+
+    } catch (err: any) {
+        console.error('[Identity] Error transferring ownership:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ============================================
 // EXISTING ENDPOINTS (preserved for compatibility)
 // ============================================
 
@@ -723,7 +1057,7 @@ app.get('/api/identity/:scid', async (req, res) => {
 app.get('/api/identities', async (req, res) => {
     try {
         const result = await pool.query(
-            'SELECT did, scid, public_key, status, created_at, updated_at FROM identities ORDER BY created_at DESC'
+            'SELECT did, scid, public_key, owner, status, created_at, updated_at FROM identities ORDER BY created_at DESC'
         );
         return res.json(result.rows);
     } catch (err: any) {

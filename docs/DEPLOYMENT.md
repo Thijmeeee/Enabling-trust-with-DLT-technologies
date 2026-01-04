@@ -29,12 +29,8 @@ npm --version
 ### 1. Clone/Upload Project
 
 ```bash
-# Option A: Clone from Git
 git clone <repository-url> dpp-trust-system
 cd dpp-trust-system
-
-# Option B: Upload project files via SCP/SFTP
-# Upload to ~/dpp-trust-system
 ```
 
 ### 2. Make Scripts Executable

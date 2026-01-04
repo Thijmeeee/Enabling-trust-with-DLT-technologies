@@ -3,6 +3,7 @@ CREATE TABLE identities (
     did VARCHAR(255) PRIMARY KEY,
     scid VARCHAR(255) UNIQUE NOT NULL,
     public_key TEXT NOT NULL,
+    owner VARCHAR(255),  -- DID of the current owner
     status VARCHAR(50) DEFAULT 'active',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
