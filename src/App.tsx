@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import EnhancedDashboard from './components/dashboards/EnhancedDashboard';
 import MainDPPView from './components/dpp/MainDPPView';
-import ComponentDPPView from './components/dpp/ComponentDPPView';
 import CreateDPPForm from './components/dpp/CreateDPPForm';
 import WitnessDashboard from './components/dashboards/WitnessDashboard';
 import WatcherDashboard from './components/dashboards/WatcherDashboard';
@@ -13,11 +12,11 @@ import RecyclerDashboard from './components/dashboards/RecyclerDashboard';
 import ConsumerView from './components/dashboards/ConsumerView';
 import WindowRegistrationWizard from './components/dashboards/WindowRegistrationWizard';
 import IntroductionPage from './components/IntroductionPage';
-import { RoleProvider, useRole, type UserRole } from './lib/utils/roleContext';
+import { RoleProvider, useRole } from './lib/utils/roleContext';
 import { ThemeProvider, useTheme } from './lib/utils/ThemeContext';
 import { hybridDataStore as enhancedDB } from './lib/data/hybridDataStore';
 import { generateMixedTestData } from './lib/operations/bulkOperations';
-import { User, ChevronDown, HelpCircle, Wallet, ToggleLeft, ToggleRight, Moon, Sun } from 'lucide-react';
+import { User, ChevronDown, HelpCircle, Wallet, ToggleLeft, ToggleRight, Moon, Sun, Trash2 } from 'lucide-react';
 
 type View = 'dashboard' | 'dpp-main' | 'dpp-component' | 'create-dpp' | 'manufacturer-wallet' | 'register-wizard';
 
@@ -28,8 +27,10 @@ function AppContent() {
   const [currentDID, setCurrentDID] = useState<string>('');
   const [isInitializing, setIsInitializing] = useState(true);
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
-  // Always show intro on reload
-  const [showIntro, setShowIntro] = useState(true);
+  // Persist intro state
+  const [showIntro, setShowIntro] = useState(() => {
+    return localStorage.getItem('hasSeenIntro') !== 'true';
+  });
   // Track where the user came from when viewing a DPP
   const [returnView, setReturnView] = useState<View>('dashboard');
   // Dashboard mode: 'role' = simplified role-based view, 'classic' = full enhanced dashboard
@@ -37,6 +38,7 @@ function AppContent() {
 
   const handleContinueFromIntro = () => {
     setShowIntro(false);
+    localStorage.setItem('hasSeenIntro', 'true');
   };
 
   useEffect(() => {
@@ -44,59 +46,45 @@ function AppContent() {
     let cancelled = false;
 
     const initData = async () => {
+      console.log('[App] Starting initialization...');
       setIsInitializing(true);
 
-      // Import hybridDataStore to check backend availability
-      const { hybridDataStore } = await import('./lib/data/hybridDataStore');
-
-      // Try to get data from backend first
-      try {
-        const backendData = await hybridDataStore.getAllDPPs();
-
-        if (cancelled) return;
-
-        if (backendData.length > 0) {
-          console.log('[App] Found', backendData.length, 'identities from backend, syncing to local store...');
-
-          // Sync backend data to enhancedDB so dashboards can use it
-          for (const dpp of backendData) {
-            try {
-              await enhancedDB.insertDPP(dpp);
-            } catch (e) {
-              // Ignore duplicates
-            }
-          }
-
-          console.log('[App] Synced backend data to local store');
+      // Add a safety timeout to ensure we don't stay in initializing state forever
+      const safetyTimeout = setTimeout(() => {
+        if (isInitializing) {
+          console.warn('[App] Initialization took too long, forcing ready state');
           setIsInitializing(false);
+        }
+      }, 5000); // Reduced from 15s to 5s safety fallback
+
+      // Try to get data from hybrid store (already handles backend + local internal)
+      try {
+        console.log('[App] Loading data from store...');
+        const data = await enhancedDB.getAllDPPs();
+        
+        if (cancelled) {
+          clearTimeout(safetyTimeout);
           return;
         }
 
-        console.log('[App] No backend data, checking local fallback...');
-      } catch (err) {
-        console.log('[App] Backend unavailable, using local data:', err);
-      }
-
-      // If no backend data, check local and generate mock data if needed
-      const existing = await enhancedDB.getAllDPPs();
-
-      // Prevent double initialization in StrictMode
-      if (cancelled) return;
-
-      if (existing.length === 0) {
-        console.log('[App] No data found, generating test data...');
-        try {
-          await generateMixedTestData();
-          console.log('[App] Test data generated successfully');
-          const newDpps = await enhancedDB.getAllDPPs();
-          console.log('[App] Total DPPs after generation:', newDpps.length);
-        } catch (err) {
-          console.error('[App] Error initializing data:', err);
+        if (data.length === 0) {
+          console.log('[App] No data found, generating test data in background...');
+          // Don't await this, let the app load immediately
+          generateMixedTestData().then(() => {
+            console.log('[App] Background data generation complete');
+            // Refresh data once generation is done if needed, but UI will pull as needed
+          }).catch(err => {
+            console.error('[App] Background data generation failed:', err);
+          });
+        } else {
+          console.log('[App] Existing data found:', data.length, 'items');
         }
-      } else {
-        console.log('[App] Existing local data found:', existing.length, 'DPPs');
+      } catch (err) {
+        console.error('[App] Initialization error:', err);
       }
 
+      console.log('[App] Initialization sequence complete, setting ready.');
+      clearTimeout(safetyTimeout);
       setIsInitializing(false);
     };
 
@@ -117,7 +105,7 @@ function AppContent() {
     }
   }, [currentRole, view]);
 
-  function handleSelectDPP(did: string, fromView?: View) {
+  function handleSelectDPP(did: string, fromView?: any) {
     console.log('handleSelectDPP called with DID:', did, 'from view:', fromView);
     setCurrentDID(did);
 
@@ -239,6 +227,21 @@ function AppContent() {
           ) : (
             <Sun className="w-5 h-5 text-yellow-400" />
           )}
+        </button>
+
+        {/* Emergency Reset Button */}
+        <button
+          onClick={() => {
+            if (window.confirm('Wilt u alle lokale data wissen en de app resetten?')) {
+              localStorage.removeItem('dpp_local_storage');
+              localStorage.removeItem('hasSeenIntro');
+              window.location.reload();
+            }
+          }}
+          className="flex items-center justify-center w-10 h-10 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 border border-red-200 dark:border-red-900/50 rounded-lg shadow-sm transition-colors"
+          title="Systeem Reset"
+        >
+          <Trash2 className="w-5 h-5 text-red-600 dark:text-red-400" />
         </button>
 
         {/* Manufacturer Wallet Button */}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Activity, AlertCircle, CheckCircle, TrendingUp, Shield, Eye, AlertTriangle, Info, ChevronDown, ChevronUp, Package, FileText, Hash, GitBranch } from 'lucide-react';
+import { Activity, AlertCircle, CheckCircle, TrendingUp, Shield, Eye, AlertTriangle, Info, ChevronDown, ChevronUp, Package, FileText, Hash, EyeOff, GitBranch } from 'lucide-react';
 import { hybridDataStore as enhancedDB } from '../../lib/data/hybridDataStore';
 import { localDB } from '../../lib/data/localData';
 import { getDIDOperationsHistory } from '../../lib/operations/didOperationsLocal';
@@ -57,9 +57,13 @@ export default function WatcherDashboard() {
     const allAlerts = await localDB.getAlerts();
     const watcherAlerts = allAlerts.filter(a => a.watcher_did === currentRoleDID);
 
+    // CRITICAL: Limit the number of DPPs monitored to prevent browser freeze with huge datasets
+    // In a real system this would be paginated or handled by a backend service
+    const dppsToMonitor = allDPPs.slice(0, 50);
+
     // Calculate integrity scores for each DPP with verification
     const monitored: MonitoredDPP[] = await Promise.all(
-      allDPPs.map(async (dpp) => {
+      dppsToMonitor.map(async (dpp) => {
         const dppAlerts = watcherAlerts.filter(a => a.dpp_id === dpp.id);
 
         // Perform continuous verification (Watcher's core function)
@@ -77,6 +81,7 @@ export default function WatcherDashboard() {
     );
 
     setMonitoredDPPs(monitored);
+    
     setAlerts(await localDB.getAlerts().then(alerts => alerts.filter(a => a.watcher_did === currentRoleDID)));
 
     // Calculate stats
@@ -552,37 +557,50 @@ export default function WatcherDashboard() {
           </div>
         </div>
 
-        {/* Merkle Tree Verification Section */}
+        {/* Merkle Tree Integrity Visualization */}
         <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <GitBranch className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Blockchain Anchoring Verification</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors overflow-hidden">
+            <div className="border-b border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <GitBranch className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                DID Event Integrity: Merkle Proof Visualizer
+                {selectedDPPForDetails && (
+                  <span className="text-sm font-normal text-gray-500 ml-2">
+                    Monitoring: {selectedDPPForDetails.model}
+                  </span>
+                )}
+              </h2>
+              <button
+                onClick={() => setShowMerkleTree(!showMerkleTree)}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              >
+                {showMerkleTree ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showMerkleTree ? 'Hide Tree' : 'Show Tree'}
+              </button>
             </div>
-            <button
-              onClick={() => setShowMerkleTree(!showMerkleTree)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300 transition-colors"
-            >
-              {showMerkleTree ? (
-                <>
-                  <ChevronUp className="w-4 h-4" />
-                  Hide Merkle Tree
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="w-4 h-4" />
-                  Show Merkle Tree
-                </>
-              )}
-            </button>
+            {showMerkleTree ? (
+              <div className="p-4 bg-gray-50 dark:bg-gray-900/40">
+                {selectedDPPForDetails ? (
+                  <MerkleTreeVisualizer 
+                    selectedDPPDid={selectedDPPForDetails.did}
+                    operations={didHistory}
+                    alerts={alerts.filter(a => a.did === selectedDPPForDetails.did)}
+                  />
+                ) : (
+                  <div className="py-12 text-center">
+                    <div className="inline-flex items-center justify-center p-4 bg-gray-100 dark:bg-gray-800 rounded-full mb-4">
+                      <Shield className="w-8 h-8 text-gray-400" />
+                    </div>
+                    <p className="text-gray-500 dark:text-gray-400">Select a product below to visualize its Merkle Integrity Tree</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="p-4 text-center text-sm text-gray-500">
+                Visualizer is hidden. Click "Show Tree" to inspect cryptographic integrity.
+              </div>
+            )}
           </div>
-          
-          {showMerkleTree && (
-            <MerkleTreeVisualizer 
-              selectedDPPId={selectedDPPForDetails?.id}
-              selectedDPPDid={selectedDPPForDetails?.did}
-            />
-          )}
         </div>
 
         <div className="grid grid-cols-3 gap-6">

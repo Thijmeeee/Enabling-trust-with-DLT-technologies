@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, CheckCircle, XCircle, AlertTriangle, Hash, Shield, FileText, Link as LinkIcon, ChevronDown, ChevronUp, Clock, Package, X } from 'lucide-react';
+import { Search, CheckCircle, XCircle, AlertTriangle, FileText, ChevronDown, ChevronUp, Package, X } from 'lucide-react';
 import { hybridDataStore as enhancedDB } from '../../lib/data/hybridDataStore';
 import { getDIDOperationsHistory } from '../../lib/operations/didOperationsLocal';
 import { useRole } from '../../lib/utils/roleContext';
@@ -34,7 +34,6 @@ interface GroupedVerifications {
 export default function ResolverDashboard() {
   const { currentRoleDID } = useRole();
   const [verifications, setVerifications] = useState<VerificationResult[]>([]);
-  const [selectedVerification, setSelectedVerification] = useState<VerificationResult | null>(null);
   const [searchDID, setSearchDID] = useState('');
   const [loading, setLoading] = useState(false);
   const [expandedDPP, setExpandedDPP] = useState<string | null>(null);
@@ -348,7 +347,6 @@ export default function ResolverDashboard() {
       const result = await verifyDID(searchDID.trim());
       setVerifications([result, ...verifications]);
       updateStats([result, ...verifications]);
-      setSelectedVerification(result);
       setSearchDID('');
     } catch (error) {
       console.error('Error verifying DID:', error);

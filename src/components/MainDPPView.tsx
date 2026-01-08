@@ -151,6 +151,12 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
     try {
       const dppData = await getDPPWithRelations(did);
       console.log('MainDPPView data loaded:', dppData);
+      
+      if (!dppData) {
+        setLoading(false);
+        return;
+      }
+
       setData(dppData);
 
       if (dppData?.dpp) {

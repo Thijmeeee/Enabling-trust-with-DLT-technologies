@@ -259,7 +259,7 @@ export async function progressDIDLifecycle(did: string, stage: 'registered' | 'v
     witness_did: 'did:webvh:example.com:system:lifecycle-manager',
     attestation_type: 'did_lifecycle_update',
     attestation_data: {
-      previousStage: didDoc.document_metadata['lifecycleStage'] || 'created',
+      previousStage: (didDoc.document_metadata as any).lifecycleStage || 'created',
       newStage: stage,
       timestamp: new Date().toISOString(),
       updates: updates,

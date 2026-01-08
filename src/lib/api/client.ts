@@ -16,6 +16,7 @@ export interface Identity {
   status: 'active' | 'deactivated';
   created_at: string;
   updated_at: string;
+  metadata?: Record<string, any>; // From 'create' event payload
 }
 
 export interface DIDEvent {
@@ -84,23 +85,38 @@ async function fetchApi<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const url = apiUrl(endpoint);
+  
+  // Add a default timeout of 10 seconds for API calls
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
 
-  if (!response.ok) {
-    const error: ApiError = await response.json().catch(() => ({
-      error: `HTTP ${response.status}: ${response.statusText}`
-    }));
-    throw new Error(error.error || 'API request failed');
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const error: ApiError = await response.json().catch(() => ({
+        error: `HTTP ${response.status}: ${response.statusText}`
+      }));
+      throw new Error(error.error || 'API request failed');
+    }
+
+    return response.json();
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new Error(`API request timed out after 10s: ${endpoint}`);
+    }
+    throw err;
   }
-
-  return response.json();
 }
 
 // ============================================

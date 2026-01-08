@@ -65,9 +65,9 @@ export default function DPPListItem({ dpp, onSelect }: { dpp: DPP; onSelect: () 
               <div className="flex items-center gap-4 text-xs text-gray-600">
                 <span className="font-medium">Version {dpp.version}</span>
                 <span>{new Date(dpp.created_at).toLocaleDateString()}</span>
-                {dpp.metadata?.batch && (
+                {Boolean(dpp.metadata?.batch) && (
                   <span className="px-2 py-1 bg-purple-50 text-purple-700 rounded font-medium">
-                    Batch: {dpp.metadata.batch}
+                    Batch: {String(dpp.metadata.batch)}
                   </span>
                 )}
               </div>

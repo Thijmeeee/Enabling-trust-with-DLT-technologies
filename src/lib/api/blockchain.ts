@@ -24,8 +24,8 @@ export interface BatchInfo {
   merkleRoot: string;
   timestamp: number;
   blockNumber: number;
-  etherscanTxUrl?: string;
-  etherscanBlockUrl: string;
+  etherscanTxUrl?: string | null;
+  etherscanBlockUrl: string | null;
 }
 
 export interface VerificationResult {
@@ -35,11 +35,21 @@ export interface VerificationResult {
   expectedRoot: string;
   blockNumber: number;
   timestamp: Date;
-  etherscanBlockUrl: string;
+  etherscanBlockUrl: string | null;
 }
 
 let provider: ethers.JsonRpcProvider | null = null;
 let contract: ethers.Contract | null = null;
+
+// Caches to avoid redundant RPC calls
+const batchCache = new Map<number, BatchInfo>();
+let lastAnchorFetch = 0;
+let cachedAnchors: any[] = [];
+const ANCHOR_CACHE_TTL = 30000; // 30 seconds
+
+let cachedBatchCount: number | null = null;
+let lastBatchCountFetch = 0;
+const BATCH_COUNT_TTL = 10000; // 10 seconds
 
 /**
  * Initialize the blockchain provider and contract
@@ -66,25 +76,42 @@ function getContract(): ethers.Contract {
  * Get the total number of batches anchored
  */
 export async function getBatchCount(): Promise<number> {
+  const now = Date.now();
+  if (cachedBatchCount !== null && now - lastBatchCountFetch < BATCH_COUNT_TTL) {
+    return cachedBatchCount;
+  }
+
   const contract = getContract();
   const count = await contract.batchCount();
-  return Number(count);
+  cachedBatchCount = Number(count);
+  lastBatchCountFetch = now;
+  return cachedBatchCount;
 }
 
 /**
  * Get batch information by ID
  */
 export async function getBatch(batchId: number): Promise<BatchInfo> {
+  if (batchCache.has(batchId)) {
+    return batchCache.get(batchId)!;
+  }
+
   const contract = getContract();
   const [root, timestamp, blockNum] = await contract.getBatch(batchId);
   
-  return {
+  const info: BatchInfo = {
     batchId,
     merkleRoot: root,
     timestamp: Number(timestamp),
     blockNumber: Number(blockNum),
     etherscanBlockUrl: etherscanBlockUrl(Number(blockNum)),
   };
+
+  if (root && root !== '0x' + '0'.repeat(64)) {
+    batchCache.set(batchId, info);
+  }
+
+  return info;
 }
 
 /**
@@ -94,22 +121,20 @@ export async function verifyOnChain(
   batchId: number, 
   expectedRoot: string
 ): Promise<VerificationResult> {
-  const contract = getContract();
+  // Use cached getBatch to avoid redundant RPC calls
+  const batch = await getBatch(batchId);
   
-  // Get batch info
-  const [root, timestamp, blockNum] = await contract.getBatch(batchId);
-  
-  // Verify
-  const verified = await contract.verify(batchId, expectedRoot);
+  // Verification is simple comparison of roots
+  const verified = batch.merkleRoot === expectedRoot;
   
   return {
     verified,
     batchId,
-    onChainRoot: root,
+    onChainRoot: batch.merkleRoot,
     expectedRoot,
-    blockNumber: Number(blockNum),
-    timestamp: new Date(Number(timestamp) * 1000),
-    etherscanBlockUrl: etherscanBlockUrl(Number(blockNum)),
+    blockNumber: batch.blockNumber,
+    timestamp: new Date(batch.timestamp * 1000),
+    etherscanBlockUrl: batch.etherscanBlockUrl,
   };
 }
 
@@ -143,14 +168,19 @@ export async function getAnchoredEvents(fromBlock: number = 0): Promise<Array<{
   timestamp: number;
   blockNumber: number;
   transactionHash: string;
-  etherscanTxUrl: string;
+  etherscanTxUrl: string | null;
 }>> {
+  const now = Date.now();
+  if (now - lastAnchorFetch < ANCHOR_CACHE_TTL && cachedAnchors.length > 0) {
+    return cachedAnchors;
+  }
+
   const contract = getContract();
   
   const filter = contract.filters.Anchored();
   const events = await contract.queryFilter(filter, fromBlock);
   
-  return events.map(event => {
+  const results = events.map(event => {
     const log = event as ethers.Log & { args: [bigint, string, bigint, bigint] };
     return {
       batchId: Number(log.args[0]),
@@ -161,6 +191,10 @@ export async function getAnchoredEvents(fromBlock: number = 0): Promise<Array<{
       etherscanTxUrl: etherscanTxUrl(log.transactionHash),
     };
   });
+
+  cachedAnchors = results;
+  lastAnchorFetch = now;
+  return results;
 }
 
 /**

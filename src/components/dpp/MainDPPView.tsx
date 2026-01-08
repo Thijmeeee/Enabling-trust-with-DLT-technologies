@@ -155,6 +155,12 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
     try {
       const dppData = await getDPPWithRelations(did);
       console.log('MainDPPView data loaded:', dppData);
+      
+      if (!dppData) {
+        setLoading(false);
+        return;
+      }
+      
       setData(dppData);
 
       // Build combined recent events (creation, anchorings, attestations, verification)
@@ -162,7 +168,7 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
         const { hybridDataStore } = await import('../../lib/data/hybridDataStore');
         const allEvents: any[] = [];
         // Creation
-        if (dppData.dpp) {
+        if (dppData?.dpp) {
           allEvents.push({
             id: `creation-${dppData.dpp.id}`,
             timestamp: dppData.dpp.created_at,
@@ -273,7 +279,8 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
   }
 
   async function handleExport() {
-    const json = await exportDPPHierarchyToJSON(did);
+    const { exportHierarchyToJSON } = await import('../../lib/operations/bulkOperations');
+    const json = await exportHierarchyToJSON(did);
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

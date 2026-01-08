@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { FileCheck, CheckCircle, XCircle, Clock, Shield, Activity, Search, Filter as FilterIcon, X, ChevronDown, ChevronUp, Square, Maximize, Package, User, ArrowRight, Key, RefreshCw, FileText, Edit, Anchor, ExternalLink, Terminal, Zap, Check } from 'lucide-react';
+import { FileCheck, CheckCircle, XCircle, Clock, Shield, Activity, Search, Filter as FilterIcon, X, ChevronDown, ChevronUp, Square, Maximize, Package, User, ArrowRight, Key, RefreshCw, FileText, Edit, Anchor, ExternalLink, Terminal, Zap } from 'lucide-react';
 import { hybridDataStore as enhancedDB } from '../../lib/data/hybridDataStore';
 import { useRole } from '../../lib/utils/roleContext';
 import { getDIDOperationsHistory } from '../../lib/operations/didOperationsLocal';
@@ -819,7 +819,7 @@ export default function WitnessDashboard() {
                       <div className="flex items-center gap-2">
                         <span className="font-mono font-medium text-purple-600 dark:text-purple-400">Batch #{batch.batch_id}</span>
                         <span className="text-gray-400">|</span>
-                        <span className="text-gray-600 dark:text-gray-300">Size: {batch.size} KB</span>
+                        <span className="text-gray-600 dark:text-gray-300">Block: {batch.block_number}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-gray-500">{batch.tx_hash.slice(0, 12)}...</span>

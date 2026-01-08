@@ -117,7 +117,7 @@ export type Specification = {
   updated_at: string;
 };
 
-// In-memory storage
+// In-memory storage with optional persistence
 class LocalDataStore {
   private dpps: Map<string, DPP> = new Map();
   private didDocuments: Map<string, DIDDocument> = new Map();
@@ -129,12 +129,65 @@ class LocalDataStore {
   private attestations: Map<string, WitnessAttestation> = new Map();
   private specifications: Map<string, Specification> = new Map();
 
+  constructor() {
+    this.loadFromStorage();
+  }
+
+  private loadFromStorage() {
+    try {
+      const data = localStorage.getItem('dpp_local_storage');
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (parsed.dpps) this.dpps = new Map(parsed.dpps);
+        if (parsed.didDocuments) this.didDocuments = new Map(parsed.didDocuments);
+        if (parsed.relationships) this.relationships = new Map(parsed.relationships);
+        if (parsed.anchoringEvents) this.anchoringEvents = new Map(parsed.anchoringEvents);
+        if (parsed.credentials) this.credentials = new Map(parsed.credentials);
+        if (parsed.watchers) this.watchers = new Map(parsed.watchers);
+        if (parsed.alerts) this.alerts = new Map(parsed.alerts);
+        if (parsed.attestations) this.attestations = new Map(parsed.attestations);
+        if (parsed.specifications) this.specifications = new Map(parsed.specifications);
+        console.log(`[LocalDataStore] Loaded ${this.dpps.size} DPPs from storage`);
+      }
+    } catch (e) {
+      console.error('[LocalDataStore] Failed to load from storage', e);
+    }
+  }
+
+  private saveTimer: any = null;
+  private saveToStorage() {
+    if (this.saveTimer) return;
+    
+    // Debounce saves to prevent performance death during bulk inserts
+    this.saveTimer = setTimeout(() => {
+      try {
+        const data = JSON.stringify({
+          dpps: Array.from(this.dpps.entries()),
+          didDocuments: Array.from(this.didDocuments.entries()),
+          relationships: Array.from(this.relationships.entries()),
+          anchoringEvents: Array.from(this.anchoringEvents.entries()),
+          credentials: Array.from(this.credentials.entries()),
+          watchers: Array.from(this.watchers.entries()),
+          alerts: Array.from(this.alerts.entries()),
+          attestations: Array.from(this.attestations.entries()),
+          specifications: Array.from(this.specifications.entries()),
+        });
+        localStorage.setItem('dpp_local_storage', data);
+      } catch (e) {
+        console.error('[LocalDataStore] Failed to save to storage', e);
+      } finally {
+        this.saveTimer = null;
+      }
+    }, 1000); // Wait 1 second after last change
+  }
+
   // DPPs
   async insertDPP(dpp: Omit<DPP, 'id' | 'created_at' | 'updated_at'>): Promise<DPP> {
     const id = this.generateId();
     const now = new Date().toISOString();
     const newDPP: DPP = { ...dpp, id, created_at: now, updated_at: now };
     this.dpps.set(id, newDPP);
+    this.saveToStorage();
     return newDPP;
   }
 
@@ -160,6 +213,7 @@ class LocalDataStore {
     };
     
     this.dpps.set(id, updated);
+    this.saveToStorage();
     return updated;
   }
 
@@ -169,6 +223,7 @@ class LocalDataStore {
     const now = new Date().toISOString();
     const newDoc: DIDDocument = { ...doc, id, created_at: now, updated_at: now };
     this.didDocuments.set(id, newDoc);
+    this.saveToStorage();
     return newDoc;
   }
 
@@ -182,6 +237,7 @@ class LocalDataStore {
     const now = new Date().toISOString();
     const newRel: DPPRelationship = { ...rel, id, created_at: now, updated_at: now };
     this.relationships.set(id, newRel);
+    this.saveToStorage();
     return newRel;
   }
 
@@ -199,6 +255,7 @@ class LocalDataStore {
     const timestamp = new Date().toISOString();
     const newEvent: AnchoringEvent = { ...event, id, timestamp };
     this.anchoringEvents.set(id, newEvent);
+    this.saveToStorage();
     return newEvent;
   }
 
@@ -212,6 +269,7 @@ class LocalDataStore {
     const created_at = new Date().toISOString();
     const newCred: VerifiableCredential = { ...cred, id, created_at };
     this.credentials.set(id, newCred);
+    this.saveToStorage();
     return newCred;
   }
 
@@ -225,6 +283,7 @@ class LocalDataStore {
     const created_at = new Date().toISOString();
     const newWatcher: Watcher = { ...watcher, id, created_at };
     this.watchers.set(id, newWatcher);
+    this.saveToStorage();
     return newWatcher;
   }
 
@@ -238,6 +297,7 @@ class LocalDataStore {
     const created_at = new Date().toISOString();
     const newAlert: WatcherAlert = { ...alert, id, created_at };
     this.alerts.set(id, newAlert);
+    this.saveToStorage();
     return newAlert;
   }
 
@@ -252,6 +312,7 @@ class LocalDataStore {
     if (!alert) return null;
     const updated = { ...alert, ...updates };
     this.alerts.set(id, updated);
+    this.saveToStorage();
     return updated;
   }
 
@@ -261,6 +322,7 @@ class LocalDataStore {
     const now = new Date().toISOString();
     const newAtt: WitnessAttestation = { ...att, id, created_at: now, timestamp: now };
     this.attestations.set(id, newAtt);
+    this.saveToStorage();
     return newAtt;
   }
 
@@ -269,6 +331,7 @@ class LocalDataStore {
     if (!existing) return null;
     const updated = { ...existing, ...updates };
     this.attestations.set(id, updated);
+    this.saveToStorage();
     return updated;
   }
 
@@ -282,6 +345,7 @@ class LocalDataStore {
     const now = new Date().toISOString();
     const newSpec: Specification = { ...spec, id, created_at: now, updated_at: now };
     this.specifications.set(id, newSpec);
+    this.saveToStorage();
     return newSpec;
   }
 
@@ -304,6 +368,7 @@ class LocalDataStore {
     this.alerts.clear();
     this.attestations.clear();
     this.specifications.clear();
+    localStorage.removeItem('dpp_local_storage');
   }
 }
 

@@ -2,7 +2,7 @@
  * Bulk Operations and Test Data Generator
  */
 
-import { enhancedDB } from '../data/enhancedDataStore';
+import { hybridDataStore as enhancedDB } from '../data/hybridDataStore';
 import { PRODUCT_SCHEMAS } from '../schemas/productSchema';
 import { 
   generateWitnessAttestations, 
@@ -403,18 +403,30 @@ export async function importDPPsFromJSON(jsonData: string): Promise<{ success: n
   return { success, errors };
 }
 
+let isGenerating = false;
+
 /**
  * Generate mixed product types for testing
  */
 export async function generateMixedTestData(): Promise<void> {
-  console.log('Generating mixed test data...');
-  
-  // Windows with full components (50 windows × 3 = 150 DPPs total)
-  await generateBulkTestData({
-    productType: 'window',
-    count: 50,
-    generateComponents: true,
-  });
-  
-  console.log('Mixed test data generated! (150 DPPs: 50 windows + 50 glass + 50 frames)');
+  if (isGenerating) {
+    console.log('Generation already in progress, skipping...');
+    return;
+  }
+
+  isGenerating = true;
+  try {
+    console.log('Generating mixed test data...');
+    
+    // Windows with full components (Reduced from 12 to 6 for ULTRFAST startup)
+    await generateBulkTestData({
+      productType: 'window',
+      count: 6,
+      generateComponents: true,
+    });
+    
+    console.log('Mixed test data generated! (18 DPPs: 6 windows + 6 glass + 6 frames)');
+  } finally {
+    isGenerating = false;
+  }
 }

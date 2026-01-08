@@ -46,16 +46,16 @@ export default function WatcherMonitor({ onClose }: { onClose: () => void }) {
       }
       
       // Determine if this is a component alert by checking the alert details or DPP data
-      const isComponent = alert.details?.isComponent || false;
-      const parentDppId = alert.details?.parentDppId || alert.dpp_id;
-      const componentName = alert.details?.componentName || 'Unknown Component';
+      const isComponent = Boolean(alert.details?.isComponent) || false;
+      const parentDppId = (alert.details?.parentDppId as string) || (alert.dpp_id as string);
+      const componentName = (alert.details?.componentName as string) || 'Unknown Component';
       
       // Use parent DPP ID as group key
-      const groupKey = parentDppId;
+      const groupKey = parentDppId || 'system';
       
       // Create group if it doesn't exist
       if (!groups.has(groupKey)) {
-        const groupName = alert.details?.groupModel || alert.details?.productModel || 'Unknown Product';
+        const groupName = (alert.details?.groupModel as string) || (alert.details?.productModel as string) || 'Unknown Product';
         groups.set(groupKey, {
           dppId: groupKey,
           dppName: groupName,

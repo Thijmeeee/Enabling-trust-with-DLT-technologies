@@ -22,16 +22,19 @@ import { createDID, resolveDID, updateDID, deactivateDID } from 'didwebvh-ts';
 // Import Key Management Service
 import { keyManagementService } from '../keyManagement/index.js';
 
-// Import centralized logger
-import { createServiceLogger, requestLogger } from '../../utils/logger.js';
-
-const log = createServiceLogger('identity');
-
 const app = express();
 app.use(express.json());
 
-// Request logging middleware
-app.use(requestLogger('identity'));
+// Simple request logger middleware with filtering
+app.use((req, res, next) => {
+    // Skip logging for high-frequency noise
+    const isNoisy = req.url === '/health' || req.url?.includes('status') || req.method === 'OPTIONS';
+    if (!isNoisy || process.env.LOG_LEVEL === 'debug') {
+        const timestamp = new Date().toISOString();
+        console.log(`[${timestamp}] ${req.method} ${req.url}`);
+    }
+    next();
+});
 
 // Enable CORS for frontend dev server
 app.use((req, res, next) => {
@@ -1064,9 +1067,16 @@ app.get('/api/identity/:scid', async (req, res) => {
 // List all identities
 app.get('/api/identities', async (req, res) => {
     try {
-        const result = await pool.query(
-            'SELECT did, scid, public_key, owner, status, created_at, updated_at FROM identities ORDER BY created_at DESC'
-        );
+        // Optimized query to include the 'create' event payload (metadata like model/type)
+        // This avoids N+1 queries from the frontend
+        const result = await pool.query(`
+            SELECT 
+                i.did, i.scid, i.public_key, i.owner, i.status, i.created_at, i.updated_at,
+                e.payload as metadata
+            FROM identities i
+            LEFT JOIN events e ON i.did = e.did AND e.event_type = 'create'
+            ORDER BY i.created_at DESC
+        `);
         return res.json(result.rows);
     } catch (err: any) {
         res.status(500).json({ error: err.message });
@@ -1077,7 +1087,7 @@ app.get('/api/identities', async (req, res) => {
 app.get('/api/events', async (req, res) => {
     const { did } = req.query;
     try {
-        let query = 'SELECT id, did, event_type, payload, version_id, witness_proofs, created_at FROM events';
+        let query = 'SELECT id, did, event_type, payload, signature, leaf_hash, version_id, witness_proofs, timestamp, created_at FROM events';
         let params: any[] = [];
 
         if (did) {
@@ -1087,7 +1097,14 @@ app.get('/api/events', async (req, res) => {
         query += ' ORDER BY created_at DESC';
 
         const result = await pool.query(query, params);
-        return res.json(result.rows);
+        
+        // Ensure timestamp is a number string or number
+        const rows = result.rows.map(row => ({
+            ...row,
+            timestamp: typeof row.timestamp === 'string' ? parseInt(row.timestamp) : row.timestamp
+        }));
+        
+        return res.json(rows);
     } catch (err: any) {
         res.status(500).json({ error: err.message });
     }
@@ -1141,11 +1158,8 @@ app.get('/health', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    log.info('Identity Service started', {
-        version: '2.0.0',
-        port: PORT,
-        domain: DOMAIN,
-        storageRoot: STORAGE_ROOT,
-        didwebvh: true
-    });
+    console.log(`🚀 Identity Service v2.0 running on port ${PORT}`);
+    console.log(`📍 Domain: ${DOMAIN}`);
+    console.log(`📁 Storage: ${STORAGE_ROOT}`);
+    console.log(`✅ didwebvh-ts integration enabled`);
 });

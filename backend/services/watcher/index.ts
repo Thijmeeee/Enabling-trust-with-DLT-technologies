@@ -28,6 +28,11 @@ const CONTRACT_ABI = [
 
 const STORAGE_ROOT = process.env.STORAGE_ROOT || '/var/www/did-logs';
 
+// Shared blockchain connection to avoid repeated detection calls
+let sharedProvider: ethers.JsonRpcProvider | null = null;
+let sharedContract: ethers.Contract | null = null;
+const batchRootCache = new Map<number, string>();
+
 // Helper: Hash a log entry using SHA256
 function hashLogEntry(logEntry: any): string {
     return crypto.createHash('sha256').update(JSON.stringify(logEntry)).digest('hex');
@@ -111,11 +116,10 @@ async function verifyMerkleProof(
     expectedMerkleRoot: string
 ): Promise<{ valid: boolean; details: string }> {
     try {
-        const rpcUrl = process.env.RPC_URL || 'http://localhost:8545';
         const contractAddress = process.env.CONTRACT_ADDRESS;
 
-        if (!contractAddress) {
-            return { valid: false, details: 'CONTRACT_ADDRESS not set' };
+        if (!contractAddress || !sharedContract) {
+            return { valid: false, details: 'Blockchain connection or CONTRACT_ADDRESS not set' };
         }
 
         // Step 1: Verify the proof locally using MerkleTree library
@@ -152,24 +156,26 @@ async function verifyMerkleProof(
         log.debug('Local Merkle proof valid', { leafHash: leafHash.slice(0, 18) });
 
         // Step 2: Verify the root matches what's stored on-chain
-        const provider = new ethers.JsonRpcProvider(rpcUrl);
-        
-        // Verify contract exists at address
-        const code = await provider.getCode(contractAddress);
-        if (code === '0x' || code === '0x0') {
-            return { valid: false, details: `No contract found at ${contractAddress}. Is the blockchain running and contract deployed?` };
-        }
-
-        const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, provider);
-
         try {
-            const [onChainRoot, timestamp, blockNum] = await contract.getBatch(batchId);
+            // Use cache for on-chain root to avoid repeated RPC calls within the same cycle
+            let onChainRoot = batchRootCache.get(batchId);
+            let blockNum = 0;
+
+            if (!onChainRoot) {
+                const [root, timestamp, actualBlockNum] = await sharedContract.getBatch(batchId);
+                onChainRoot = root;
+                blockNum = Number(actualBlockNum);
+                
+                if (onChainRoot && onChainRoot !== '0x' + '0'.repeat(64)) {
+                   batchRootCache.set(batchId, onChainRoot);
+                }
+            }
 
             // Check if batch exists (empty root means batch doesn't exist)
             if (!onChainRoot || onChainRoot === '0x0000000000000000000000000000000000000000000000000000000000000000') {
                 log.warn('Batch not found on-chain', { batchId, contractAddress });
                 // Check if the contract actually has ANY batches yet
-                const nextId = await contract.batchCount();
+                const nextId = await sharedContract.batchCount();
                 if (batchId >= Number(nextId)) {
                     return { valid: false, details: `Batch ${batchId} is pending anchoring on blockchain` };
                 }
@@ -191,7 +197,7 @@ async function verifyMerkleProof(
 
             return {
                 valid: true,
-                details: `✅ Verified: proof valid, root matches on-chain at block ${blockNum}`
+                details: `✅ Verified: proof valid, root matches on-chain`
             };
         } catch (contractError: any) {
             // Contract call failed - likely batch doesn't exist or contract not deployed
@@ -208,14 +214,36 @@ async function verifyMerkleProof(
 // Main audit function
 async function runAudit() {
     log.debug('Starting audit cycle');
+    batchRootCache.clear(); // Clear cache for new audit cycle
 
     try {
         const rpcUrl = process.env.RPC_URL || 'http://localhost:8545';
         const contractAddress = process.env.CONTRACT_ADDRESS;
-        const provider = new ethers.JsonRpcProvider(rpcUrl);
+        
+        if (!sharedProvider) {
+            sharedProvider = new ethers.JsonRpcProvider(rpcUrl);
+        }
+        
+        if (contractAddress && !sharedContract) {
+            sharedContract = new ethers.Contract(contractAddress, CONTRACT_ABI, sharedProvider);
+            
+            // Initial check to verify contract existence - only perform once per launch
+            try {
+                const code = await sharedProvider.getCode(contractAddress);
+                if (code === '0x' || code === '0x0') {
+                    log.warn('No contract code found at address', { address: contractAddress });
+                    sharedContract = null; // Reset so we retry next time
+                } else {
+                    log.info('Shared contract initialized and verified', { address: contractAddress });
+                }
+            } catch (e) {
+                log.error('Failed to verify contract address', e);
+                sharedContract = null;
+            }
+        }
 
         // Sanity Check: Verify if DB batches match on-chain batches
-        if (contractAddress) {
+        if (contractAddress && sharedContract) {
             try {
                 // Check the latest batch from the batches table
                 const { rows: dbBatches } = await pool.query('SELECT batch_id, merkle_root FROM batches ORDER BY batch_id DESC LIMIT 1');
@@ -226,8 +254,15 @@ async function runAudit() {
                 const lastBatch = dbBatches[0] || eventBatches[0];
 
                 if (lastBatch && lastBatch.batch_id !== null) {
-                    const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, provider);
-                    const [onChainRoot] = await contract.getBatch(lastBatch.batch_id);
+                    // Use cache/helper for on-chain root
+                    let onChainRoot = batchRootCache.get(lastBatch.batch_id);
+                    if (!onChainRoot) {
+                        const [root] = await sharedContract.getBatch(lastBatch.batch_id);
+                        onChainRoot = root;
+                        if (onChainRoot && onChainRoot !== '0x' + '0'.repeat(64)) {
+                            batchRootCache.set(lastBatch.batch_id, onChainRoot);
+                        }
+                    }
                     
                     const isEmptyRoot = !onChainRoot || onChainRoot === '0x0000000000000000000000000000000000000000000000000000000000000000';
                     const isMismatch = !isEmptyRoot && onChainRoot.toLowerCase() !== lastBatch.merkle_root.toLowerCase();
@@ -260,7 +295,7 @@ async function runAudit() {
             ['active']
         );
 
-        log.info('Auditing identities', { count: identities.length });
+        log.debug('Auditing identities', { count: identities.length });
 
         for (const identity of identities) {
             // Audit 1: Hash chain check
@@ -272,7 +307,7 @@ async function runAudit() {
                 [identity.did, 'hash_chain', hashChainResult.valid ? 'valid' : 'invalid', hashChainResult.details]
             );
 
-            log.info('Hash chain audit', { 
+            log.debug('Hash chain audit', { 
                 scid: identity.scid, 
                 valid: hashChainResult.valid,
                 details: hashChainResult.valid ? undefined : hashChainResult.details
@@ -322,7 +357,7 @@ async function runAudit() {
                      VALUES ($1, $2, $3, $4, NOW())`,
                     [identity.did, 'merkle_proof', allMerkleValid ? 'valid' : 'invalid', merkleDetails]
                 );
-                log.info('Merkle proof audit', { 
+                log.debug('Merkle proof audit', { 
                     scid: identity.scid, 
                     valid: allMerkleValid, 
                     eventCount: batchedEventCount 
@@ -332,7 +367,7 @@ async function runAudit() {
             }
         }
 
-        log.info('Audit cycle complete');
+        log.debug('Audit cycle complete');
 
     } catch (err) {
         log.error('Audit failed', err);
@@ -353,8 +388,8 @@ setTimeout(async () => {
     await runAudit();
 }, 5000);
 
-// Schedule: Run every 30 seconds for testing (change to '*/5 * * * *' for production = every 5 min)
-const auditJob = new CronJob('*/30 * * * * *', async () => {
+// Schedule: Run every 60 seconds (1 minute) for development
+const auditJob = new CronJob('0 */1 * * * *', async () => {
     await runAudit();
 });
 

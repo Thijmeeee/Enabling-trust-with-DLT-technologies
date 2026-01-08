@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { Search, AlertCircle, Plus, User, ArrowUpDown } from 'lucide-react';
 import { searchDPPs } from '../../lib/operations/dppManagerLocal';
 import type { DPP } from '../../lib/data/localData';
-import DPPListItem from './DPPListItem';
+import DPPListItem from '../DPPListItem';
 import { useRole, UserRole } from '../../lib/utils/roleContext';
-import CreateDPPForm from './CreateDPPForm';
+import CreateDPPForm from '../dpp/CreateDPPForm';
 
 export default function Dashboard({ onSelectDPP }: { onSelectDPP: (did: string) => void }) {
   const { currentRole, setRole } = useRole();
