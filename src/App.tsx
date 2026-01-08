@@ -61,7 +61,7 @@ function AppContent() {
           // Sync backend data to enhancedDB so dashboards can use it
           for (const dpp of backendData) {
             try {
-              await enhancedDB.addDPP(dpp);
+              await enhancedDB.insertDPP(dpp);
             } catch (e) {
               // Ignore duplicates
             }

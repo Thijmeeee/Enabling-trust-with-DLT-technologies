@@ -6,6 +6,10 @@ import { sha256 } from '@noble/hashes/sha256';
 import * as fs from 'fs/promises';
 import * as crypto from 'crypto';
 import 'dotenv/config';
+import { createServiceLogger } from '../../utils/logger.js';
+
+// Initialize structured logger
+const log = createServiceLogger('watcher');
 
 const pool = new Pool({
     host: process.env.DB_HOST || 'localhost',
@@ -119,8 +123,11 @@ async function verifyMerkleProof(
         const proof = merkleProof.map(p => Buffer.from(p.slice(2), 'hex'));
         const root = Buffer.from(expectedMerkleRoot.slice(2), 'hex');
 
-        console.log(`[Watcher] Verifying leaf ${leafHash.slice(0, 10)}... in batch ${batchId}`);
-        console.log(`[Watcher] Proof length: ${proof.length}`);
+        log.debug('Verifying Merkle proof', { 
+            leafHash: leafHash.slice(0, 18), 
+            batchId, 
+            proofLength: proof.length 
+        });
 
         // Handle single-leaf edge case: if proof is empty, leaf should equal root
         let isValidProof: boolean;
@@ -128,7 +135,7 @@ async function verifyMerkleProof(
             // Single leaf tree: leaf IS the root
             isValidProof = leafHash.toLowerCase() === expectedMerkleRoot.toLowerCase();
             if (isValidProof) {
-                console.log(`[Watcher] Single-leaf tree: leaf equals root ✅`);
+                log.debug('Single-leaf tree verified: leaf equals root');
             }
         } else {
             // Multiple leaves: use MerkleTree verification
@@ -142,7 +149,7 @@ async function verifyMerkleProof(
             };
         }
 
-        console.log(`[Watcher] Local Merkle proof valid for leaf ${leafHash.slice(0, 18)}...`);
+        log.debug('Local Merkle proof valid', { leafHash: leafHash.slice(0, 18) });
 
         // Step 2: Verify the root matches what's stored on-chain
         const provider = new ethers.JsonRpcProvider(rpcUrl);
@@ -160,7 +167,7 @@ async function verifyMerkleProof(
 
             // Check if batch exists (empty root means batch doesn't exist)
             if (!onChainRoot || onChainRoot === '0x0000000000000000000000000000000000000000000000000000000000000000') {
-                console.warn(`[Watcher] ⚠️ Batch ${batchId} not found on-chain at ${contractAddress}`);
+                log.warn('Batch not found on-chain', { batchId, contractAddress });
                 // Check if the contract actually has ANY batches yet
                 const nextId = await contract.batchCount();
                 if (batchId >= Number(nextId)) {
@@ -171,9 +178,11 @@ async function verifyMerkleProof(
 
             // Compare expected root with on-chain root
             if (onChainRoot.toLowerCase() !== expectedMerkleRoot.toLowerCase()) {
-                console.error(`[Watcher] ❌ Root mismatch for batch ${batchId}:`);
-                console.error(`          Expected (DB): ${expectedMerkleRoot}`);
-                console.error(`          On-Chain:      ${onChainRoot}`);
+                log.error('Root mismatch detected', null, { 
+                    batchId, 
+                    expectedRoot: expectedMerkleRoot, 
+                    onChainRoot 
+                });
                 return {
                     valid: false,
                     details: `Root mismatch: expected ${expectedMerkleRoot.slice(0, 18)}..., on-chain ${onChainRoot.slice(0, 18)}...`
@@ -198,7 +207,7 @@ async function verifyMerkleProof(
 
 // Main audit function
 async function runAudit() {
-    console.log(`[${new Date().toISOString()}] Starting audit cycle...`);
+    log.debug('Starting audit cycle');
 
     try {
         const rpcUrl = process.env.RPC_URL || 'http://localhost:8545';
@@ -224,23 +233,24 @@ async function runAudit() {
                     const isMismatch = !isEmptyRoot && onChainRoot.toLowerCase() !== lastBatch.merkle_root.toLowerCase();
 
                     if (isEmptyRoot || isMismatch) {
-                        console.warn(`[Watcher] ⚠️ Blockchain desync detected! Batch ${lastBatch.batch_id} ${isEmptyRoot ? 'missing on-chain' : 'root mismatch'}.`);
-                        if (!isEmptyRoot) {
-                            console.warn(`          DB: ${lastBatch.merkle_root}`);
-                            console.warn(`          Chain: ${onChainRoot}`);
-                        }
-                        console.warn(`          Clearing stale batch data to allow re-anchoring...`);
+                        log.warn('Blockchain desync detected', { 
+                            batchId: lastBatch.batch_id, 
+                            reason: isEmptyRoot ? 'missing on-chain' : 'root mismatch',
+                            dbRoot: lastBatch.merkle_root,
+                            chainRoot: isEmptyRoot ? null : onChainRoot,
+                            action: 'Clearing stale batch data'
+                        });
                         
                         // Clear stale data
                         await pool.query("UPDATE events SET witness_proofs = NULL");
                         await pool.query('DELETE FROM batches');
                         
-                        console.log(`[Watcher] Stale data cleared. Witness service will re-anchor on next run.`);
+                        log.info('Stale data cleared, witness service will re-anchor on next run');
                         return; // Stop this audit cycle, wait for re-anchoring
                     }
                 }
             } catch (e) {
-                console.error('[Watcher] Sanity check failed:', e);
+                log.error('Sanity check failed', e);
             }
         }
 
@@ -250,7 +260,7 @@ async function runAudit() {
             ['active']
         );
 
-        console.log(`[Watcher] Auditing ${identities.length} identities`);
+        log.info('Auditing identities', { count: identities.length });
 
         for (const identity of identities) {
             // Audit 1: Hash chain check
@@ -262,7 +272,11 @@ async function runAudit() {
                 [identity.did, 'hash_chain', hashChainResult.valid ? 'valid' : 'invalid', hashChainResult.details]
             );
 
-            console.log(`[Watcher] Hash chain for ${identity.scid}: ${hashChainResult.valid ? '✅ valid' : '❌ invalid'}`);
+            log.info('Hash chain audit', { 
+                scid: identity.scid, 
+                valid: hashChainResult.valid,
+                details: hashChainResult.valid ? undefined : hashChainResult.details
+            });
 
             // Get events for this DID that have been batched
             const { rows: events } = await pool.query(
@@ -292,7 +306,11 @@ async function runAudit() {
                     if (!merkleResult.valid) {
                         allMerkleValid = false;
                         merkleDetails = merkleResult.details;
-                        console.error(`[Watcher] ❌ Merkle failure for ${identity.scid} in batch ${wp.batchId}: ${merkleResult.details}`);
+                        log.error('Merkle verification failed', null, { 
+                            scid: identity.scid, 
+                            batchId: wp.batchId, 
+                            details: merkleResult.details 
+                        });
                         break; // Stop at first failure
                     }
                 }
@@ -304,28 +322,34 @@ async function runAudit() {
                      VALUES ($1, $2, $3, $4, NOW())`,
                     [identity.did, 'merkle_proof', allMerkleValid ? 'valid' : 'invalid', merkleDetails]
                 );
-                console.log(`[Watcher] Merkle proof summary for ${identity.scid}: ${allMerkleValid ? '✅ valid' : '❌ invalid'}`);
+                log.info('Merkle proof audit', { 
+                    scid: identity.scid, 
+                    valid: allMerkleValid, 
+                    eventCount: batchedEventCount 
+                });
             } else {
-                console.log(`[Watcher] No batched events for ${identity.scid} - skipping Merkle audit`);
+                log.debug('No batched events for identity', { scid: identity.scid });
             }
         }
 
-        console.log(`[Watcher] Audit cycle complete`);
+        log.info('Audit cycle complete');
 
     } catch (err) {
-        console.error('[Watcher] Audit failed:', err);
+        log.error('Audit failed', err);
     }
 }
 
 // Immediate run on startup
-console.log('🚀 Watcher Engine starting...');
-console.log(`   RPC_URL: ${process.env.RPC_URL || 'http://172.18.16.1:8545'}`);
-console.log(`   CONTRACT_ADDRESS: ${process.env.CONTRACT_ADDRESS || 'NOT SET'}`);
-console.log(`   STORAGE_ROOT: ${STORAGE_ROOT}`);
+log.info('Watcher Engine starting', { 
+    rpcUrl: process.env.RPC_URL || 'http://172.18.16.1:8545',
+    contractAddress: process.env.CONTRACT_ADDRESS || 'NOT SET',
+    storageRoot: STORAGE_ROOT,
+    schedule: 'every 30 seconds (testing mode)'
+});
 
 // Run immediately once
 setTimeout(async () => {
-    console.log('[Watcher] Running initial audit...');
+    log.info('Running initial audit');
     await runAudit();
 }, 5000);
 
@@ -335,5 +359,4 @@ const auditJob = new CronJob('*/30 * * * * *', async () => {
 });
 
 auditJob.start();
-console.log('🔄 Watcher Engine scheduled: every 30 seconds (testing mode)');
-console.log('   (First run in 5 seconds for immediate testing)');
+log.info('Watcher Engine scheduled', { interval: '30 seconds', firstRunIn: '5 seconds' });

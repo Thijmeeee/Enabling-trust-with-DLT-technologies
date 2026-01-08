@@ -36,16 +36,17 @@ export const API_CONFIG = {
 
   // Blockchain configuration
   BLOCKCHAIN: {
-    // For local dev, use Hardhat; for production, use Sepolia
-    RPC_URL: import.meta.env.VITE_RPC_URL || (IS_LOCAL_DEV
-      ? 'http://localhost:8545'
-      : 'https://sepolia.infura.io/v3/your-api-key'),
-    CHAIN_ID: IS_LOCAL_DEV ? 31337 : 11155111,
-    // EXPLORER_URL can be configured via VITE_EXPLORER_URL env var
-    // Set to https://sepolia.etherscan.io for Sepolia testnet
-    EXPLORER_URL: import.meta.env.VITE_EXPLORER_URL || (IS_LOCAL_DEV ? null : 'https://sepolia.etherscan.io'),
+    // Use Sepolia testnet by default (set VITE_USE_LOCAL_CHAIN=true for local Hardhat)
+    RPC_URL: import.meta.env.VITE_RPC_URL || (
+      import.meta.env.VITE_USE_LOCAL_CHAIN === 'true'
+        ? 'http://localhost:8545'
+        : 'https://sepolia.infura.io/v3/493bd4f6b23d409eba3523dfd705e4b1'
+    ),
+    CHAIN_ID: import.meta.env.VITE_USE_LOCAL_CHAIN === 'true' ? 31337 : 11155111,
+    // Always use Sepolia explorer for blockchain links (user can set VITE_EXPLORER_URL to override)
+    EXPLORER_URL: import.meta.env.VITE_EXPLORER_URL || 'https://sepolia.etherscan.io',
     CONTRACT_ADDRESS: import.meta.env.VITE_CONTRACT_ADDRESS || '0x5FbDB2315678afecb367f032d93F642f64180aa3',
-    IS_LOCAL: IS_LOCAL_DEV,
+    IS_LOCAL: import.meta.env.VITE_USE_LOCAL_CHAIN === 'true',
   },
 };
 

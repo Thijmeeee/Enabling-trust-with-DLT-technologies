@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Activity, AlertCircle, CheckCircle, TrendingUp, Shield, Eye, AlertTriangle, Info, ChevronDown, ChevronUp, Package, FileText, Hash } from 'lucide-react';
+import { Activity, AlertCircle, CheckCircle, TrendingUp, Shield, Eye, AlertTriangle, Info, ChevronDown, ChevronUp, Package, FileText, Hash, GitBranch } from 'lucide-react';
 import { hybridDataStore as enhancedDB } from '../../lib/data/hybridDataStore';
 import { localDB } from '../../lib/data/localData';
 import { getDIDOperationsHistory } from '../../lib/operations/didOperationsLocal';
 import { useRole } from '../../lib/utils/roleContext';
 import { WatcherAlert, DPP } from '../../lib/data/localData';
+import MerkleTreeVisualizer from '../visualizations/MerkleTreeVisualizer';
 
 interface MonitoredDPP extends DPP {
   integrityScore: number;
@@ -31,6 +32,7 @@ export default function WatcherDashboard() {
   const [didHistory, setDidHistory] = useState<any[]>([]);
   const [attestations, setAttestations] = useState<any[]>([]);
   const [showAlertModal, setShowAlertModal] = useState(false);
+  const [showMerkleTree, setShowMerkleTree] = useState(true);
   const [alertModalDPP, setAlertModalDPP] = useState<MonitoredDPP | null>(null);
   const [alertForm, setAlertForm] = useState({
     severity: 'warning' as 'critical' | 'warning' | 'info',
@@ -460,12 +462,12 @@ export default function WatcherDashboard() {
       }
     });
 
-    // Filter to show only window groups (main products with components)
+    // Include all groups that are main products (type is 'main')
     const validGroups = Array.from(groups.values()).filter(group => {
-      const isWindowGroup = group.dppName.toLowerCase().startsWith('window') &&
-        !group.dppName.toLowerCase().includes('frame') &&
-        !group.dppName.toLowerCase().includes('panel');
-      return isWindowGroup;
+      // Show all main product groups and groups that have a valid DPP
+      const hasValidDpp = group.dpp && group.dpp.type === 'main';
+      const hasComponents = group.components && group.components.length > 0;
+      return hasValidDpp || hasComponents;
     });
 
     return validGroups;
@@ -548,6 +550,39 @@ export default function WatcherDashboard() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Merkle Tree Verification Section */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <GitBranch className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Blockchain Anchoring Verification</h2>
+            </div>
+            <button
+              onClick={() => setShowMerkleTree(!showMerkleTree)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300 transition-colors"
+            >
+              {showMerkleTree ? (
+                <>
+                  <ChevronUp className="w-4 h-4" />
+                  Hide Merkle Tree
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="w-4 h-4" />
+                  Show Merkle Tree
+                </>
+              )}
+            </button>
+          </div>
+          
+          {showMerkleTree && (
+            <MerkleTreeVisualizer 
+              selectedDPPId={selectedDPPForDetails?.id}
+              selectedDPPDid={selectedDPPForDetails?.did}
+            />
+          )}
         </div>
 
         <div className="grid grid-cols-3 gap-6">

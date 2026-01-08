@@ -117,9 +117,8 @@ export async function generateWitnessAttestations(dppId: string, did: string, dp
     });
   }
 
-  // Insert all attestations to both stores for compatibility
+  // Insert all attestations (once per attestation)
   for (const attestation of attestations) {
-    await hybridDataStore.insertAttestation(attestation);
     await hybridDataStore.insertAttestation(attestation);
   }
 
@@ -202,7 +201,6 @@ export async function createLifecycleEvent(
     signature: `0x${Math.random().toString(16).substring(2, 66)}`,
   };
   await hybridDataStore.insertAttestation(attestationData);
-  await hybridDataStore.insertAttestation(attestationData);
 
   // Also create anchoring event for important lifecycle changes
   if (eventType === 'installation' || eventType === 'disposal') {
@@ -222,7 +220,6 @@ export async function createLifecycleEvent(
         eventTimestamp: new Date().toISOString(),
       },
     };
-    await hybridDataStore.insertAnchoringEvent(lifecycleAnchorData);
     await hybridDataStore.insertAnchoringEvent(lifecycleAnchorData);
   }
 }
@@ -269,7 +266,6 @@ export async function progressDIDLifecycle(did: string, stage: 'registered' | 'v
     },
     signature: `0x${Math.random().toString(16).substring(2, 66)}`,
   };
-  await hybridDataStore.insertAttestation(lifecycleAttestationData);
   await hybridDataStore.insertAttestation(lifecycleAttestationData);
 }
 
@@ -365,9 +361,8 @@ export async function generateDefaultLifecycleEvents(
     });
   }
 
-  // Insert all events into both stores
+  // Insert all events
   for (const event of events) {
-    await hybridDataStore.insertAttestation(event);
     await hybridDataStore.insertAttestation(event);
   }
 

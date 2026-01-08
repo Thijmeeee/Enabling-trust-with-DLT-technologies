@@ -22,8 +22,16 @@ import { createDID, resolveDID, updateDID, deactivateDID } from 'didwebvh-ts';
 // Import Key Management Service
 import { keyManagementService } from '../keyManagement/index.js';
 
+// Import centralized logger
+import { createServiceLogger, requestLogger } from '../../utils/logger.js';
+
+const log = createServiceLogger('identity');
+
 const app = express();
 app.use(express.json());
+
+// Request logging middleware
+app.use(requestLogger('identity'));
 
 // Enable CORS for frontend dev server
 app.use((req, res, next) => {
@@ -1133,8 +1141,11 @@ app.get('/health', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`🚀 Identity Service v2.0 running on port ${PORT}`);
-    console.log(`📍 Domain: ${DOMAIN}`);
-    console.log(`📁 Storage: ${STORAGE_ROOT}`);
-    console.log(`✅ didwebvh-ts integration enabled`);
+    log.info('Identity Service started', {
+        version: '2.0.0',
+        port: PORT,
+        domain: DOMAIN,
+        storageRoot: STORAGE_ROOT,
+        didwebvh: true
+    });
 });

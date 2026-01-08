@@ -91,6 +91,10 @@ if (-not $SkipDatabase) {
         if (Test-Path $seedPath) {
             Get-Content $seedPath | podman exec -i dpp-postgres psql -U dpp_admin -d dpp_db 2>$null
         }
+
+        # Cleanup stale blockchain data (crucial for local dev restarts)
+        Write-Host "      Cleaning stale blockchain data..." -ForegroundColor Gray
+        podman exec -i dpp-postgres psql -U dpp_admin -d dpp_db -c "TRUNCATE batches CASCADE; UPDATE events SET witness_proofs = NULL;" 2>$null
         
         # Generate demo did.jsonl files for Watcher verification
         Write-Host "      Generating demo DID log files..." -ForegroundColor Gray

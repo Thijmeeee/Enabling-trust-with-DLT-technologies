@@ -101,9 +101,6 @@ export default function ManufacturerSimpleDashboard({ onRegisterWindow, onNaviga
                 <p className="text-4xl font-bold text-gray-900 dark:text-white">{todayCount}</p>
               </div>
             </div>
-            <div className="text-right">
-              <p className="text-sm text-gray-400 dark:text-gray-500">Keep up the good work! 👍</p>
-            </div>
           </div>
         </div>
 
@@ -171,11 +168,6 @@ export default function ManufacturerSimpleDashboard({ onRegisterWindow, onNaviga
             </div>
           )}
         </div>
-
-        {/* Help Text */}
-        <p className="text-center text-gray-400 dark:text-gray-500 text-sm mt-8">
-          Need help? Contact your supervisor.
-        </p>
       </div>
     </div>
   );

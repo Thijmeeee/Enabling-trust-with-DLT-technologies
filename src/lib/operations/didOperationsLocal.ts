@@ -94,8 +94,8 @@ export async function transferOwnership(
       approval_status: 'approved' as const,
     };
 
+    // Insert attestation only once via hybridDataStore (which internally uses localDB)
     await enhancedDB.insertAttestation(attestation);
-    await localDB.insertAttestation(attestation);
 
     return {
       success: true,
@@ -178,8 +178,8 @@ export async function rotateKey(
       approval_status: 'approved' as const,
     };
 
+    // Insert attestation only once via hybridDataStore (which internally uses localDB)
     await enhancedDB.insertAttestation(attestation);
-    await localDB.insertAttestation(attestation);
 
     return {
       success: true,
@@ -219,8 +219,9 @@ export async function updateDIDDocument(
       return { success: false, message: 'DID document not found' };
     }
 
-    const versionNumber = typeof didDoc.document_metadata['version'] === 'number'
-      ? didDoc.document_metadata['version'] + 1
+    const metadata = didDoc.document_metadata as Record<string, unknown>;
+    const versionNumber = typeof metadata?.version === 'number'
+      ? (metadata.version as number) + 1
       : 2;
 
     // Create witness attestation for DID update - pending approval
@@ -245,8 +246,8 @@ export async function updateDIDDocument(
       approval_status: 'pending' as const,
     };
 
+    // Insert attestation only once via hybridDataStore (which internally uses localDB)
     await enhancedDB.insertAttestation(attestation);
-    await localDB.insertAttestation(attestation);
 
     return {
       success: true,
@@ -282,7 +283,9 @@ export async function getDIDOperationsHistory(dppId: string) {
         'key_rotation', 
         'did_update', 
         'did_creation',
-        'create'
+        'did_deactivation',
+        'create',
+        'deactivate'
       ].includes(att.attestation_type);
 
       // Explicitly exclude rejected operations
@@ -340,5 +343,166 @@ export async function getPendingAndRejectedOperations(did: string) {
   } catch (error) {
     console.error('Error getting pending/rejected operations:', error);
     return { pending: [], rejected: [] };
+  }
+}
+
+/**
+ * Deactivate a DID (using didwebvh-ts deactivateDID)
+ * This permanently deactivates the DID - it cannot be reactivated
+ * Only the owner can perform this operation
+ */
+export async function deactivateDID(
+  dppId: string,
+  ownerDID: string,
+  reason: string = 'Manual deactivation by owner'
+): Promise<{ success: boolean; message: string }> {
+  try {
+    // Get the DPP
+    const dpp = await enhancedDB.getDPPById(dppId);
+    if (!dpp) {
+      return { success: false, message: 'DPP not found' };
+    }
+
+    // Check if current user is the owner
+    if (dpp.owner !== ownerDID) {
+      return { success: false, message: 'Only the owner can deactivate this DID' };
+    }
+
+    // Check if already deactivated
+    if (dpp.lifecycle_status === 'deactivated') {
+      return { success: false, message: 'DID is already deactivated' };
+    }
+
+    // Try to call backend API for real deactivation (uses didwebvh-ts)
+    try {
+      const response = await fetch(`http://localhost:3000/api/did/${encodeURIComponent(dpp.did)}/deactivate`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keyId: 'default-key', // Backend will handle key lookup
+          reason: reason
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('[DID Operations] Backend DID deactivation successful:', result);
+
+        // Update local DPP stores
+        await enhancedDB.updateDPP(dppId, { lifecycle_status: 'deactivated' });
+        await localDB.updateDPP(dppId, { lifecycle_status: 'deactivated' });
+
+        return {
+          success: true,
+          message: 'DID deactivated successfully via backend (didwebvh-ts)'
+        };
+      }
+    } catch (backendError) {
+      console.log('[DID Operations] Backend not available, using local fallback');
+    }
+
+    // Fallback: Local mock deactivation for demo
+    await enhancedDB.updateDPP(dppId, { lifecycle_status: 'deactivated' });
+    await localDB.updateDPP(dppId, { lifecycle_status: 'deactivated' });
+
+    const attestation = {
+      dpp_id: dppId,
+      did: dpp.did,
+      witness_did: 'did:webvh:example.com:witnesses:did-validator-1',
+      attestation_type: 'did_deactivation',
+      timestamp: new Date().toISOString(),
+      attestation_data: {
+        timestamp: new Date().toISOString(),
+        witness: 'DID Validator Node 1',
+        organization: 'Decentralized Identity Network',
+        eventType: 'DID Deactivation',
+        reason: reason,
+        deactivatedBy: ownerDID,
+        finalVersionId: 'final',
+      },
+      signature: `mock-${Date.now()}`,
+      approval_status: 'approved' as const,
+    };
+
+    // Insert attestation via hybridDataStore
+    await enhancedDB.insertAttestation(attestation);
+
+    return {
+      success: true,
+      message: 'DID deactivated successfully (local fallback)'
+    };
+  } catch (error) {
+    console.error('Error deactivating DID:', error);
+    return { success: false, message: 'Failed to deactivate DID' };
+  }
+}
+
+/**
+ * Update DID document via backend (uses didwebvh-ts updateDID)
+ * Only the owner can perform this operation
+ */
+export async function updateDIDViaBackend(
+  dppId: string,
+  ownerDID: string,
+  updates: {
+    serviceEndpoints?: Array<{ id: string; type: string; serviceEndpoint: string }>;
+    description?: string;
+  }
+): Promise<{ success: boolean; message: string; versionId?: string }> {
+  try {
+    // Get the DPP
+    const dpp = await enhancedDB.getDPPById(dppId);
+    if (!dpp) {
+      return { success: false, message: 'DPP not found' };
+    }
+
+    // Check if current user is the owner
+    if (dpp.owner !== ownerDID) {
+      return { success: false, message: 'Only the owner can update this DID' };
+    }
+
+    // Check if deactivated
+    if (dpp.lifecycle_status === 'deactivated') {
+      return { success: false, message: 'Cannot update a deactivated DID' };
+    }
+
+    // Try to call backend API for real update (uses didwebvh-ts updateDID)
+    try {
+      const response = await fetch(`http://localhost:3000/api/did/${encodeURIComponent(dpp.did)}/update`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keyId: 'default-key', // Backend will handle key lookup
+          updates: {
+            document: {
+              service: updates.serviceEndpoints,
+              description: updates.description
+            }
+          }
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('[DID Operations] Backend DID update successful:', result);
+
+        return {
+          success: true,
+          message: 'DID updated successfully via backend (didwebvh-ts)',
+          versionId: result.versionId
+        };
+      }
+    } catch (backendError) {
+      console.log('[DID Operations] Backend not available, using local fallback');
+    }
+
+    // Fallback: Use existing local updateDIDDocument function
+    return await updateDIDDocument(dppId, ownerDID, {
+      serviceEndpoint: updates.serviceEndpoints?.[0]?.serviceEndpoint,
+      description: updates.description
+    });
+  } catch (error) {
+    console.error('Error updating DID:', error);
+    return { success: false, message: 'Failed to update DID' };
   }
 }

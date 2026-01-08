@@ -1,4 +1,4 @@
-# 🚀 DPP Trust System - Opstart Handleiding
+# DPP Trust System - Opstart Handleiding
 
 ## Overzicht
 
@@ -97,12 +97,6 @@ DB_USER=dpp_admin
 DB_PASS=secret123
 DB_NAME=dpp_db
 PORT=3000
-
-# Logging Configuration
-LOG_LEVEL=info          # debug | info | warn | error
-LOG_FORMAT=pretty       # pretty (dev) | json (production)
-SERVICE_NAME=dpp-trust-system
-ENABLE_TRACING=true     # Enable request correlation IDs
 ```
 
 ---
@@ -115,36 +109,10 @@ ENABLE_TRACING=true     # Enable request correlation IDs
 .\start-dev.ps1
 ```
 
-Dit start automatisch **4 services**:
-1. ✅ PostgreSQL database (Podman container)
-2. ✅ Hardhat blockchain node (lokale blockchain op port 8545)
-3. ✅ Backend Identity Service (port 3000)
-4. ✅ Frontend Development Server (port 5173)
-
-**Script opties:**
-
-| Flag | Beschrijving |
-|------|--------------|
-| `-SkipDatabase` | Sla PostgreSQL over |
-| `-SkipBlockchain` | Sla Hardhat blockchain over |
-| `-SkipBackend` | Sla Backend service over |
-| `-SkipFrontend` | Sla Frontend over |
-| `-DeployContract` | Deploy smart contract naar lokale blockchain |
-
-**Voorbeelden:**
-```powershell
-# Start alles
-.\start-dev.ps1
-
-# Start alles + deploy contract
-.\start-dev.ps1 -DeployContract
-
-# Start alleen frontend en backend (geen blockchain)
-.\start-dev.ps1 -SkipDatabase -SkipBlockchain
-
-# Start alleen database
-.\start-dev.ps1 -SkipBlockchain -SkipBackend -SkipFrontend
-```
+Dit start automatisch:
+1. PostgreSQL database (Podman container)
+2. Backend Identity Service
+3. Frontend Development Server
 
 ### Optie 2: Handmatig Opstarten
 
@@ -166,19 +134,18 @@ Get-Content backend\db\schema.sql | podman exec -i dpp-postgres psql -U dpp_admi
 podman start dpp-postgres
 ```
 
-#### Terminal 2: Hardhat Blockchain (Lokale blockchain)
-```powershell
-cd contracts
-npx hardhat node --hostname 0.0.0.0
-# Output: Started HTTP and WebSocket JSON-RPC server at http://0.0.0.0:8545/
-# Chain ID: 31337
-```
-
-#### Terminal 3: Backend Service
+#### Terminal 2: Backend Service
 ```powershell
 cd backend
 npm run dev:identity
 # Output: 🚀 Identity Service running on port 3000
+```
+
+#### Terminal 3: Blockchain (Optioneel - alleen voor lokale blockchain tests)
+```powershell
+cd contracts
+npx hardhat node --hostname 0.0.0.0
+# Output: Started HTTP and WebSocket JSON-RPC server at http://0.0.0.0:8545/
 ```
 
 #### Terminal 4: Frontend

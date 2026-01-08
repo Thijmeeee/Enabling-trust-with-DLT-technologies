@@ -1,30 +1,92 @@
-# Simplified Caddyfile for local development
+# Production-ready Caddyfile with security features
+# See: https://caddyserver.com/docs/caddyfile
+
+(security_headers) {
+    header {
+        # Security headers
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.infura.io https://*.alchemy.com wss://*.infura.io wss://*.alchemy.com"
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
+        # Remove server identification
+        -Server
+    }
+}
+
+(rate_limit) {
+    # Basic rate limiting - 100 requests per second per IP
+    # Note: For production, consider using a dedicated WAF like Coraza
+    # Enable with: order rate_limit before reverse_proxy
+    # rate_limit {remote.ip} 100r/s
+}
+
+(api_security) {
+    # API-specific security
+    @blocked_patterns {
+        path_regexp sql (?i)(union|select|insert|update|delete|drop|create|alter|exec|execute|xp_|sp_|0x)
+        path_regexp xss (?i)(<script|javascript:|on\w+\s*=)
+        path_regexp traversal (\.\./|\.\.\\)
+    }
+    respond @blocked_patterns "Forbidden" 403
+}
+
 :80 {
-    # 1. Route API requests to microservices
+    import security_headers
+    import rate_limit
+
+    # 1. Route API requests to microservices with security
     handle /api/identity/* {
-        reverse_proxy identity:3000
+        import api_security
+        reverse_proxy identity:3000 {
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
     }
 
     handle /api/products/* {
-        reverse_proxy identity:3000
+        import api_security
+        reverse_proxy identity:3000 {
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
     }
 
     handle /api/events/* {
-        reverse_proxy identity:3000
+        import api_security
+        reverse_proxy identity:3000 {
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
     }
 
     handle /api/witness/* {
-        reverse_proxy witness:3000
+        import api_security
+        reverse_proxy witness:3000 {
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
     }
 
     handle /api/watcher/* {
-        reverse_proxy watcher:3000
+        import api_security
+        reverse_proxy watcher:3000 {
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
     }
 
-    # 2. DID resolution (static files)
+    # 2. DID resolution (static files) - with caching
     handle /.well-known/did/* {
         root * /usr/share/caddy/did
         file_server
+        header Cache-Control "public, max-age=3600"
     }
 
     # 3. Default to Frontend (SPA)
@@ -32,10 +94,20 @@
         root * /usr/share/caddy/app
         try_files {path} /index.html
         file_server
+        
+        # Cache static assets
+        @static {
+            path *.js *.css *.png *.jpg *.jpeg *.gif *.svg *.woff *.woff2
+        }
+        header @static Cache-Control "public, max-age=31536000, immutable"
     }
 
-    # Enable logging
+    # Enable structured logging
     log {
         output stdout
+        format json {
+            time_format iso8601
+        }
+        level INFO
     }
 }

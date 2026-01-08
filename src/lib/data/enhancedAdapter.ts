@@ -3,6 +3,8 @@
  */
 
 import { hybridDataStore as dataStore } from '../data/hybridDataStore';
+import { localDB } from '../data/localData';
+import { enhancedDB } from '../data/enhancedDataStore';
 import { exportHierarchyToJSON } from '../operations/bulkOperations';
 
 export async function getDPPWithRelations(did: string) {
@@ -15,54 +17,55 @@ export async function getDPPWithRelations(did: string) {
 
   console.log('Found DPP:', dpp);
 
-  // Get data using available methods, with fallbacks for unavailable ones
+  // Get data using available methods
   const didDocument = await dataStore.getDIDDocumentByDID(did);
   const attestations = await dataStore.getAttestationsByDID(did);
   const anchoringEvents = await dataStore.getAnchoringEventsByDID(did);
+  
+  // Get credentials and specifications (check both stores)
+  let credentials = await localDB.getCredentialsByDPP(dpp.id);
+  if (credentials.length === 0) {
+    credentials = await enhancedDB.getCredentialsByDPPId(dpp.id);
+  }
+  
+  let specifications = await localDB.getSpecificationsByDPP(dpp.id);
+  if (specifications.length === 0) {
+    specifications = await enhancedDB.getSpecificationsByDPPId(dpp.id);
+  }
 
-  // Methods not yet implemented - return empty arrays
-  const relationships: any[] = [];
-  const credentials: any[] = [];
-  const specifications: any[] = [];
+  // Get relationships using hybridDataStore which checks both stores
+  const relationships = await dataStore.getRelationshipsByParent(did);
 
   console.log('Specifications found:', specifications);
+  console.log('Relationships found:', relationships);
 
-  // No parent/child relationships in backend data yet
-  const parent = null;
-
-  // Parse children from metadata.components if available
-  const children: any[] = [];
-  if (dpp.metadata && Array.isArray(dpp.metadata.components)) {
-    console.log('Found components in metadata:', dpp.metadata.components);
-    // Map components to the expected child format
-    // We try to find the full DPP for each component if possible, otherwise use the metadata
-    for (const comp of dpp.metadata.components) {
-      if (comp.did) {
-        const childDpp = await dataStore.getDPPByDID(comp.did);
-        if (childDpp) {
-          children.push(childDpp);
-        } else {
-          // If we can't find the full DPP (e.g. strict permissioning), create a skeleton from the metadata reference
-          children.push({
-            id: 'unknown-id-' + Math.random(), // Temporary ID
-            did: comp.did,
-            type: comp.type || 'component',
-            model: comp.description || 'Verified Component', // Use description as model name fallack
-            owner: 'Unknown',
-            status: 'active',
-            compliance_status: 'compliant',
-            lifecycle_status: 'installed', // Assume installed if part of a product
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            metadata: {
-              productType: comp.type,
-              ...comp
-            }
-          });
-        }
+  // Get parent if this is a component
+  let parent = null;
+  if (dpp.type === 'component') {
+    const parentRelations = await dataStore.getRelationshipsByChild(did);
+    if (parentRelations.length > 0) {
+      const parentDpp = await dataStore.getDPPByDID(parentRelations[0].parent_did);
+      if (parentDpp) {
+        parent = { did: parentDpp.did, model: parentDpp.model };
       }
     }
   }
+
+  // Get children from relationships table
+  const children: any[] = [];
+  for (const rel of relationships) {
+    const childDpp = await dataStore.getDPPByDID(rel.child_did);
+    if (childDpp) {
+      const childDidDocument = await dataStore.getDIDDocumentByDID(rel.child_did);
+      children.push({
+        dpp: childDpp,
+        didDocument: childDidDocument,
+        relationship: rel,
+      });
+    }
+  }
+
+  console.log('Children found:', children.length);
 
   return {
     dpp,
@@ -85,20 +88,28 @@ export async function updateDPP(_id: string, _updates: Partial<any>): Promise<an
 }
 
 export async function getAggregatedMetrics(dppId: string) {
-  // Simplified metrics without component relationships
   const dpps = await dataStore.getAllDPPs();
   const dpp = dpps.find(d => d.id === dppId);
   if (!dpp) return null;
 
   const attestations = await dataStore.getAttestationsByDID(dpp.did);
   const anchoringEvents = await dataStore.getAnchoringEventsByDID(dpp.did);
+  
+  // Get credentials from both stores
+  let credentials = await localDB.getCredentialsByDPP(dppId);
+  if (credentials.length === 0) {
+    credentials = await enhancedDB.getCredentialsByDPPId(dppId);
+  }
+  
+  // Get relationships using hybridDataStore
+  const relationships = await dataStore.getRelationshipsByParent(dpp.did);
 
   return {
-    componentCount: 0,
-    credentialCount: 0,
+    componentCount: relationships.length,
+    credentialCount: credentials.length,
     attestationCount: attestations.length,
     anchoringCount: anchoringEvents.length,
-    verifiedCredentials: 0,
+    verifiedCredentials: credentials.filter((c: any) => c.verification_status === 'valid').length,
     aggregatedSustainability: {
       totalCO2Footprint: 0,
       avgRecycledContent: 0,

@@ -737,38 +737,34 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                     {/* Verification Checklist */}
                     <div className="space-y-3">
                       <div className="flex items-start gap-3">
-                        <CheckCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                        <div>
-                          <div className="font-medium text-gray-900 dark:text-white">Production Verified</div>
-                          <div className="text-xs text-gray-600 dark:text-gray-400">DID document validated and registered</div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-3">
-                        {trustScore.breakdown.credentials >= 20 ? (
+                        {trustScore.breakdown.didResolution >= 15 ? (
                           <CheckCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
                         ) : (
                           <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                         )}
                         <div>
-                          <div className="font-medium text-gray-900 dark:text-white">Quality Controlled</div>
+                          <div className="font-medium text-gray-900 dark:text-white">DID Registered</div>
                           <div className="text-xs text-gray-600 dark:text-gray-400">
-                            {Math.round((trustScore.breakdown.credentials / 25) * 100)}% of certificates available
+                            {trustScore.breakdown.didResolution >= 25 ? 'Verified with cryptographic keys' :
+                             trustScore.breakdown.didResolution >= 15 ? 'Document registered' : 'Pending registration'}
                           </div>
                         </div>
                       </div>
 
                       <div className="flex items-start gap-3">
-                        {trustScore.breakdown.credentials >= 15 ? (
+                        {(trustScore.breakdown.attestations || 0) >= 15 ? (
                           <CheckCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                        ) : (
+                        ) : (trustScore.breakdown.attestations || 0) > 0 ? (
                           <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                        ) : (
+                          <AlertCircle className="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" />
                         )}
                         <div>
-                          <div className="font-medium text-gray-900 dark:text-white">
-                            {data.credentials ? data.credentials.length : 0} of {data.credentials ? Math.ceil(data.credentials.length / 0.68) : 25} Certificates Uploaded
+                          <div className="font-medium text-gray-900 dark:text-white">Witness Attestations</div>
+                          <div className="text-xs text-gray-600 dark:text-gray-400">
+                            {(trustScore.breakdown.attestations || 0) >= 15 ? 'Events verified by witnesses' :
+                             (trustScore.breakdown.attestations || 0) > 0 ? 'Pending witness verification' : 'No attestations yet'}
                           </div>
-                          <div className="text-xs text-gray-600 dark:text-gray-400">Verifiable documents available</div>
                         </div>
                       </div>
 
@@ -779,9 +775,23 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                           <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                         )}
                         <div>
-                          <div className="font-medium text-gray-900 dark:text-white">Blockchain Registered</div>
+                          <div className="font-medium text-gray-900 dark:text-white">Blockchain Anchored</div>
                           <div className="text-xs text-gray-600 dark:text-gray-400">
-                            Data immutably recorded on blockchain
+                            {trustScore.breakdown.anchoring >= 20 ? 'Data immutably recorded on blockchain' : 'Pending blockchain anchoring'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-3">
+                        {trustScore.breakdown.hierarchy >= 8 ? (
+                          <CheckCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                        ) : (
+                          <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                        )}
+                        <div>
+                          <div className="font-medium text-gray-900 dark:text-white">Component Structure</div>
+                          <div className="text-xs text-gray-600 dark:text-gray-400">
+                            {trustScore.breakdown.hierarchy >= 8 ? 'Valid product hierarchy' : 'Hierarchy validation pending'}
                           </div>
                         </div>
                       </div>

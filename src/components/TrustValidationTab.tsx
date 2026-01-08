@@ -550,6 +550,9 @@ export default function TrustValidationTab({ did }: TrustValidationTabProps) {
     setExpandedSection(expandedSection === section ? null : section);
   };
 
+  // Track the last confirmed status to prevent UI flicker during verification
+  const [lastConfirmedStatus, setLastConfirmedStatus] = useState<'verified' | 'partial' | 'warning'>('warning');
+
   // Derived data
   const uniqueWitnesses = Array.from(new Set(attestations.map(a => a.witness_did)));
   const activeAlerts = alerts.filter(a => !a.resolved);
@@ -563,7 +566,15 @@ export default function TrustValidationTab({ did }: TrustValidationTabProps) {
     return 'warning';
   };
 
-  const overallStatus = getOverallStatus();
+  // Update last confirmed status only when verification is complete
+  useEffect(() => {
+    if (!isVerifying && verification.details.lastVerified) {
+      setLastConfirmedStatus(getOverallStatus());
+    }
+  }, [isVerifying, verification]);
+
+  // Use last confirmed status during verification to prevent flicker
+  const overallStatus = isVerifying ? lastConfirmedStatus : getOverallStatus();
   const statusConfig = {
     verified: { 
       label: 'Fully Verified', 

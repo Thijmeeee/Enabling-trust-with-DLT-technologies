@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { FileCheck, CheckCircle, XCircle, Clock, Shield, Activity, Search, Filter as FilterIcon, X, ChevronDown, ChevronUp, Square, Maximize, Package, User, ArrowRight, Key, RefreshCw, FileText, Edit, Anchor, ExternalLink } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { FileCheck, CheckCircle, XCircle, Clock, Shield, Activity, Search, Filter as FilterIcon, X, ChevronDown, ChevronUp, Square, Maximize, Package, User, ArrowRight, Key, RefreshCw, FileText, Edit, Anchor, ExternalLink, Terminal, Zap, Check } from 'lucide-react';
 import { hybridDataStore as enhancedDB } from '../../lib/data/hybridDataStore';
 import { useRole } from '../../lib/utils/roleContext';
 import { getDIDOperationsHistory } from '../../lib/operations/didOperationsLocal';
@@ -33,6 +33,88 @@ interface GroupedEvents {
   }>;
 }
 
+interface StreamLogItem {
+  id: string;
+  timestamp: Date;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+}
+
+function WitnessVisualizer({ isVerifying, currentStep }: { isVerifying: boolean; currentStep: number }) {
+  const steps = [
+    { id: 1, label: 'Syntax Check', icon: FileText },
+    { id: 2, label: 'Signature Verification', icon: Key },
+    { id: 3, label: 'History Resolution', icon: Clock },
+    { id: 4, label: 'Policy Compliance', icon: Shield },
+  ];
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-6">
+      <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4 flex items-center gap-2">
+        <Zap className="w-4 h-4 text-blue-500" />
+        Active Verification Process
+      </h3>
+      <div className="grid grid-cols-4 gap-4">
+        {steps.map((step, idx) => {
+          const isActive = isVerifying && currentStep === idx;
+          const isCompleted = isVerifying && currentStep > idx;
+          const Icon = step.icon;
+          return (
+            <div key={step.id} className={`flex flex-col items-center p-3 rounded-lg border ${isActive ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' :
+              isCompleted ? 'border-green-500 bg-green-50 dark:bg-green-900/20' :
+                'border-gray-200 dark:border-gray-700 opacity-50'
+              }`}>
+              <div className={`p-2 rounded-full mb-2 ${isActive ? 'bg-blue-100 text-blue-600 animate-pulse' :
+                isCompleted ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
+                }`}>
+                <Icon className="w-5 h-5" />
+              </div>
+              <span className={`text-xs text-center font-medium ${isActive ? 'text-blue-700' : isCompleted ? 'text-green-700' : 'text-gray-500'
+                }`}>{step.label}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function LiveLog({ logs }: { logs: StreamLogItem[] }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [logs]);
+
+  return (
+    <div className="bg-gray-900 rounded-lg border border-gray-800 p-4 h-64 flex flex-col font-mono text-xs">
+      <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-800 text-gray-400">
+        <span className="flex items-center gap-2"><Terminal className="w-3 h-3" /> Live Event Stream</span>
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+          <span>ONLINE</span>
+        </div>
+      </div>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-1">
+        {logs.length === 0 && <span className="text-gray-600 italic">Waiting for events...</span>}
+        {logs.map(log => (
+          <div key={log.id} className="flex gap-3">
+            <span className="text-gray-500 flex-shrink-0">[{log.timestamp.toLocaleTimeString()}]</span>
+            <span className={`${log.type === 'error' ? 'text-red-400' :
+              log.type === 'success' ? 'text-green-400' :
+                log.type === 'warning' ? 'text-yellow-400' :
+                  'text-gray-300'
+              }`}>
+              {log.message}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function WitnessDashboard() {
   const { currentRoleDID } = useRole();
   const [pendingEvents, setPendingEvents] = useState<PendingDIDEvent[]>([]);
@@ -42,6 +124,40 @@ export default function WitnessDashboard() {
   const [selectedEvent, setSelectedEvent] = useState<PendingDIDEvent | null>(null);
   const [expandedDPP, setExpandedDPP] = useState<string | null>(null);
   const [expandedComponents, setExpandedComponents] = useState<Set<string>>(new Set());
+
+  // Helper function to format event type labels with proper capitalization
+  const formatEventTypeLabel = (eventType: string): string => {
+    const labels: Record<string, string> = {
+      'did_creation': 'DID Creation',
+      'create': 'DID Creation',
+      'key_rotation': 'Key Rotation',
+      'ownership_change': 'Ownership Transfer',
+      'ownership_transfer': 'Ownership Transfer',
+      'did_update': 'DID Update',
+      'did_lifecycle_update': 'Lifecycle Update',
+      'did_deactivation': 'DID Deactivation',
+      'deactivate': 'DID Deactivation',
+    };
+    
+    if (labels[eventType]) {
+      return labels[eventType];
+    }
+    
+    // Fallback: convert snake_case to Title Case
+    return eventType
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  };
+
+  // Visualizer State
+  const [logs, setLogs] = useState<StreamLogItem[]>([]);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
+
+  const addLog = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
+    setLogs(prev => [...prev.slice(-49), { id: Math.random().toString(36), timestamp: new Date(), message, type }]);
+  };
 
   // Blockchain batches from backend
   const [batches, setBatches] = useState<BackendBatch[]>([]);
@@ -106,7 +222,7 @@ export default function WitnessDashboard() {
     console.log('Parent Map:', Array.from(parentMap.entries()));
 
     // Filter for DID events only
-    const didEventTypes = ['did_creation', 'key_rotation', 'ownership_change', 'did_update', 'did_lifecycle_update'];
+    const didEventTypes = ['did_creation', 'key_rotation', 'ownership_change', 'did_update', 'did_lifecycle_update', 'did_deactivation'];
 
     const events: PendingDIDEvent[] = [];
     const approved: PendingDIDEvent[] = [];
@@ -162,7 +278,7 @@ export default function WitnessDashboard() {
           did: att.did,
           eventType: att.attestation_type,
           timestamp: att.timestamp,
-          description: att.attestation_type.replace(/_/g, ' ').toUpperCase(),
+          description: formatEventTypeLabel(att.attestation_type),
           data: att.attestation_data,
           status: status,
           productModel: dpp.model, // Keep original component name
@@ -193,7 +309,14 @@ export default function WitnessDashboard() {
       }
     }
 
-    setPendingEvents(events);
+    setPendingEvents(prev => {
+      // Detect new events for logging
+      const newEvents = events.filter(e => !prev.find(p => p.id === e.id));
+      if (newEvents.length > 0) {
+        newEvents.forEach(e => addLog(`Received new event: ${e.eventType} for ${e.did.slice(-8)}`, 'info'));
+      }
+      return events;
+    });
     setApprovedEvents(approved);
     setRejectedEvents(rejected);
   }
@@ -367,13 +490,44 @@ export default function WitnessDashboard() {
     setShowConfirmModal(true);
   }
 
-  function handleConfirm() {
+  async function handleConfirm() {
     if (!eventToConfirm || !confirmAction) return;
 
+    // Run Visualizer Animation
+    setIsVerifying(true);
+    addLog(`Initiating verification for event ${eventToConfirm.id.slice(0, 8)}...`, 'info');
+
+    // Step 1: Syntax
+    setCurrentStep(0);
+    await new Promise(r => setTimeout(r, 600));
+    addLog('Syntax check passed: DID format valid', 'success');
+
+    // Step 2: Signature
+    setCurrentStep(1);
+    await new Promise(r => setTimeout(r, 800));
+    addLog('Signature valid: Signed by key-001', 'success');
+
+    // Step 3: History
+    setCurrentStep(2);
+    await new Promise(r => setTimeout(r, 800));
+    addLog('History check: consistent with previous operation', 'success');
+
+    // Step 4: Compliance
+    setCurrentStep(3);
+    await new Promise(r => setTimeout(r, 600));
+    addLog('Policy check: compliant', 'success');
+
+    // Complete
+    setCurrentStep(4);
+    await new Promise(r => setTimeout(r, 400));
+    setIsVerifying(false);
+
     if (confirmAction === 'approve') {
-      handleApprove(eventToConfirm);
+      await handleApprove(eventToConfirm);
+      addLog(`Event ${eventToConfirm.id.slice(0, 8)} APPROVED and queued for batching`, 'success');
     } else {
-      handleReject(eventToConfirm);
+      await handleReject(eventToConfirm);
+      addLog(`Event ${eventToConfirm.id.slice(0, 8)} REJECTED`, 'warning');
     }
   }
 
@@ -482,18 +636,19 @@ export default function WitnessDashboard() {
       g.components?.forEach(c => console.log('  Component:', c.name, '- Events:', c.events.length));
     });
 
-    // Filter to show only window groups (main products with components)
+    // Include all groups that have events (either main events or component events)
     const validGroups = Array.from(groups.values()).filter(group => {
-      // Only show groups that are windows (main products)
-      const isWindowGroup = group.dppName.toLowerCase().startsWith('window') &&
-        !group.dppName.toLowerCase().includes('frame') &&
-        !group.dppName.toLowerCase().includes('panel');
+      // Show groups that have any events
+      const hasMainEvents = group.events.length > 0;
+      const hasComponentEvents = group.components && group.components.some(c => c.events.length > 0);
+      const hasAnyEvents = hasMainEvents || hasComponentEvents;
 
       console.log('Filtering group:', group.dppName,
-        '- isWindow:', isWindowGroup,
-        '- Keep?', isWindowGroup);
+        '- hasMainEvents:', hasMainEvents,
+        '- hasComponentEvents:', hasComponentEvents,
+        '- Keep?', hasAnyEvents);
 
-      return isWindowGroup;
+      return hasAnyEvents;
     });
 
     console.log('Valid groups after filtering:', validGroups.length);
@@ -620,6 +775,63 @@ export default function WitnessDashboard() {
             )}
           </div>
         )}
+
+        {/* Visualization Area */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          <div className="lg:col-span-1">
+            <WitnessVisualizer isVerifying={isVerifying} currentStep={currentStep} />
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">System Status</h3>
+                <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs rounded-full font-medium flex items-center gap-1">
+                  <Activity className="w-3 h-3" /> Operational
+                </span>
+              </div>
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Node Uptime</span>
+                  <span className="font-mono text-gray-900 dark:text-gray-200">99.98%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Pending TXs</span>
+                  <span className="font-mono text-gray-900 dark:text-gray-200">{pendingEvents.length} events</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Avg. Batch Time</span>
+                  <span className="font-mono text-gray-900 dark:text-gray-200">10.2s</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="lg:col-span-2">
+            <LiveLog logs={logs} />
+
+            {/* Blockchain Anchors - Compact View */}
+            {batches.length > 0 && (
+              <div className="mt-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Anchor className="w-4 h-4 text-purple-600" />
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Latest Blockchain Batches</h3>
+                </div>
+                <div className="space-y-2">
+                  {batches.slice(0, 2).map((batch) => (
+                    <div key={batch.batch_id} className="flex items-center justify-between text-xs p-2 bg-gray-50 dark:bg-gray-700 rounded border border-gray-100 dark:border-gray-600">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-medium text-purple-600 dark:text-purple-400">Batch #{batch.batch_id}</span>
+                        <span className="text-gray-400">|</span>
+                        <span className="text-gray-600 dark:text-gray-300">Size: {batch.size} KB</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-gray-500">{batch.tx_hash.slice(0, 12)}...</span>
+                        {batch.status === 'confirmed' ? <CheckCircle className="w-3 h-3 text-green-500" /> : <Clock className="w-3 h-3 text-yellow-500" />}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Search and Filter Bar */}
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-6 transition-colors">

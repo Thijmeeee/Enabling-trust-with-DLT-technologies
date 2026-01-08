@@ -4,6 +4,10 @@ import { ethers } from 'ethers';
 import { MerkleTree } from 'merkletreejs';
 import { sha256 } from '@noble/hashes/sha256';
 import 'dotenv/config';
+import { createServiceLogger } from '../../utils/logger.js';
+
+// Initialize structured logger
+const log = createServiceLogger('witness');
 
 const pool = new Pool({
     host: process.env.DB_HOST || 'localhost',
@@ -34,7 +38,7 @@ function hexToBuffer(hex: string): Buffer {
 
 // Main batch processing function
 async function processBatch() {
-    console.log(`[${new Date().toISOString()}] Starting batch processing...`);
+    log.debug('Starting batch processing');
 
     try {
         // A. Fetch unanchored events (events with NULL witness_proofs)
@@ -46,11 +50,11 @@ async function processBatch() {
     `);
 
         if (events.length === 0) {
-            console.log('[Witness] No unanchored events found. Skipping batch.');
+            log.debug('No unanchored events found, skipping batch');
             return;
         }
 
-        console.log(`[Witness] Found ${events.length} unanchored events`);
+        log.info('Found unanchored events', { eventCount: events.length });
 
         // B. Build Merkle Tree
         // Use the leaf_hash directly as the leaf (it's already a SHA256 hash)
@@ -66,7 +70,7 @@ async function processBatch() {
         const tree = new MerkleTree(leaves, sha256Buffer, { sortPairs: true });
         const root = tree.getHexRoot();
 
-        console.log(`[Witness] Merkle root: ${root}`);
+        log.info('Merkle tree built', { merkleRoot: root, leafCount: leaves.length });
 
         // C. Anchor to Blockchain
         const rpcUrl = process.env.RPC_URL || "http://blockchain:8545";
@@ -86,12 +90,15 @@ async function processBatch() {
 
         const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, wallet);
 
-        console.log(`[Witness] Anchoring to contract ${contractAddress}...`);
+        log.info('Anchoring to blockchain', { contractAddress, merkleRoot: root });
         const tx = await contract.anchor(root);
         const receipt = await tx.wait();
 
-        console.log(`[Witness] Transaction confirmed: ${receipt.hash}`);
-        console.log(`[Witness] Block number: ${receipt.blockNumber}`);
+        log.info('Transaction confirmed', { 
+            txHash: receipt.hash, 
+            blockNumber: receipt.blockNumber,
+            gasUsed: receipt.gasUsed?.toString()
+        });
 
         // D. Parse the Anchored event to get the REAL batch ID from the contract
         // The contract returns batchId via the Anchored event
@@ -110,10 +117,10 @@ async function processBatch() {
         if (anchoredLog) {
             const parsedEvent = iface.parseLog({ topics: anchoredLog.topics as string[], data: anchoredLog.data });
             contractBatchId = Number(parsedEvent?.args?.batchId ?? 0);
-            console.log(`[Witness] Contract returned batchId: ${contractBatchId}`);
+            log.info('Parsed Anchored event', { batchId: contractBatchId });
         } else {
             // Fallback: query contract for latest batch count (less reliable)
-            console.warn('[Witness] Could not parse Anchored event, using fallback');
+            log.warn('Could not parse Anchored event, using fallback');
             contractBatchId = (await pool.query('SELECT COALESCE(MAX(batch_id), -1) + 1 as next_id FROM batches')).rows[0].next_id;
         }
 
@@ -122,7 +129,10 @@ async function processBatch() {
         if (contractBatchId === 0) {
             const existingBatches = await pool.query('SELECT COUNT(*) FROM batches');
             if (parseInt(existingBatches.rows[0].count) > 0) {
-                console.warn('[Witness] ⚠️ Blockchain reset detected (Batch 0 anchored but DB has existing batches). Clearing old batch references...');
+                log.warn('Blockchain reset detected', { 
+                    reason: 'Batch 0 anchored but DB has existing batches',
+                    action: 'Clearing old batch references'
+                });
                 await pool.query("UPDATE events SET witness_proofs = NULL");
                 await pool.query('DELETE FROM batches');
             }
@@ -142,7 +152,12 @@ async function processBatch() {
         );
 
         const batchId = contractBatchId;
-        console.log(`✅ Anchored batch ${batchId} with root ${root} in tx ${receipt.hash}`);
+        log.info('Batch anchored successfully', { 
+            batchId, 
+            merkleRoot: root, 
+            txHash: receipt.hash,
+            blockNumber: receipt.blockNumber
+        });
 
         // F. Update events with batch reference AND individual Merkle proofs
         for (let i = 0; i < events.length; i++) {
@@ -170,24 +185,30 @@ async function processBatch() {
                 [JSON.stringify(witnessProofData), event.id]
             );
 
-            console.log(`[Witness] Stored proof for event ${event.id}: leaf ${i}/${events.length}`);
+            log.debug('Stored proof for event', { eventId: event.id, leafIndex: i, totalLeaves: events.length });
         }
 
-        console.log(`[Witness] Updated ${events.length} events with batch ${batchId} and individual Merkle proofs`);
+        log.info('Batch processing completed', { 
+            batchId, 
+            eventCount: events.length,
+            merkleRoot: root
+        });
 
     } catch (err) {
-        console.error('[Witness] Batch processing failed:', err);
+        log.error('Batch processing failed', err, { phase: 'processBatch' });
     }
 }
 
-// Immediate run on startup (for testing)
-console.log('🚀 Witness Engine starting...');
-console.log(`   RPC_URL: ${process.env.RPC_URL || 'http://blockchain:8545'}`);
-console.log(`   CONTRACT_ADDRESS: ${process.env.CONTRACT_ADDRESS || 'NOT SET'}`);
+// Immediate run on startup
+log.info('Witness Engine starting', { 
+    rpcUrl: process.env.RPC_URL || 'http://blockchain:8545',
+    contractAddress: process.env.CONTRACT_ADDRESS || 'NOT SET',
+    schedule: 'every 10 seconds (testing mode)'
+});
 
 // Run immediately once, then on schedule
 setTimeout(async () => {
-    console.log('[Witness] Running initial batch check...');
+    log.info('Running initial batch check');
     await processBatch();
 }, 5000);
 
@@ -197,5 +218,4 @@ const batchJob = new CronJob('*/10 * * * * *', async () => {
 });
 
 batchJob.start();
-console.log('🔄 Witness Engine scheduled: every 10 seconds (testing mode)');
-console.log('   (First run in 5 seconds for immediate testing)');
+log.info('Witness Engine scheduled', { interval: '10 seconds', firstRunIn: '5 seconds' });
