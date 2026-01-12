@@ -137,7 +137,6 @@ chmod +x deploy-vm.sh stop-vm.sh
 | **Watcher** | Audits system integrity | Verify Merkle proofs, Hash chain validation |
 | **Recycler** | End-of-life handler | View product composition, Mark as recycled |
 | **Consumer** | End user | Scan QR, View product info |
-| **Supervisor** | System admin | View all operations, Compliance reporting |
 
 ## 🔗 Trust Layer Components
 

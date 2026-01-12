@@ -13,7 +13,9 @@ import {
   Radio,
   HardDrive,
   Users,
-  Link
+  Link,
+  Calculator,
+  Scan
 } from 'lucide-react';
 import type { UserRole } from './utils/roleContext';
 
@@ -23,7 +25,6 @@ export interface InfrastructureEntity {
   type: 'node' | 'database' | 'service' | 'client';
   description: string;
   icon: any;
-  status: 'active' | 'standby' | 'optional';
 }
 
 export interface StakeholderProfile {
@@ -40,9 +41,9 @@ export const ECOSYSTEM_MAP: Record<string, StakeholderProfile> = {
     label: 'Manufacturer',
     description: 'Creates products and mints initial Digital Product Passports.',
     responsibilities: [
-      'Minting new Passports',
-      'Anchoring creation events',
-      'Managing product data'
+      'Minting new DPPs',
+      'Managing product data',
+      'Managing DID-files'
     ],
     infrastructure: [
       {
@@ -50,8 +51,7 @@ export const ECOSYSTEM_MAP: Record<string, StakeholderProfile> = {
         name: 'Identity Agent (Wallet)',
         type: 'service',
         description: 'Manages private keys for signing DPPs',
-        icon: Key,
-        status: 'active'
+        icon: Key
       },
       {
         id: 'man-db',
@@ -59,43 +59,31 @@ export const ECOSYSTEM_MAP: Record<string, StakeholderProfile> = {
         type: 'database',
         description: 'Stores private technical specifications',
         icon: Database,
-        status: 'active'
       },
-      {
-        id: 'man-gateway',
-        name: 'Trust Anchor Gateway',
-        type: 'node',
-        description: 'Connects internal systems to DLT',
-        icon: Server,
-        status: 'active'
-      }
     ]
   },
   Witness: {
     role: 'Witness',
-    label: 'Witness Node',
+    label: 'Witness',
     description: 'Neutral party that validates critical lifecycle events.',
     responsibilities: [
-      'Validating transactions',
-      'Signing attestations',
-      'Preventing double-spending'
+      'Validating DID-operations',
+      'Anchoring proofs on blockchain'
     ],
     infrastructure: [
-      {
-        id: 'wit-node',
-        name: 'Observer Node',
-        type: 'node',
-        description: 'Full copy of the ledger for validation',
-        icon: Globe,
-        status: 'active'
-      },
       {
         id: 'wit-service',
         name: 'Notary Service',
         type: 'service',
         description: 'Automated signing of valid requests',
         icon: FileCheck,
-        status: 'active'
+      },
+       {
+        id: 'man-gateway',
+        name: 'Trust Anchor Gateway',
+        type: 'node',
+        description: 'Connects internal systems to blockchain',
+        icon: Server,
       }
     ]
   },
@@ -106,25 +94,29 @@ export const ECOSYSTEM_MAP: Record<string, StakeholderProfile> = {
     responsibilities: [
       'Audit logging',
       'Fraud detection',
-      'Compliance checking'
     ],
     infrastructure: [
       {
-        id: 'watch-node',
+        id: 'observer-node',
+        name: 'Observer Node',
+        type: 'node',
+        description: 'Full copy of the ledger for validation',
+        icon: Globe,
+      },
+      {
+        id: 'audit-node',
         name: 'Audit Node',
         type: 'node',
         description: 'Read-only access to all public proofs',
-        icon: Activity,
-        status: 'active'
+        icon: Search,
       },
       {
-        id: 'watch-analytics',
-        name: 'Anomaly Detector',
-        type: 'service',
-        description: 'AI model scanning for irregularities',
-        icon: Search,
-        status: 'active'
-      }
+        id: 'calculating-node',
+        name: 'Calculating Node',
+        type: 'node',
+        description: 'Reconstructing the merkle tree with verifying hashes',
+        icon: Calculator,
+      },
     ]
   },
   Resolver: {
@@ -143,65 +135,33 @@ export const ECOSYSTEM_MAP: Record<string, StakeholderProfile> = {
         type: 'node',
         description: 'Global entry point for DID traversal',
         icon: Link,
-        status: 'active'
       }
     ]
   },
-  Consumer: {
-    role: 'Consumer',
-    label: 'Consumer',
-    description: 'End-user who scans products to verify authenticity.',
+  ConsumerRecycler: {
+    role: 'Consumer' as any,
+    label: 'Consumer & Recycler',
+    description: 'End-users and recycling facilities who interact with products throughout and at the end of their lifecycle.',
     responsibilities: [
-      'Authenticity verification',
-      'Accessing product story',
-      'Claiming ownership (optional)'
+      'Accessing product story and transparency data',
+      'Claiming ownership and verifying authenticity',
+      'Marking products as recycled at end-of-life',
+      'Recovering valuable materials using DPP data'
     ],
     infrastructure: [
       {
         id: 'con-app',
         name: 'Consumer App',
         type: 'client',
-        description: 'Web app for seamless product interaction',
-        icon: Smartphone,
-        status: 'active'
-      }
-    ]
-  },
-  Supervisor: {
-    role: 'Supervisor',
-    label: 'Supervisor',
-    description: 'Manages access rights and network governance.',
-    responsibilities: [
-      'Issuing credentials',
-      'Revoking compromised keys'
-    ],
-    infrastructure: [
-      {
-        id: 'sup-auth',
-        name: 'Authority Node',
-        type: 'node',
-        description: 'governance and permission management',
-        icon: Shield,
-        status: 'active'
-      }
-    ]
-  },
-  Recycler: {
-    role: 'Recycler',
-    label: 'Recycler',
-    description: 'Processes products at end-of-life.',
-    responsibilities: [
-      'Marking products as recycled',
-      'Recovering materials'
-    ],
-    infrastructure: [
+        description: 'Scans QR-codes to access the Digital Product Passport data.',
+        icon: Scan,
+      },
       {
         id: 'rec-scanner',
-        name: 'Intake Scanner',
+        name: 'Recycler Portal',
         type: 'client',
-        description: 'IoT device for checking material composition',
+        description: 'Interface for material recovery and recycling status updates.',
         icon: Radio,
-        status: 'active'
       }
     ]
   }

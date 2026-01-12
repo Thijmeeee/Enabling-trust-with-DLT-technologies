@@ -46,7 +46,6 @@ function addDarkModeClasses(filePath) {
 // Process dashboards
 const dashboards = [
     'src/components/dashboards/RecyclerDashboard.tsx',
-    'src/components/dashboards/SupervisorDashboard.tsx',
     'src/components/dashboards/ResolverDashboard.tsx'
 ];
 

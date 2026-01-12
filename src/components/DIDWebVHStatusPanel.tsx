@@ -8,7 +8,6 @@ interface DIDWebVHStatusPanelProps {
 
 export default function DIDWebVHStatusPanel({ did }: DIDWebVHStatusPanelProps) {
     const { currentRole } = useRole();
-    const isSupervisor = currentRole === 'Supervisor';
     const [isExpanded, setIsExpanded] = useState(false);
 
     return (
@@ -129,13 +128,12 @@ export default function DIDWebVHStatusPanel({ did }: DIDWebVHStatusPanelProps) {
                         </div>
                     </div>
 
-                    {/* Supervisor-Specific Compliance Check */}
-                    {isSupervisor && (
-                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-lg p-5">
-                            <div className="flex items-start gap-3">
-                                <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0 mt-0.5" />
-                                <div>
-                                    <h4 className="font-bold text-green-900 text-lg mb-2">Regulatory Compliance</h4>
+                    {/* Regulatory Compliance Info */}
+                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-lg p-5 mb-4">
+                        <div className="flex items-start gap-3">
+                            <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0 mt-0.5" />
+                            <div>
+                                <h4 className="font-bold text-green-900 text-lg mb-2">Regulatory Compliance</h4>
                                     <p className="text-sm text-green-800 leading-relaxed mb-3">
                                         This DID:webvh implementation adheres to the <strong>EU Digital Product Passport Regulation</strong>
                                         and the <strong>eIDAS 2.0 framework</strong> for digital identity verification. The system ensures:
@@ -161,20 +159,17 @@ export default function DIDWebVHStatusPanel({ did }: DIDWebVHStatusPanelProps) {
                                 </div>
                             </div>
                         </div>
-                    )}
 
-                    {/* Educational Footer for Manufacturers */}
-                    {!isSupervisor && (
-                        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                            <h4 className="font-semibold text-purple-900 mb-2 text-sm">Why This Matters for Manufacturers</h4>
-                            <p className="text-xs text-purple-800 leading-relaxed">
-                                DID:webvh provides you with a <strong>verifiable digital identity</strong> for every product.
-                                This builds trust with buyers, enables instant proof of authenticity, and creates a permanent
-                                record that protects against counterfeiting and fraud. Your products gain a digital certificate
-                                that travels with them throughout their entire lifecycle.
-                            </p>
-                        </div>
-                    )}
+                    {/* Educational Footer for Stakeholders */}
+                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                        <h4 className="font-semibold text-purple-900 mb-2 text-sm">Why This Matters</h4>
+                        <p className="text-xs text-purple-800 leading-relaxed">
+                            DID:webvh provides you with a <strong>verifiable digital identity</strong> for every product.
+                            This builds trust with stakeholders, enables instant proof of authenticity, and creates a permanent
+                            record that protects against counterfeiting and fraud. Your products gain a digital certificate
+                            that travels with them throughout their entire lifecycle.
+                        </p>
+                    </div>
                 </div>
             )}
         </div>

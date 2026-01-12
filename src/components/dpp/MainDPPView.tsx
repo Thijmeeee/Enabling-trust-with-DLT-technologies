@@ -332,7 +332,7 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
 
   // Helper to check if current role can see advanced features
   const canSeeAdvancedFeatures = () => {
-    return currentRole.includes('Manufacturer') || currentRole === 'Supervisor';
+    return currentRole.includes('Manufacturer');
   };
 
   const dpp = data.dpp;

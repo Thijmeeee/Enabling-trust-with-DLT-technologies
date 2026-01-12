@@ -668,7 +668,7 @@ export default function WitnessDashboard() {
                   <FileCheck className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
                 </div>
                 <div>
-                  <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Witness Node Dashboard</h1>
+                  <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Witness Dashboard</h1>
                   <p className="text-gray-600 dark:text-gray-400">Validate and sign DID events</p>
                 </div>
               </div>

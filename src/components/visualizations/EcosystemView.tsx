@@ -18,7 +18,6 @@ const ROLE_THEMES: Record<string, any> = {
   Resolver: { bg: 'bg-yellow-100', text: 'text-yellow-900' },
   Supervisor: { bg: 'bg-red-100', text: 'text-red-900' },
   Recycler: { bg: 'bg-green-100', text: 'text-green-900' },
-  Consumer: { bg: 'bg-slate-100', text: 'text-slate-900' },
 };
 
 export default function EcosystemView() {

@@ -7,7 +7,6 @@ import WatcherDashboard from './components/dashboards/WatcherDashboard';
 import ResolverDashboard from './components/dashboards/ResolverDashboard';
 import ManufacturerDashboard from './components/dashboards/ManufacturerDashboard';
 import ManufacturerSimpleDashboard from './components/dashboards/ManufacturerSimpleDashboard';
-import SupervisorDashboard from './components/dashboards/SupervisorDashboard';
 import RecyclerDashboard from './components/dashboards/RecyclerDashboard';
 import ConsumerView from './components/dashboards/ConsumerView';
 import WindowRegistrationWizard from './components/dashboards/WindowRegistrationWizard';
@@ -145,7 +144,6 @@ function AppContent() {
   const roles = [
     { value: 'Manufacturer A' as const, label: 'Manufacturer A' },
     { value: 'Manufacturer B' as const, label: 'Manufacturer B' },
-    { value: 'Supervisor' as const, label: 'Supervisor' },
     { value: 'Recycler' as const, label: 'Recycler' },
     { value: 'Consumer' as const, label: 'Consumer' },
     { value: 'Witness' as const, label: 'Witness' },
@@ -310,12 +308,6 @@ function AppContent() {
           {view === 'dashboard' && dashboardMode === 'role' && (currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B') && (
             <ManufacturerSimpleDashboard
               onRegisterWindow={() => setView('register-wizard')}
-              onNavigate={handleSelectDPP}
-            />
-          )}
-
-          {view === 'dashboard' && dashboardMode === 'role' && currentRole === 'Supervisor' && (
-            <SupervisorDashboard
               onNavigate={handleSelectDPP}
             />
           )}

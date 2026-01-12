@@ -147,7 +147,7 @@ export default function OperatorDashboard({ onRegisterWindow, onNavigate }: Oper
 
         {/* Help Text */}
         <p className="text-center text-gray-400 text-sm mt-8">
-          Hulp nodig? Vraag uw supervisor.
+          Need help? Contact system support.
         </p>
       </div>
     </div>

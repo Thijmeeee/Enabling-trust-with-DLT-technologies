@@ -747,7 +747,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                           </div>
                           
                           <div className="text-right">
-                            <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase font-semibold tracking-widest">Witness Node</p>
+                            <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase font-semibold tracking-widest">Witness</p>
                             <p className="text-xs font-mono text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-900 px-2 py-1 rounded mt-1">
                               {attestation.witness_did.substring(0, 15)}...{attestation.witness_did.substring(attestation.witness_did.length - 4)}
                             </p>

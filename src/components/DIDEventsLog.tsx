@@ -320,7 +320,7 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
                             )}
                             {event.type === 'attestation' && (
                               <div>
-                                <p className="mb-1"><span className="font-medium">Witness Node:</span> {event.details.witness.split(':').pop()}</p>
+                                <p className="mb-1"><span className="font-medium">Witness:</span> {event.details.witness.split(':').pop()}</p>
                                 {event.details.isDIDEvent && (
                                   <div className="mt-2 px-2 py-1 bg-green-50 border border-green-200 rounded text-green-800 font-medium">
                                     ✓ DID Event - Monitored by Witnesses

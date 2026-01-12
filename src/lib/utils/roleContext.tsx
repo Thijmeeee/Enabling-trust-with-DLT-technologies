@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, ReactNode } from 'react';
 
-export type UserRole = 'Recycler' | 'Manufacturer' | 'Manufacturer A' | 'Manufacturer B' | 'Supervisor' | 'Witness' | 'Watcher' | 'Resolver' | 'Consumer';
+export type UserRole = 'Recycler' | 'Manufacturer' | 'Manufacturer A' | 'Manufacturer B' | 'Witness' | 'Watcher' | 'Resolver' | 'Consumer';
 
 interface RoleContextType {
   currentRole: UserRole;
@@ -17,7 +17,6 @@ export const roleDIDs: Record<UserRole, string> = {
   Manufacturer: 'did:webvh:example.com:organizations:window-manufacturer',
   'Manufacturer A': 'did:webvh:glass-solutions.com:organizations:manufacturer',
   'Manufacturer B': 'did:webvh:frame-masters.com:organizations:manufacturer',
-  Supervisor: 'did:webvh:example.com:roles:supervisor-001',
   Witness: 'did:webvh:example.com:witnesses:witness-node-001',
   Watcher: 'did:webvh:example.com:watchers:watcher-node-001',
   Resolver: 'did:webvh:example.com:resolvers:resolver-node-001',
@@ -30,7 +29,6 @@ const rolePermissions: Record<UserRole, string[]> = {
   Manufacturer: ['basic', 'materials', 'lifecycle', 'operations', 'manufacturing', 'suppliers', 'costs'],
   'Manufacturer A': ['basic', 'materials', 'lifecycle', 'operations', 'manufacturing', 'suppliers', 'costs'],
   'Manufacturer B': ['basic', 'materials', 'lifecycle', 'operations', 'manufacturing', 'suppliers', 'costs'],
-  Supervisor: ['basic', 'materials', 'lifecycle', 'operations', 'manufacturing', 'suppliers', 'costs', 'sensitive', 'all'],
   Witness: ['basic', 'operations', 'did-events'],
   Watcher: ['basic', 'operations', 'did-events', 'monitoring', 'alerts'],
   Resolver: ['basic', 'operations', 'did-events', 'history', 'verification'],

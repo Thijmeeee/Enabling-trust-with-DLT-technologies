@@ -103,7 +103,6 @@ export default function Dashboard({ onSelectDPP }: { onSelectDPP: (did: string) 
           <option value="Watcher">👁️ Watcher</option>
           <option value="Resolver">🔍 Resolver</option>
           <option value="Consumer">👤 Consumer</option>
-          <option value="Supervisor">⚖️ Supervisor</option>
           <option value="Recycler">♻️ Recycler</option>
         </select>
       </div>
