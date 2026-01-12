@@ -16,13 +16,57 @@ const ROLE_THEMES: Record<string, any> = {
   Witness: { bg: 'bg-blue-100', text: 'text-blue-900' },
   Watcher: { bg: 'bg-purple-100', text: 'text-purple-900' },
   Resolver: { bg: 'bg-yellow-100', text: 'text-yellow-900' },
-  Supervisor: { bg: 'bg-red-100', text: 'text-red-900' },
-  Recycler: { bg: 'bg-green-100', text: 'text-green-900' },
+  ConsumerRecycler: { bg: 'bg-green-100', text: 'text-green-900' },
 };
 
 export default function EcosystemView() {
-  const [activeRole, setActiveRole] = useState<string | null>(null);
-  const profiles = Object.values(ECOSYSTEM_MAP);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  const renderCard = (id: string) => {
+    const profile = ECOSYSTEM_MAP[id];
+    if (!profile) return null;
+
+    const theme = ROLE_THEMES[id] || { bg: 'bg-gray-100', text: 'text-gray-900' };
+    const ProfileIcon = profile.infrastructure[0]?.icon || Shield;
+    const isActive = activeId === id;
+
+    return (
+      <button
+        key={id}
+        onMouseEnter={() => setActiveId(id)}
+        onClick={() => setActiveId(id)}
+        className={`
+          text-left p-5 rounded-2xl border transition-all duration-300 relative overflow-hidden group
+          ${theme.bg} 
+          ${theme.text}
+          ${isActive 
+            ? `border-blue-500 shadow-2xl scale-[1.04] z-10 ring-4 ring-blue-400 ring-offset-4 dark:ring-offset-slate-900` 
+            : `border-transparent hover:border-blue-300 dark:hover:border-blue-700 opacity-95 hover:opacity-100`
+          }
+        `}
+      >
+        <div className="flex items-center gap-5 relative z-10">
+          <div className={`
+            p-3 rounded-xl transition-colors
+            ${theme.isDark ? 'bg-white/20 text-white' : 'bg-black/10 text-black'}
+          `}>
+            <ProfileIcon className="w-6 h-6" />
+          </div>
+          <div>
+            <h4 className="font-bold text-xl leading-tight">
+              {profile.label}
+            </h4>
+            <span className={`text-xs uppercase font-extrabold tracking-wider ${theme.isDark ? 'text-white/60' : 'text-black/50'}`}>
+              {profile.infrastructure.length} Entities
+            </span>
+          </div>
+          {isActive && (
+            <ArrowRight className={`w-6 h-6 ml-auto animate-pulse ${theme.isDark ? 'text-white' : 'text-black'}`} />
+          )}
+        </div>
+      </button>
+    );
+  };
 
   return (
     <div className="w-full relative">
@@ -51,56 +95,35 @@ export default function EcosystemView() {
         <div className="flex flex-col lg:flex-row items-start justify-center w-full gap-8 max-w-[1400px]">
           
           {/* Left Side: Stakeholders List */}
-          <div className="flex flex-col gap-4 w-full lg:w-[480px] py-6 px-4">
-            {profiles.map((profile) => {
-              const theme = ROLE_THEMES[profile.role] || ROLE_THEMES.Consumer;
-              const ProfileIcon = profile.infrastructure[0]?.icon || Shield;
-              const isActive = activeRole === profile.role;
-              
-              return (
-                <button
-                  key={profile.role}
-                  onMouseEnter={() => setActiveRole(profile.role)}
-                  onClick={() => setActiveRole(profile.role)}
-                  className={`
-                    text-left p-5 rounded-2xl border transition-all duration-300 relative overflow-hidden group
-                    ${theme.bg} 
-                    ${theme.text}
-                    ${isActive 
-                      ? `border-blue-500 shadow-2xl scale-[1.04] z-10 ring-4 ring-blue-400 ring-offset-4 dark:ring-offset-slate-900` 
-                      : `border-transparent hover:border-blue-300 dark:hover:border-blue-700 opacity-95 hover:opacity-100`
-                    }
-                  `}
-                >
-                  <div className="flex items-center gap-5 relative z-10">
-                    <div className={`
-                      p-3 rounded-xl transition-colors
-                      ${theme.isDark ? 'bg-white/20 text-white' : 'bg-black/10 text-black'}
-                    `}>
-                      <ProfileIcon className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-xl leading-tight">
-                        {profile.label}
-                      </h4>
-                      <span className={`text-xs uppercase font-extrabold tracking-wider ${theme.isDark ? 'text-white/60' : 'text-black/50'}`}>
-                        {profile.infrastructure.length} Entities
-                      </span>
-                    </div>
-                    {isActive && (
-                      <ArrowRight className={`w-6 h-6 ml-auto animate-pulse ${theme.isDark ? 'text-white' : 'text-black'}`} />
-                    )}
-                  </div>
-                </button>
-              );
-            })}
+          <div className="flex flex-col gap-2 w-full lg:w-[480px] py-6 px-4">
+            
+            <div className="mb-6">
+              <h4 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-4 px-2">
+                Supply Chain Stakeholders
+              </h4>
+              <div className="flex flex-col gap-4">
+                {renderCard('Manufacturer')}
+                {renderCard('ConsumerRecycler')}
+              </div>
+            </div>
+
+            <div>
+              <h4 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-4 px-2">
+                DID Infrastructure & Verifiers
+              </h4>
+              <div className="flex flex-col gap-4">
+                {renderCard('Witness')}
+                {renderCard('Watcher')}
+                {renderCard('Resolver')}
+              </div>
+            </div>
           </div>
 
           {/* Right Side: Infrastructure Detail */}
           <div className="w-full lg:flex-1 min-h-[400px] py-6">
-            {activeRole ? (() => {
-              const activeProfile = ECOSYSTEM_MAP[activeRole];
-              const theme = ROLE_THEMES[activeRole] || ROLE_THEMES.Consumer;
+            {activeId ? (() => {
+              const activeProfile = ECOSYSTEM_MAP[activeId];
+              const theme = ROLE_THEMES[activeId] || { bg: 'bg-green-100', text: 'text-green-900' };
               const HeaderIcon = activeProfile.infrastructure[0]?.icon || Server;
               
               return (
