@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Shield, User, Factory, Recycle, Eye, FileCheck, Activity } from 'lucide-react';
 
-type UserRole = 'manufacturer' | 'operator' | 'recycler' | 'supervisor' | 'witness' | 'watcher';
+type UserRole = 'manufacturer' | 'recycler' | 'supervisor' | 'witness' | 'watcher';
 
 interface LoginPageProps {
   onLogin: (role: UserRole, username: string) => void;
@@ -18,13 +18,6 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       description: 'Create and manage product DPPs',
       icon: Factory,
       color: 'blue',
-    },
-    {
-      id: 'operator' as UserRole,
-      name: 'Operator',
-      description: 'Operate and maintain products',
-      icon: User,
-      color: 'green',
     },
     {
       id: 'recycler' as UserRole,

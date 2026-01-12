@@ -61,7 +61,7 @@ export default function ManufacturerSimpleDashboard({ onRegisterWindow, onNaviga
   };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors">
+    <div className="min-h-screen bg-white dark:bg-gray-900 pt-16 transition-colors">
       {/* Clean Header */}
       <div className="border-b border-gray-100 dark:border-gray-800 px-6 py-6">
         <div className="max-w-2xl mx-auto">

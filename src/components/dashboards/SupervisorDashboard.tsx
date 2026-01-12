@@ -83,7 +83,7 @@ export default function SupervisorDashboard({ onNavigate }: SupervisorDashboardP
   }).slice(0, 20);
 
   return (
-    <div className="min-h-screen bg-red-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-red-50 dark:bg-gray-900 pt-16 transition-colors">
       {/* Header */}
       <div className="bg-gradient-to-r from-red-700 to-red-800 text-white">
         <div className="max-w-7xl mx-auto px-6 py-6">

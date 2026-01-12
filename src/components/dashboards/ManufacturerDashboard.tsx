@@ -157,14 +157,6 @@ export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP,
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <button
-                onClick={handleResetData}
-                className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors border border-red-200 dark:border-red-700"
-                title="Reset all data and regenerate with new DIDs"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span className="hidden sm:inline">Reset Data</span>
-              </button>
               {onCreateDPP && (
                 <button
                   onClick={onCreateDPP}
@@ -215,6 +207,7 @@ export default function ManufacturerDashboard({ onNavigate, onBack, onCreateDPP,
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Processed end-of-life</p>
           </div>
         </div>
+
 
         {/* Main Content Layout */}
         <div className="flex flex-col lg:flex-row gap-8">

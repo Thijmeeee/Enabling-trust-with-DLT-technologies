@@ -557,6 +557,7 @@ export default function WatcherDashboard() {
           </div>
         </div>
 
+
         {/* Merkle Tree Integrity Visualization */}
         <div className="mb-6">
           <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors overflow-hidden">

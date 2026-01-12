@@ -361,6 +361,18 @@ export function validateAgainstSchema(
  * Get schema for a product type
  */
 export function getSchemaForType(productType: string): ProductTypeSchema | null {
+  if (!productType) return null;
+  
+  const type = productType.toLowerCase();
+  
+  // Try direct match first
+  if (PRODUCT_SCHEMAS[type]) return PRODUCT_SCHEMAS[type];
+  
+  // Try fuzzy matching for common types if direct match fails
+  if (type.includes('window')) return PRODUCT_SCHEMAS['window'];
+  if (type.includes('glass')) return PRODUCT_SCHEMAS['glass'];
+  if (type.includes('frame')) return PRODUCT_SCHEMAS['frame'];
+  
   return PRODUCT_SCHEMAS[productType] || null;
 }
 

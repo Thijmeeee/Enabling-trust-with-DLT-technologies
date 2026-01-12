@@ -10,8 +10,11 @@ import {
   FileCheck,
   ArrowRight,
   ArrowLeft,
-  X
+  X,
+  Users,
+  Settings
 } from 'lucide-react';
+import EcosystemView from './visualizations/EcosystemView';
 
 interface IntroductionPageProps {
   onContinue: () => void;
@@ -45,11 +48,11 @@ export default function IntroductionPage({ onContinue }: IntroductionPageProps) 
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800 flex flex-col transition-colors">
       {/* Header with Progress and Skip */}
       <div className="px-6 py-8 flex justify-between items-center max-w-6xl mx-auto w-full">
-        <div className="flex gap-2">
+        <div className="flex gap-3">
           {steps.map((_, idx) => (
             <div
               key={idx}
-              className={`h-2 w-12 rounded-full transition-all duration-300 ${idx <= currentStep ? 'bg-blue-600' : 'bg-gray-200'
+              className={`h-2 w-24 rounded-full transition-all duration-300 ${idx <= currentStep ? 'bg-blue-600' : 'bg-gray-200'
                 }`}
             />
           ))}
@@ -63,8 +66,8 @@ export default function IntroductionPage({ onContinue }: IntroductionPageProps) 
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 pb-6">
-        <div className="max-w-5xl w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex-1 flex flex-col items-center justify-center px-4 pb-6">
+        <div className="max-w-[1600px] w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
           {steps[currentStep].component}
         </div>
       </div>
@@ -104,7 +107,7 @@ function WelcomeStep() {
       </div>
 
       <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">
-        Digital Product Passport
+        DPP Trust Anchor
       </h1>
 
       <p className="text-xl text-gray-600 dark:text-gray-300 mb-12 leading-relaxed">
@@ -132,61 +135,8 @@ function WelcomeStep() {
 
 function PlayersStep() {
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="text-center mb-10">
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Stakeholders</h2>
-        <p className="text-xl text-gray-600 dark:text-gray-300">Who is involved in the product lifecycle?</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="p-3 bg-blue-100 rounded-lg">
-              <Factory className="w-8 h-8 text-blue-600" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Manufacturer</h3>
-          </div>
-          <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-            Creates the product and issues its first digital passport. They are the starting point of the journey and define the initial specifications.
-          </p>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="p-3 bg-green-100 rounded-lg">
-              <Wrench className="w-8 h-8 text-green-600" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Operator</h3>
-          </div>
-          <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-            Works with the materials day-to-day. They handle assembly, installation, and maintenance, updating the passport with new events.
-          </p>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="p-3 bg-purple-100 rounded-lg">
-              <UserCheck className="w-8 h-8 text-purple-600" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Supervisor</h3>
-          </div>
-          <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-            Oversees the entire process. They ensure compliance with regulations and quality standards, acting as an auditor.
-          </p>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="p-3 bg-teal-100 rounded-lg">
-              <Recycle className="w-8 h-8 text-teal-600" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Recycler</h3>
-          </div>
-          <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-            Handles end-of-life processing. They use the passport to identify materials for efficient recycling, closing the loop.
-          </p>
-        </div>
-      </div>
+    <div className="w-full">
+      <EcosystemView />
     </div>
   );
 }

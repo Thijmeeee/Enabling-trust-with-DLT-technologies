@@ -969,6 +969,7 @@ export default function WitnessDashboard() {
           </div>
         </div>
 
+
         {/* Filter Tabs */}
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 mb-6 transition-colors">
           <div className="flex border-b border-gray-200 dark:border-gray-700">

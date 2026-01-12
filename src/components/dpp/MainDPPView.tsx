@@ -338,16 +338,18 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
   const dpp = data.dpp;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pt-20 transition-colors">
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 transition-colors">
         <div className="max-w-7xl mx-auto px-4 py-4">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white mb-4 transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            {backLabel || 'Back to Dashboard'}
-          </button>
+          <div className="flex justify-center mb-6">
+            <button
+              onClick={onBack}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-full text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors shadow-sm"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              {backLabel || 'Back to Dashboard'}
+            </button>
+          </div>
 
           <div className="flex items-start justify-between">
             <div className="flex items-start gap-4 flex-1">

@@ -98,10 +98,13 @@ export default function Dashboard({ onSelectDPP }: { onSelectDPP: (did: string) 
           onChange={(e) => setRole(e.target.value as UserRole)}
           className="px-4 py-2 bg-blue-600 border-2 border-blue-400 rounded-lg text-white font-semibold hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 cursor-pointer shadow-lg"
         >
-          <option value="Operator">👷 Operator</option>
+          <option value="Manufacturer">🏭 Manufacturer</option>
+          <option value="Witness">🛡️ Witness</option>
+          <option value="Watcher">👁️ Watcher</option>
+          <option value="Resolver">🔍 Resolver</option>
+          <option value="Consumer">👤 Consumer</option>
+          <option value="Supervisor">⚖️ Supervisor</option>
           <option value="Recycler">♻️ Recycler</option>
-          <option value="Fabrikant">🏭 Fabrikant</option>
-          <option value="Supervisor">👁️ Supervisor</option>
         </select>
       </div>
 
@@ -127,19 +130,6 @@ export default function Dashboard({ onSelectDPP }: { onSelectDPP: (did: string) 
                   Create New DPP
                 </button>
               )}
-              
-              <button
-                onClick={async () => {
-                  if (confirm('Are you sure you want to reset the database? This will delete all data and regenerate mock data.')) {
-                    localStorage.clear();
-                    window.location.reload();
-                  }
-                }}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2 font-semibold shadow-lg"
-                title="Clear database and regenerate mock data"
-              >
-                🔄 Reset Database
-              </button>
               
               <div className="flex gap-4">
                 <div className="text-center bg-blue-700 rounded-lg px-4 py-3">

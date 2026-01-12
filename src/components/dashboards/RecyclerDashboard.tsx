@@ -214,7 +214,7 @@ export default function RecyclerDashboard({ onNavigate }: RecyclerDashboardProps
   }
 
   return (
-    <div className="min-h-screen bg-green-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-green-50 dark:bg-gray-900 pt-16 transition-colors">
       {/* Header */}
       <div className="bg-gradient-to-r from-green-700 to-green-800 text-white">
         <div className="max-w-3xl mx-auto px-6 py-8">
