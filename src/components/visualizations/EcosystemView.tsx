@@ -1,12 +1,8 @@
 import { useState } from 'react';
 import { 
-  Network, 
   Server, 
-  Database, 
   Shield, 
   ArrowRight,
-  Wifi,
-  Lock,
   Globe
 } from 'lucide-react';
 import { ECOSYSTEM_MAP } from '../../lib/ecosystemMap';
@@ -98,6 +94,25 @@ export default function EcosystemView() {
           <div className="flex flex-col gap-2 w-full lg:w-[480px] py-6 px-4">
             
             <div className="mb-6">
+              <h4 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-4 px-2">
+                Network Status & Readiness
+              </h4>
+              <div className="grid grid-cols-2 gap-3 mb-6">
+                <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Blockchain</span>
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${window.location.hostname === 'localhost' ? 'bg-blue-500 animate-pulse' : 'bg-green-500'}`}></div>
+                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                      {window.location.hostname === 'localhost' ? 'Sepolia / Local' : 'Sepolia Main'}
+                    </span>
+                  </div>
+                </div>
+                <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Registry</span>
+                  <span className="text-sm font-bold text-slate-700 dark:text-slate-200">WitnessAnchor V1</span>
+                </div>
+              </div>
+
               <h4 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-4 px-2">
                 Supply Chain Stakeholders
               </h4>

@@ -150,7 +150,12 @@ function AppContent() {
     { value: 'Watcher' as const, label: 'Watcher' },
     { value: 'Resolver' as const, label: 'Resolver' },
   ];
-
+  const handleRoleChange = (role: typeof roles[number]['value']) => {
+    setRole(role);
+    setView('dashboard');
+    setCurrentDID('');
+    setShowRoleDropdown(false);
+  };
   return (
     <div className="relative bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors">
       {/* Role selector dropdown and help button */}
@@ -172,10 +177,7 @@ function AppContent() {
               {roles.map((role) => (
                 <button
                   key={role.value}
-                  onClick={() => {
-                    setRole(role.value);
-                    setShowRoleDropdown(false);
-                  }}
+                  onClick={() => handleRoleChange(role.value)}
                   className={`w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${currentRole === role.value ? 'bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-700 dark:text-gray-300'
                     }`}
                 >

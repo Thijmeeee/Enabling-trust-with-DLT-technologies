@@ -1,13 +1,11 @@
 import { ShieldCheck, Link2, CheckCircle, Server, Layers, AlertCircle, Info, ChevronDown, ChevronUp } from 'lucide-react';
 import { useState } from 'react';
-import { useRole } from '../lib/utils/roleContext';
 
 interface DIDWebVHStatusPanelProps {
     did: string;
 }
 
 export default function DIDWebVHStatusPanel({ did }: DIDWebVHStatusPanelProps) {
-    const { currentRole } = useRole();
     const [isExpanded, setIsExpanded] = useState(false);
 
     return (
