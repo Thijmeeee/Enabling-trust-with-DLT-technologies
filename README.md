@@ -1,243 +1,118 @@
-# DPP Trust System
+# DPP Trust System - Setup & User Guide
 
-A complete Digital Product Passport (DPP) Trust System demonstrating decentralized identity management, blockchain anchoring, and multi-stakeholder access control for the circular economy.
+Welcome to the **DPP (Digital Product Passport) Trust System**. This project provides a robust solution for anchoring product data to the blockchain, ensuring that product integrity and provenance are irrefutable.
 
-## 🏗️ Architecture Overview
+This guide will help you set up and run the project from scratch on your local machine, connected to the **Ethereum Sepolia Testnet**.
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         Frontend (React + Vite)                     │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌─────────────┐ │
-│  │ Manufacturer │ │   Witness    │ │   Watcher    │ │   Consumer  │ │
-│  │  Dashboard   │ │  Dashboard   │ │  Dashboard   │ │    View     │ │
-│  └──────────────┘ └──────────────┘ └──────────────┘ └─────────────┘ │
-└─────────────────────────────────────────────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                      Backend (Node.js + Express)                     │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐                 │
-│  │   Identity   │ │   Witness    │ │   Watcher    │                 │
-│  │   Service    │ │   Service    │ │   Service    │                 │
-│  │  (port 3000) │ │  (scheduled) │ │  (scheduled) │                 │
-│  └──────────────┘ └──────────────┘ └──────────────┘                 │
-└─────────────────────────────────────────────────────────────────────┘
-         │                   │                    │
-         ▼                   ▼                    ▼
-┌─────────────────┐ ┌─────────────────┐ ┌─────────────────────────────┐
-│   PostgreSQL    │ │    Hardhat      │ │   WitnessAnchorRegistry     │
-│   (port 5432)   │ │  (port 8545)    │ │   (Smart Contract)          │
-└─────────────────┘ └─────────────────┘ └─────────────────────────────┘
-```
+---
 
-## 🚀 Quick Start (Windows - Development)
+## 🏗️ Architecture at a Glance
 
-### Prerequisites
-- Node.js 18+
-- Podman or Docker Desktop
-- Git
+The system consists of four main components:
+1.  **Frontend (React)**: A dashboard for different stakeholders (Manufacturer, Witness, Watcher).
+2.  **Backend Services**: Manages identities (DIDs) and handles blockchain anchoring.
+3.  **PostgreSQL**: A database for local event storage (runs in Podman).
+4.  **Smart Contract**: A registry on Sepolia that guarantees data authenticity.
 
-### Start All Services
+---
 
+## 📋 1. Prerequisites
+
+Ensure the following software is installed before you begin:
+
+1.  **Node.js (v18+)**: For frontend, backend, and contract tools. [Download here](https://nodejs.org/).
+2.  **Podman**: For the database container. [Download Podman Desktop](https://podman-desktop.io/).
+3.  **Git**: To retrieve the code.
+4.  **PowerShell**: Use a PowerShell terminal (e.g., in VS Code) for the scripts.
+
+---
+
+## 🚀 2. Step-by-Step Installation
+
+### Step A: Clone the Repository
+Open your terminal and run:
 ```powershell
-# Clone the repository
 git clone <repository-url>
 cd Enabling-trust-with-DLT-technologies
+```
 
-# Install dependencies
+### Step B: Install Dependencies
+This project has three locations where packages need to be installed:
+```powershell
+# 1. Frontend & General
 npm install
-cd backend && npm install && cd ..
-cd contracts && npm install && cd ..
 
-# Start everything with one command
-.\start-dev.ps1
+# 2. Backend Services
+cd backend
+npm install
+cd ..
+
+# 3. Smart Contracts
+cd contracts
+npm install
+cd ..
 ```
 
-This starts:
-| Service | Port | Description |
-|---------|------|-------------|
-| Frontend | 5173 | React development server |
-| Backend API | 3000 | Identity service REST API |
-| Blockchain | 8545 | Hardhat local node (Chain ID: 31337) |
-| Database | 5432 | PostgreSQL via Podman |
+---
 
-### Stop All Services
+## ⚙️ 3. Configuration (Sepolia Setup)
 
+We use a single central configuration file for the entire team so we can work with the same wallet and contract.
+
+1.  Go to the `deployment/` folder.
+2.  Open or create the `.env` file.
+3.  Ensure the following values are set (these are shared within the team):
+
+```env
+# Blockchain Connection
+RPC_URL=https://sepolia.infura.io/v3/YOUR_API_KEY
+
+# Team Wallets (Share these securely, NOT on GitHub!)
+DEPLOYER_PRIVATE_KEY=b48f... # The 'owner' of the contract
+RELAYER_PRIVATE_KEY=b48f...  # The key that pays for transaction fees
+
+# The current contract on Sepolia
+CONTRACT_ADDRESS=0x06563e729443CCBbc5Ff7bD2412d78de55B66a65
+VITE_CONTRACT_ADDRESS=0x06563e729443CCBbc5Ff7bD2412d78de55B66a65
+```
+
+---
+
+## 🏁 4. Running the Project
+
+Once you have configured the `.env` and Podman is running, you can start everything with a single command:
+
+```powershell
+.\start-dev.ps1 -SkipBlockchain
+```
+
+**What does this script do?**
+*   Starts your **PostgreSQL database** (Podman).
+*   Starts the **Backend API** (port 3000).
+*   Starts the **Witness & Watcher services** (for blockchain anchoring).
+*   Opens the **Frontend** at [http://localhost:5173](http://localhost:5173).
+
+---
+
+## 🛠️ Troubleshooting
+
+### "Not an authorized witness" error
+Getting this error in the Witness terminal?
+1.  Are you using the correct `RELAYER_PRIVATE_KEY` from the shared `.env`?
+2.  If you want to use your own wallet, the contract owner must add you via the `add-witness` script, or you must deploy a new contract yourself:
+    ```powershell
+    cd contracts
+    npm run deploy:sepolia
+    ```
+
+### Database won't start
+*   Ensure **Podman Desktop** is active.
+*   Check port 5432: if another Postgres instance is already running on your PC, Podman cannot start.
+
+---
+
+## 🛑 Stopping
+To cleanly shut down all services (including the database):
 ```powershell
 .\stop-dev.ps1
 ```
-
-## 🖥️ VM Deployment (Ubuntu 22.04)
-
-See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for full instructions.
-
-```bash
-# Quick deploy
-chmod +x deploy-vm.sh stop-vm.sh
-./deploy-vm.sh --deploy-contract
-```
-
-## 📁 Project Structure
-
-```
-├── src/                        # Frontend source code
-│   ├── components/
-│   │   ├── dashboards/         # Role-based dashboards
-│   │   │   ├── ManufacturerDashboard.tsx
-│   │   │   ├── WitnessDashboard.tsx
-│   │   │   ├── WatcherDashboard.tsx
-│   │   │   ├── RecyclerDashboard.tsx
-│   │   │   └── ConsumerView.tsx
-│   │   └── ...
-│   ├── lib/
-│   │   ├── api/                # Backend API client
-│   │   ├── data/               # Data stores (hybrid, enhanced, local)
-│   │   └── operations/         # DID operations (rotate, transfer)
-│   └── App.tsx
-│
-├── backend/                    # Backend services
-│   ├── services/
-│   │   ├── identity/           # Identity management API
-│   │   ├── keyManagement/      # Secure key storage
-│   │   ├── witness/            # Merkle tree anchoring service
-│   │   └── watcher/            # Audit verification service
-│   ├── utils/                  # Verification utilities
-│   └── db/
-│       ├── schema.sql          # Database schema
-│       └── seed.sql            # Demo data
-│
-├── contracts/                  # Smart contracts (Solidity)
-│   ├── contracts/
-│   │   └── WitnessAnchorRegistry.sol
-│   └── scripts/
-│       └── deploy.ts
-│
-├── docs/                       # Documentation
-│   ├── DEPLOYMENT.md           # VM deployment guide
-│   ├── SETUP.md                # Setup instructions
-│   └── SKILLS.md               # Skills documentation
-│
-├── scripts/                    # Utility scripts
-│   └── add-dark-mode.js
-│
-├── start-dev.ps1               # Windows dev startup script
-├── stop-dev.ps1                # Windows dev stop script
-├── deploy-vm.sh                # Ubuntu VM deployment script
-├── stop-vm.sh                  # Ubuntu VM stop script
-├── .env.example                # Environment template
-└── README.md                   # This file
-```
-
-## 🔐 Stakeholder Roles
-
-| Role | Description | Capabilities |
-|------|-------------|--------------|
-| **Manufacturer** | Creates products and DPPs | Create DPP, Transfer ownership, Rotate keys |
-| **Witness** | Validates DID operations | Approve/Reject key rotations, ownership transfers |
-| **Watcher** | Audits system integrity | Verify Merkle proofs, Hash chain validation |
-| **Recycler** | End-of-life handler | View product composition, Mark as recycled |
-| **Consumer** | End user | Scan QR, View product info |
-
-## 🔗 Trust Layer Components
-
-### 1. Identity Service (Backend)
-- Creates DIDs (Decentralized Identifiers)
-- Manages identity lifecycle
-- REST API at `http://localhost:3000/api`
-
-### 2. Witness Service
-- Batches events into Merkle trees
-- Anchors Merkle roots to blockchain
-- Runs on cron schedule
-
-### 3. Watcher Service
-- Verifies hash chain integrity
-- Validates Merkle proofs against chain
-- Logs audit results
-
-### 4. Smart Contract (WitnessAnchorRegistry)
-- Stores Merkle roots on-chain
-- Access control (only authorized witnesses)
-- Immutable audit trail
-
-## 🛠️ API Endpoints
-
-### Identity Service (port 3000)
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/health` | Health check |
-| POST | `/api/identities` | Create new identity |
-| GET | `/api/identities` | List all identities |
-| GET | `/api/identities/:did` | Get identity by DID |
-| GET | `/api/identities/:did/events` | Get events for DID |
-| GET | `/api/events` | List all events |
-| GET | `/api/batches` | List all batches |
-| GET | `/api/audits` | List all audits |
-
-## 🧪 Demo Data
-
-The system comes with demo products:
-- 3 Windows (Triple Glass, Double Glass, Smart Window)
-- 2 Glass panels
-- 2 Frames
-
-Demo data is loaded automatically on first database creation.
-
-## 🔧 Configuration
-
-### Environment Variables
-
-Copy the example environment file and customize:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` with your own values. See `.env.example` for all available options.
-
-> ⚠️ **Never commit `.env` to version control** - it contains sensitive credentials.
-
-## 📚 Technologies
-
-| Category | Technology |
-|----------|------------|
-| Frontend | React, TypeScript, Vite, Tailwind CSS |
-| Backend | Node.js, Express, TypeScript |
-| Database | PostgreSQL |
-| Blockchain | Hardhat, Ethers.js, Solidity |
-| Container | Podman/Docker |
-| Crypto | merkletreejs, @noble/hashes |
-
-## 🐛 Troubleshooting
-
-### Frontend not loading
-```powershell
-# Check if port 5173 is in use
-Get-NetTCPConnection -LocalPort 5173
-
-# Restart frontend
-.\stop-dev.ps1
-.\start-dev.ps1
-```
-
-### Database connection error
-```powershell
-# Check if PostgreSQL is running
-podman ps
-
-# Restart database
-podman restart dpp-postgres
-```
-
-### Blockchain not responding
-```powershell
-# Check if Hardhat is running
-Get-NetTCPConnection -LocalPort 8545
-
-# View Hardhat logs (in Hardhat terminal window)
-```
-
-## 📄 License
-
-MIT License - See LICENSE file for details.
