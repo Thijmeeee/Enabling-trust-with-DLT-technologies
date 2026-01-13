@@ -26,6 +26,7 @@ import { hybridDataStore, getRecentBlockchainAnchors, getBlockchainVerification 
 import { etherscanTxUrl, etherscanBlockUrl } from '../lib/api/config';
 import { useRole } from '../lib/utils/roleContext';
 import { verifyHashChain, type HashChainEntry } from '../lib/utils/merkle';
+import { verifyProtocolFiles } from '../lib/operations/didResolverLocal';
 import type { WitnessAttestation, WatcherAlert, AnchoringEvent } from '../lib/data/localData';
 
 interface TrustValidationTabProps {
@@ -427,42 +428,36 @@ export default function TrustValidationTab({ did }: TrustValidationTabProps) {
 
     await new Promise(r => setTimeout(r, 400));
 
-    // 1. Hash Chain Verification
-    const logEntries: HashChainEntry[] = attestations.map((att, idx) => ({
-      versionId: idx + 1,
-      logEntryHash: `0x${att.id.replace(/-/g, '').padEnd(64, '0')}`,
-      backlink: idx > 0 ? `0x${attestations[idx - 1].id.replace(/-/g, '').padEnd(64, '0')}` : undefined,
-      type: att.attestation_type,
-      timestamp: att.timestamp,
-    }));
+    // 0. Comprehensive Verification from Protocol Files (NEW - DIRECT FROM FS)
+    console.log('[TrustValidation] Verifying directly from protocol files...');
+    const protocolResults = await verifyProtocolFiles(did);
+    console.log('[TrustValidation] Protocol results:', protocolResults);
 
-    const hashChainResult = verifyHashChain(logEntries);
-    const hashChainValid = logEntries.length === 0 || hashChainResult.valid;
+    // 1. Hash Chain Verification (Using protocol results)
+    const hashChainValid = protocolResults.hashChainValid && protocolResults.logEntries.length > 0;
     
     setVerification(prev => ({
       ...prev,
       hashChain: hashChainValid ? 'valid' : 'invalid',
       details: {
         ...prev.details,
-        hashChainErrors: hashChainResult.brokenLinks.map(bl =>
-          `Version ${bl.versionId}: hash mismatch`
-        ),
+        hashChainErrors: protocolResults.errors,
       }
     }));
 
     await new Promise(r => setTimeout(r, 300));
 
-    // 2. Witness Verification
-    const uniqueWitnessCount = new Set(attestations.map(a => a.witness_did)).size;
+    // 2. Witness Verification (Using protocol results)
     const witnessThreshold = 1;
-    const witnessValid = uniqueWitnessCount >= witnessThreshold;
+    const hasWitnessProof = protocolResults.witnessValid && protocolResults.proofs.length > 0;
+    const witnessValid = hasWitnessProof || protocolResults.witnessCount >= witnessThreshold;
 
     setVerification(prev => ({
       ...prev,
-      witnesses: witnessValid ? 'valid' : (uniqueWitnessCount > 0 ? 'pending' : 'pending'),
+      witnesses: witnessValid ? 'valid' : 'pending',
       details: {
         ...prev.details,
-        witnessCount: uniqueWitnessCount,
+        witnessCount: protocolResults.witnessCount || 0,
         witnessThreshold,
       }
     }));
@@ -470,6 +465,7 @@ export default function TrustValidationTab({ did }: TrustValidationTabProps) {
     await new Promise(r => setTimeout(r, 300));
 
     // 3. Blockchain Verification
+    // We combine the protocol file proofs with what we found in the blockchain state
     let blockchainVerified = false;
     let blockNumber: number | null = null;
     let txHash: string | null = null;
@@ -477,7 +473,18 @@ export default function TrustValidationTab({ did }: TrustValidationTabProps) {
     let etherscanTxUrlValue: string | null = null;
     let etherscanBlockUrlValue: string | null = null;
 
-    if (blockchainAnchors.length > 0) {
+    // Favor protocol file data if it has proofs
+    if (protocolResults.proofs.length > 0) {
+      const latestProof = protocolResults.proofs[protocolResults.proofs.length - 1];
+      blockchainVerified = true;
+      blockNumber = latestProof.blockNumber || null;
+      txHash = latestProof.txHash || null;
+      merkleRoot = latestProof.merkleRoot || null;
+      if (txHash?.startsWith('0x')) etherscanTxUrlValue = etherscanTxUrl(txHash);
+      if (blockNumber) etherscanBlockUrlValue = etherscanBlockUrl(blockNumber);
+    } 
+    // Fallback to DB/RPC discovery if file has no proofs yet
+    else if (blockchainAnchors.length > 0) {
       const latestAnchor = blockchainAnchors[0];
       blockchainVerified = true;
       blockNumber = latestAnchor.blockNumber;
@@ -485,23 +492,6 @@ export default function TrustValidationTab({ did }: TrustValidationTabProps) {
       merkleRoot = latestAnchor.merkleRoot;
       etherscanTxUrlValue = latestAnchor.etherscanTxUrl || null;
       etherscanBlockUrlValue = latestAnchor.etherscanBlockUrl;
-
-      if (latestAnchor.merkleRoot) {
-        try {
-          const verifyResult = await getBlockchainVerification(latestAnchor.batchId, latestAnchor.merkleRoot);
-          if (verifyResult) blockchainVerified = verifyResult.verified;
-        } catch (e) {
-          console.warn('On-chain verification failed:', e);
-        }
-      }
-    } else if (anchorings.length > 0) {
-      const latestAnchor = anchorings[0];
-      blockNumber = latestAnchor.block_number;
-      txHash = latestAnchor.transaction_hash;
-      merkleRoot = latestAnchor.merkle_root;
-      if (txHash?.startsWith('0x')) etherscanTxUrlValue = etherscanTxUrl(txHash);
-      if (blockNumber) etherscanBlockUrlValue = etherscanBlockUrl(blockNumber);
-      blockchainVerified = true;
     }
 
     setVerification(prev => ({
@@ -520,14 +510,14 @@ export default function TrustValidationTab({ did }: TrustValidationTabProps) {
 
     await new Promise(r => setTimeout(r, 200));
 
-    // 4. Regulatory Compliance (based on other checks)
+    // 4. Regulatory Compliance
     const regulatoryValid = hashChainValid && witnessValid && blockchainVerified;
     setVerification(prev => ({
       ...prev,
       regulatory: regulatoryValid ? 'valid' : (hashChainValid || witnessValid ? 'pending' : 'pending'),
     }));
 
-    // Calculate Trust Score
+    // Calculate Trust Score based on file-derived metrics
     let score = 0;
     if (hashChainValid) score += 25;
     if (witnessValid) score += 25;

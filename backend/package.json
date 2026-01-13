@@ -11,7 +11,8 @@
         "dev:identity": "tsx watch services/identity/index.ts",
         "dev:witness": "tsx watch services/witness/index.ts",
         "dev:watcher": "tsx watch services/watcher/index.ts",
-        "generate-demo-logs": "tsx scripts/generate-demo-logs.ts"
+        "generate-demo-logs": "tsx scripts/generate-demo-logs.ts",
+        "sync-witness-files": "tsx scripts/sync-witness-files.ts"
     },
     "dependencies": {
         "express": "^4.18.2",

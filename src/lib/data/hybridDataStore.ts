@@ -599,6 +599,11 @@ export async function getDIDDocumentByDID(did: string) {
           id: `${did}#product-service`,
           type: 'ProductPassport',
           serviceEndpoint: `https://dpp.example.com/products/${dpp.id}`
+        },
+        {
+          id: `${did}#witness-service`,
+          type: 'RelativeWitnessService',
+          serviceEndpoint: `./did-witness.json`
         }
       ],
       service_endpoints: [`https://dpp.example.com/products/${dpp.id}`],

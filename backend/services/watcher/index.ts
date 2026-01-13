@@ -27,6 +27,7 @@ const CONTRACT_ABI = [
 ];
 
 const STORAGE_ROOT = process.env.STORAGE_ROOT || '/var/www/did-logs';
+const IDENTITY_SERVICE_URL = process.env.IDENTITY_SERVICE_URL || 'http://localhost:3001';
 
 // Shared blockchain connection to avoid repeated detection calls
 let sharedProvider: ethers.JsonRpcProvider | null = null;
@@ -184,7 +185,7 @@ async function verifyMerkleProof(
 
             // Compare expected root with on-chain root
             if (onChainRoot.toLowerCase() !== expectedMerkleRoot.toLowerCase()) {
-                log.error('Root mismatch detected', null, { 
+                log.error('Root mismatch detected', { 
                     batchId, 
                     expectedRoot: expectedMerkleRoot, 
                     onChainRoot 
@@ -208,6 +209,59 @@ async function verifyMerkleProof(
         }
     } catch (err: any) {
         return { valid: false, details: `Merkle verification error: ${err.message?.slice(0, 50)}` };
+    }
+}
+
+/**
+ * Audit Check 3: Verify the did-witness.json file from the Identity Service
+ * This ensures the files are actually being served correctly and contain valid proofs.
+ */
+async function verifyWitnessFile(did: string, scid: string): Promise<{ valid: boolean; details: string }> {
+    try {
+        const url = `${IDENTITY_SERVICE_URL}/.well-known/did/${scid}/did-witness.json`;
+        log.debug('Fetching witness file for audit', { url });
+        
+        const response = await fetch(url);
+        if (!response.ok) {
+            return { 
+                valid: false, 
+                details: `Public witness file missing: ${response.status} ${response.statusText}` 
+            };
+        }
+
+        const witnessData = await response.json();
+        const proofs = witnessData.anchoringProofs || [];
+
+        if (proofs.length === 0) {
+            return { valid: true, details: 'Witness file is empty (no anchorings yet)' };
+        }
+
+        // Verify some/all proofs from the file
+        for (const wp of proofs) {
+            const verification = await verifyMerkleProof(
+                wp.batchId,
+                wp.leafHash,
+                wp.merkleProof,
+                wp.merkleRoot
+            );
+
+            if (!verification.valid) {
+                return { 
+                    valid: false, 
+                    details: `Invalid proof in public did-witness.json (batch ${wp.batchId}): ${verification.details}` 
+                };
+            }
+        }
+
+        return { 
+            valid: true, 
+            details: `✅ Public witness file verified with ${proofs.length} successful cryptographic proofs.` 
+        };
+    } catch (err: any) {
+        return { 
+            valid: false, 
+            details: `Network error fetching witness file: ${err.message}` 
+        };
     }
 }
 
@@ -341,7 +395,7 @@ async function runAudit() {
                     if (!merkleResult.valid) {
                         allMerkleValid = false;
                         merkleDetails = merkleResult.details;
-                        log.error('Merkle verification failed', null, { 
+                        log.error('Merkle verification failed', { 
                             scid: identity.scid, 
                             batchId: wp.batchId, 
                             details: merkleResult.details 
@@ -365,6 +419,14 @@ async function runAudit() {
             } else {
                 log.debug('No batched events for identity', { scid: identity.scid });
             }
+
+            // Audit 3: Public file verification (distributed trust)
+            const fileAudit = await verifyWitnessFile(identity.did, identity.scid);
+            await pool.query(
+                `INSERT INTO audits (did, check_type, status, details, checked_at) 
+                 VALUES ($1, $2, $3, $4, NOW())`,
+                [identity.did, 'witness_file', fileAudit.valid ? 'valid' : 'invalid', fileAudit.details]
+            );
         }
 
         log.debug('Audit cycle complete');

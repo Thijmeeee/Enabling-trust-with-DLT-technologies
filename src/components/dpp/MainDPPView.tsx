@@ -22,7 +22,6 @@ import {
   Flame,
   Droplets,
   FileCheck,
-  Clock,
   FileJson,
 } from 'lucide-react';
 import { getDPPWithRelations, getAggregatedMetrics } from '../../lib/data/enhancedAdapter';
@@ -35,9 +34,9 @@ import QRCodeDisplay from '../visualizations/QRCodeDisplay';
 import DIDEventsLog from '../DIDEventsLog';
 import { ProtectedField, ProtectedMetadata } from '../ProtectedField';
 import WindowLifecycleVisualization from '../visualizations/WindowLifecycleVisualization';
-import { LifecycleControls } from '../LifecycleControls';
 import DIDOperationsPanel from '../DIDOperationsPanel';
 import TrustValidationTab from '../TrustValidationTab';
+import ProtocolFilesTab from '../ProtocolFilesTab';
 import DoPerformanceView from '../DoPerformanceView';
 import DoPerformanceEditor from '../DoPerformanceEditor';
 import AttestationDetailsModal from '../modals/AttestationDetailsModal';
@@ -57,7 +56,7 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
   const [loading, setLoading] = useState(true);
   const [showQR, setShowQR] = useState(false);
   const [showRawData, setShowRawData] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'specifications' | 'components' | 'lifecycle' | 'did-operations' | 'trust-validation' | 'events'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'specifications' | 'components' | 'lifecycle' | 'did-operations' | 'trust-validation' | 'events' | 'protocol-files'>('overview');
   const [eventRefreshKey, setEventRefreshKey] = useState(0);
   const [editingDoP, setEditingDoP] = useState(false);
   const [selectedAttestation, setSelectedAttestation] = useState<any>(null);
@@ -409,6 +408,7 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
               { id: 'lifecycle', label: 'Lifecycle', showFor: ['main', 'component'] },
               { id: 'did-operations', label: 'DID Operations', showFor: ['main', 'component'] },
               { id: 'trust-validation', label: 'Trust & Validation', showFor: ['main', 'component'] },
+              { id: 'protocol-files', label: 'Protocol Files', showFor: ['main', 'component'] },
               { id: 'events', label: 'Events', showFor: ['main', 'component'] },
             ].filter(tab => tab.showFor.includes(dpp.type)).map((tab) => (
               <button
@@ -1105,6 +1105,10 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
 
         {activeTab === 'trust-validation' && (
           <TrustValidationTab did={did} />
+        )}
+
+        {activeTab === 'protocol-files' && (
+          <ProtocolFilesTab did={did} />
         )}
 
         {activeTab === 'events' && (
