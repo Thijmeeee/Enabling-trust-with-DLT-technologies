@@ -1108,14 +1108,7 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
         )}
 
         {activeTab === 'events' && (
-          <>
-            <LifecycleControls
-              dppId={dpp.id}
-              did={did}
-              onEventCreated={handleEventCreated}
-            />
-            <DIDEventsLog key={`events-${eventRefreshKey}`} did={did} openEventId={openEventId} />
-          </>
+          <DIDEventsLog key={`events-${eventRefreshKey}`} did={did} openEventId={openEventId} />
         )}
       </div>
 

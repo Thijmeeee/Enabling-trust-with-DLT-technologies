@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { X, Plus, CheckCircle, ArrowRight, ArrowLeft, Package } from 'lucide-react';
 import { hybridDataStore } from '../../lib/data/hybridDataStore';
 import { generateWitnessAttestations } from '../../lib/operations/lifecycleHelpers';
+import { useRole, roleDIDs } from '../../lib/utils/roleContext';
 
 interface WindowData {
   model: string;
@@ -22,6 +23,7 @@ export default function CreateDPPForm({ onClose, onComplete }: {
   onClose: () => void;
   onComplete: () => void;
 }) {
+  const { currentRoleDID } = useRole();
   const [step, setStep] = useState<'window' | 'glass' | 'frame' | 'review' | 'creating'>('window');
   const [windowData, setWindowData] = useState<WindowData>({
     model: '',
@@ -62,10 +64,11 @@ export default function CreateDPPForm({ onClose, onComplete }: {
         model: glassData.model,
         parent_did: windowDid,
         lifecycle_status: 'active',
-        owner: 'did:webvh:example.com:organizations:glass-supplier',
-        custodian: 'did:webvh:example.com:organizations:window-manufacturer',
+        owner: roleDIDs['Manufacturer A'], // Components can be owned by specific manufacturers
+        custodian: currentRoleDID,
         metadata: {
           description: glassData.description,
+          productType: 'glass',
           material: glassData.material,
           ...glassData.metadata,
           productionDate: new Date().toISOString(),
@@ -81,10 +84,11 @@ export default function CreateDPPForm({ onClose, onComplete }: {
         model: frameData.model,
         parent_did: windowDid,
         lifecycle_status: 'active',
-        owner: 'did:webvh:example.com:organizations:frame-supplier',
-        custodian: 'did:webvh:example.com:organizations:window-manufacturer',
+        owner: roleDIDs['Manufacturer B'],
+        custodian: currentRoleDID,
         metadata: {
           description: frameData.description,
+          productType: 'frame',
           material: frameData.material,
           ...frameData.metadata,
           productionDate: new Date().toISOString(),
@@ -100,10 +104,11 @@ export default function CreateDPPForm({ onClose, onComplete }: {
         model: windowData.model,
         parent_did: null,
         lifecycle_status: 'active',
-        owner: 'did:webvh:example.com:organizations:window-manufacturer',
+        owner: currentRoleDID, // Correctly set current manufacturer as owner
         custodian: null,
         metadata: {
           description: windowData.description,
+          productType: 'window',
           dimensions: { ...windowData.dimensions, unit: 'mm' },
           weight: windowData.weight,
           productionDate: new Date().toISOString(),

@@ -123,10 +123,10 @@ function extractScidFromDid(did: string): string {
  * - Hash chain linking
  */
 app.post('/api/products/create', async (req, res) => {
-    const { type, model, metadata } = req.body;
+    const { type, model, metadata, ownerDid } = req.body;
 
     try {
-        console.log('[Identity] Creating new DID for product:', { type, model });
+        console.log('[Identity] Creating new DID for product:', { type, model, ownerDid });
 
         // 1. Generate signing keys using Key Management Service
         const keyPair = await keyManagementService.generateKeyPair();
@@ -153,6 +153,7 @@ app.post('/api/products/create', async (req, res) => {
                 domain: DOMAIN,
                 signer: didwebvhSigner,
                 updateKeys: [signer.publicKeyMultibase],
+                controller: ownerDid || undefined, // Set the owner/controller if provided
                 verificationMethods: [{
                     type: 'Multikey',
                     publicKeyMultibase: signer.publicKeyMultibase
@@ -168,7 +169,8 @@ app.post('/api/products/create', async (req, res) => {
                 signer,
                 type,
                 model,
-                metadata
+                metadata,
+                controller: ownerDid // Set owner in fallback too
             });
         }
 
@@ -183,9 +185,9 @@ app.post('/api/products/create', async (req, res) => {
 
         // 5. Store in database
         await pool.query(
-            `INSERT INTO identities (did, scid, public_key, status) VALUES ($1, $2, $3, $4)
-             ON CONFLICT (did) DO UPDATE SET status = 'active', updated_at = NOW()`,
-            [did, scid, signer.publicKeyMultibase, 'active']
+            `INSERT INTO identities (did, scid, public_key, owner, status) VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (did) DO UPDATE SET owner = EXCLUDED.owner, status = 'active', updated_at = NOW()`,
+            [did, scid, signer.publicKeyMultibase, ownerDid || null, 'active']
         );
 
         // 6. Store creation event for witness batching
@@ -207,7 +209,7 @@ app.post('/api/products/create', async (req, res) => {
             ]
         );
 
-        console.log(`✅ Created DID: ${did}`);
+        console.log(`✅ Created DID and stored event: ${did}`);
 
         return res.json({
             did,
@@ -234,12 +236,13 @@ async function createDIDFallback(options: {
     type: string;
     model: string;
     metadata?: any;
+    controller?: string;
 }) {
-    const { domain, signer, type, model, metadata } = options;
+    const { domain, signer, type, model, metadata, controller } = options;
     const timestamp = new Date().toISOString();
 
     // Create initial DID document
-    const initialDoc = {
+    const initialDoc: any = {
         '@context': [
             'https://www.w3.org/ns/did/v1',
             'https://w3id.org/security/multikey/v1'
@@ -258,6 +261,10 @@ async function createDIDFallback(options: {
             serviceEndpoint: `https://${domain}/api/products`
         }]
     };
+
+    if (controller) {
+        initialDoc.controller = controller;
+    }
 
     // Compute SCID: hash of canonical initial state
     const canonicalData = JSON.stringify({
@@ -613,6 +620,10 @@ app.delete('/api/did/:did/deactivate', async (req, res) => {
         );
 
         // Store deactivation event
+        const leafHash = crypto.createHash('sha256')
+            .update(JSON.stringify(deactivationEntry))
+            .digest('hex');
+
         await pool.query(
             `INSERT INTO events (did, event_type, payload, signature, leaf_hash, version_id, timestamp) 
              VALUES ($1, $2, $3, $4, $5, $6, $7)`,
@@ -621,7 +632,7 @@ app.delete('/api/did/:did/deactivate', async (req, res) => {
                 'deactivate',
                 JSON.stringify({ deactivated: true }),
                 proofValue,
-                previousHash,
+                leafHash,
                 newVersionId,
                 Date.now()
             ]
@@ -855,6 +866,10 @@ app.post('/api/did/:did/rotate', async (req, res) => {
         );
 
         // Store rotation event
+        const leafHash = crypto.createHash('sha256')
+            .update(JSON.stringify(newEntry))
+            .digest('hex');
+
         await pool.query(
             `INSERT INTO events (did, event_type, payload, signature, leaf_hash, version_id, timestamp) 
              VALUES ($1, $2, $3, $4, $5, $6, $7)`,
@@ -867,7 +882,7 @@ app.post('/api/did/:did/rotate', async (req, res) => {
                     reason: reason || 'Manual key rotation'
                 }),
                 proofValue,
-                previousHash,
+                leafHash,
                 newVersionId,
                 Date.now()
             ]
@@ -1026,6 +1041,10 @@ app.post('/api/did/:did/transfer', async (req, res) => {
         }
 
         // Store transfer event
+        const leafHash = crypto.createHash('sha256')
+            .update(JSON.stringify(newEntry))
+            .digest('hex');
+
         await pool.query(
             `INSERT INTO events (did, event_type, payload, signature, leaf_hash, version_id, timestamp) 
              VALUES ($1, $2, $3, $4, $5, $6, $7)`,
@@ -1038,13 +1057,13 @@ app.post('/api/did/:did/transfer', async (req, res) => {
                     reason: reason || 'Ownership transfer'
                 }),
                 proofValue,
-                previousHash,
+                leafHash,
                 newVersionId,
                 Date.now()
             ]
         );
 
-        console.log(`✅ Ownership transferred for DID: ${did} to ${newOwnerDID}`);
+        console.log(`✅ Ownership transferred and event stored: ${did} -> ${newOwnerDID}`);
 
         return res.json({
             did,

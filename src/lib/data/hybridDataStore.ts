@@ -426,7 +426,7 @@ export async function getAttestationsByDID(did: string): Promise<WitnessAttestat
         const hasWitnesses = event.witness_proofs?.witnesses && event.witness_proofs.witnesses.length > 0;
         
         if (hasWitnesses) {
-          const witness = event.witness_proofs!.witnesses[0];
+          const witness = event.witness_proofs!.witnesses![0];
           backendAttestations.push({
             id: `${event.id}-${witness.witnessDid}`,
             dpp_id: '', 
@@ -438,6 +438,8 @@ export async function getAttestationsByDID(did: string): Promise<WitnessAttestat
             timestamp: witness.timestamp,
             created_at: event.created_at,
             approval_status: 'approved' as const, 
+            witness_status: event.witness_proofs?.txHash ? 'anchored' : 'pending',
+            tx_hash: event.witness_proofs?.txHash,
           });
         } else {
           backendAttestations.push({
@@ -451,6 +453,8 @@ export async function getAttestationsByDID(did: string): Promise<WitnessAttestat
             timestamp: event.timestamp ? new Date(Number(event.timestamp)).toISOString() : event.created_at,
             created_at: event.created_at,
             approval_status: 'approved' as const,
+            witness_status: event.witness_proofs?.txHash ? 'anchored' : 'pending',
+            tx_hash: event.witness_proofs?.txHash,
           });
         }
       }
@@ -620,6 +624,7 @@ export async function insertDPP(data: Omit<DPP, 'id' | 'created_at' | 'updated_a
         type: data.type,
         model: data.model,
         metadata: data.metadata as Record<string, unknown>,
+        ownerDid: data.owner, // Send owner as ownerDid to backend
       });
       return { ...data, id: result.scid, did: result.did, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
     } catch (e) {
@@ -702,18 +707,22 @@ function identityToDPP(identity: Identity): DPP {
 }
 
 function eventToAnchoringEvent(event: DIDEvent): AnchoringEvent {
-  const batchId = event.witness_proofs?.batchId;
+  const witnessProof = event.witness_proofs;
   return {
     id: String(event.id),
     dpp_id: '',
     did: event.did,
-    transaction_hash: '', // Would need to fetch from batch
-    block_number: 0, // Would need to fetch from batch
-    merkle_root: null,
+    transaction_hash: witnessProof?.txHash || '',
+    block_number: witnessProof?.blockNumber || 0,
+    merkle_root: witnessProof?.merkleRoot || null,
     component_hashes: null,
     anchor_type: event.event_type,
     timestamp: new Date(event.timestamp).toISOString(),
-    metadata: { batchId, versionId: event.version_id },
+    metadata: { 
+      batchId: witnessProof?.batchId, 
+      versionId: event.version_id,
+      verified: !!witnessProof?.txHash
+    },
   };
 }
 

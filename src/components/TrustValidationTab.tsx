@@ -907,9 +907,21 @@ export default function TrustValidationTab({ did }: TrustValidationTabProps) {
                       <p className="text-sm font-semibold text-gray-900 dark:text-white">
                         Block #{anchoring.block_number}
                       </p>
-                      <p className="text-[10px] text-gray-500 dark:text-gray-400 font-mono truncate max-w-[180px]">
-                        {anchoring.transaction_hash}
-                      </p>
+                      {anchoring.transaction_hash ? (
+                        <a 
+                          href={etherscanTxUrl(anchoring.transaction_hash) || '#'} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-[10px] text-purple-600 dark:text-purple-400 font-mono hover:underline flex items-center gap-1 transition-colors"
+                        >
+                          {anchoring.transaction_hash.slice(0, 24)}...
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      ) : (
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400 font-mono truncate max-w-[180px]">
+                          Pending anchoring...
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="text-right">

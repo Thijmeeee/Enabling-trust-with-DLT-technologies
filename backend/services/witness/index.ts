@@ -36,9 +36,18 @@ function hexToBuffer(hex: string): Buffer {
     return Buffer.from(cleanHex, 'hex');
 }
 
+// Global flag to prevent concurrent batch processing
+let isProcessing = false;
+
 // Main batch processing function
 async function processBatch() {
-    log.debug('Starting batch processing');
+    if (isProcessing) {
+        log.debug('Batch processing already in progress, skipping');
+        return;
+    }
+
+    log.debug('Starting batch processing check');
+    isProcessing = true;
 
     try {
         // A. Fetch unanchored events (events with NULL witness_proofs)
@@ -46,6 +55,7 @@ async function processBatch() {
       SELECT e.id, e.did, e.event_type, e.leaf_hash, e.version_id 
       FROM events e
       WHERE e.witness_proofs IS NULL
+      ORDER BY e.timestamp ASC
       LIMIT 100
     `);
 
@@ -54,7 +64,29 @@ async function processBatch() {
             return;
         }
 
-        log.info('Found unanchored events', { eventCount: events.length });
+        // B. Check threshold
+        const threshold = parseInt(process.env.BATCH_THRESHOLD || '1');
+        const maxWaitMs = parseInt(process.env.BATCH_MAX_WAIT_MS || '60000'); // Default 1 minute
+        
+        // Find oldest unanchored event to check wait time
+        const { rows: oldest } = await pool.query('SELECT MIN(timestamp) as oldest_ts FROM events WHERE witness_proofs IS NULL');
+        const oldestTs = oldest[0]?.oldest_ts ? Number(oldest[0].oldest_ts) : Date.now();
+        const waitTime = Date.now() - oldestTs;
+
+        if (events.length < threshold && waitTime < maxWaitMs) {
+            log.info('Threshold not met, skipping batch', { 
+                currentCount: events.length, 
+                threshold, 
+                waitTimeMs: waitTime,
+                maxWaitMs 
+            });
+            return;
+        }
+
+        log.info('Batch threshold met or timeout reached, processing...', { 
+            eventCount: events.length, 
+            reason: events.length >= threshold ? 'threshold' : 'timeout' 
+        });
 
         // B. Build Merkle Tree
         // Use the leaf_hash directly as the leaf (it's already a SHA256 hash)
@@ -76,12 +108,35 @@ async function processBatch() {
         const rpcUrl = process.env.RPC_URL || "http://blockchain:8545";
         const provider = new ethers.JsonRpcProvider(rpcUrl);
 
-        const privateKey = process.env.RELAYER_PRIVATE_KEY;
+        let privateKey = process.env.RELAYER_PRIVATE_KEY;
         if (!privateKey) {
             throw new Error('RELAYER_PRIVATE_KEY not set');
         }
+        
+        // Ensure 0x prefix for ethers
+        if (!privateKey.startsWith('0x')) {
+            privateKey = '0x' + privateKey;
+        }
 
         const wallet = new ethers.Wallet(privateKey, provider);
+
+        log.info('Relayer status', { 
+            address: wallet.address, 
+            eventsFound: events.length,
+            rpc: rpcUrl.split('@')[rpcUrl.split('@').length - 1] // Hide credentials if any
+        });
+
+        // Check balance
+        const balance = await provider.getBalance(wallet.address);
+        log.info('Balance check', { 
+            balance: ethers.formatEther(balance) + ' ETH',
+            network: (await provider.getNetwork()).name
+        });
+
+        if (balance === 0n && !rpcUrl.includes('localhost') && !rpcUrl.includes('127.0.0.1')) {
+            log.error('CRITICAL: Relayer has 0 ETH on Sepolia. Transactions will fail.', null, { address: wallet.address });
+            return;
+        }
 
         const contractAddress = process.env.CONTRACT_ADDRESS;
         if (!contractAddress) {
@@ -91,7 +146,10 @@ async function processBatch() {
         const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, wallet);
 
         log.info('Anchoring to blockchain', { contractAddress, merkleRoot: root });
+        
         const tx = await contract.anchor(root);
+        log.info('Transaction sent', { txHash: tx.hash });
+        
         const receipt = await tx.wait();
 
         log.info('Transaction confirmed', { 
@@ -196,6 +254,8 @@ async function processBatch() {
 
     } catch (err) {
         log.error('Batch processing failed', err, { phase: 'processBatch' });
+    } finally {
+        isProcessing = false;
     }
 }
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Shield, User, Factory, Recycle, Eye, FileCheck, Activity } from 'lucide-react';
+import { Shield, Factory, Recycle, FileCheck, Activity } from 'lucide-react';
 
 type UserRole = 'manufacturer' | 'recycler' | 'witness' | 'watcher';
 

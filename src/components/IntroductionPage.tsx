@@ -3,16 +3,11 @@ import {
   Shield,
   Eye,
   Search,
-  Factory,
-  Wrench,
-  UserCheck,
   Recycle,
   FileCheck,
   ArrowRight,
   ArrowLeft,
   X,
-  Users,
-  Settings
 } from 'lucide-react';
 import EcosystemView from './visualizations/EcosystemView';
 

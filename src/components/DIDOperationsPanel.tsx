@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useRole, roleDIDs, type UserRole } from '../lib/utils/roleContext';
 import { transferOwnership, rotateKey, getDIDOperationsHistory, getPendingAndRejectedOperations, deactivateDID, updateDIDViaBackend } from '../lib/operations/didOperationsLocal';
 import type { DPP, WitnessAttestation } from '../lib/data/localData';
-import { Key, ArrowRightLeft, ChevronDown, ChevronUp, Clock, XCircle, CheckCircle, Shield, Power, FileEdit, AlertTriangle } from 'lucide-react';
+import { Key, ArrowRightLeft, ChevronDown, ChevronUp, Clock, XCircle, CheckCircle, Shield, Power, FileEdit, AlertTriangle, ExternalLink } from 'lucide-react';
+import { etherscanTxUrl } from '../lib/api/config';
 
 interface DIDOperationsPanelProps {
   dpp: DPP;
@@ -736,6 +737,17 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                                 <span className="px-2 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 text-[10px] font-bold uppercase tracking-wider rounded-full flex items-center gap-1">
                                   <Clock size={10} /> Pending
                                 </span>
+                              )}
+                              {attestation.tx_hash && (
+                                <a 
+                                  href={etherscanTxUrl(attestation.tx_hash) || '#'}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[10px] text-indigo-600 dark:text-indigo-400 font-mono hover:underline flex items-center gap-1 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-800"
+                                >
+                                  {attestation.tx_hash.substring(0, 10)}...
+                                  <ExternalLink size={10} />
+                                </a>
                               )}
                             </div>
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">

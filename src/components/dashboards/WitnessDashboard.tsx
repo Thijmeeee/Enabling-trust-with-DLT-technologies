@@ -221,8 +221,18 @@ export default function WitnessDashboard() {
 
     console.log('Parent Map:', Array.from(parentMap.entries()));
 
-    // Filter for DID events only
-    const didEventTypes = ['did_creation', 'key_rotation', 'ownership_change', 'did_update', 'did_lifecycle_update', 'did_deactivation'];
+    // Filter for DID events only (include create and transfer)
+    const didEventTypes = [
+      'did_creation', 
+      'create', 
+      'key_rotation', 
+      'ownership_change', 
+      'ownership_transfer', 
+      'did_update', 
+      'did_lifecycle_update', 
+      'did_deactivation',
+      'deactivate'
+    ];
 
     const events: PendingDIDEvent[] = [];
     const approved: PendingDIDEvent[] = [];

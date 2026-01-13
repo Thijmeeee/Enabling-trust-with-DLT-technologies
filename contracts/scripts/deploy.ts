@@ -2,7 +2,8 @@ import pkg from "hardhat";
 const { ethers } = pkg;
 
 async function main() {
-    console.log("Deploying WitnessAnchorRegistry to local Hardhat node...");
+    const networkName = pkg.network.name;
+    console.log(`Deploying WitnessAnchorRegistry to ${networkName}...`);
 
     const WitnessAnchorRegistry = await ethers.getContractFactory("WitnessAnchorRegistry");
     const contract = await WitnessAnchorRegistry.deploy();

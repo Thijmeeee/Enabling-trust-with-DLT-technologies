@@ -50,6 +50,21 @@ Write-Host ""
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host "  DPP Trust System - Development Environment" -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
+
+# Load .env file from deployment folder if it exists
+$envPath = Join-Path $ProjectRoot "deployment\.env"
+if (Test-Path $envPath) {
+    Write-Host "Loading environment from deployment/.env" -ForegroundColor Gray
+    Get-Content $envPath | ForEach-Object {
+        if ($_ -match '^([^#\s][^=]+)=(.*)$') {
+            $name = $matches[1].Trim()
+            $value = $matches[2].Trim().Trim("'").Trim('"')
+            # Set the environment variable for this session and child processes
+            [System.Environment]::SetEnvironmentVariable($name, $value)
+            Set-Content -Path "env:$name" -Value $value
+        }
+    }
+}
 Write-Host ""
 
 # ============================================================
@@ -164,7 +179,8 @@ if (-not $SkipBackend) {
         Write-Host "      Starting in new window..." -ForegroundColor Gray
         
         $backendPath = Join-Path $ProjectRoot "backend"
-        $proc = Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$backendPath'; `$env:DB_HOST='localhost'; Write-Host 'Backend Identity Service' -ForegroundColor Cyan; npm run dev:identity" -WindowStyle Normal -PassThru
+        # Explicitly pass env variables to ensure child process picks up .env settings
+        $proc = Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$backendPath'; `$env:DB_HOST='localhost'; `$env:DOMAIN='$($env:DOMAIN)'; `$env:STORAGE_ROOT='$($env:STORAGE_ROOT)'; Write-Host 'Backend Identity Service' -ForegroundColor Cyan; npm run dev:identity" -WindowStyle Normal -PassThru
         Add-Content -Path $PidFile -Value "backend:$($proc.Id)"
         
         Write-Host "      Waiting for Backend to start..." -ForegroundColor Gray
@@ -191,10 +207,10 @@ Write-Host "[4/6] Witness Service (Blockchain Anchoring)" -ForegroundColor Yello
 Write-Host "      Starting in new window..." -ForegroundColor Gray
 
 $backendPath = Join-Path $ProjectRoot "backend"
-# Use Hardhat's default test account #0 private key for local development (DO NOT use in production!)
-$proc = Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$backendPath'; `$env:DB_HOST='localhost'; `$env:RPC_URL='http://localhost:8545'; `$env:CONTRACT_ADDRESS='0x5FbDB2315678afecb367f032d93F642f64180aa3'; `$env:RELAYER_PRIVATE_KEY='0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'; Write-Host 'Witness Service' -ForegroundColor Cyan; npm run dev:witness" -WindowStyle Normal -PassThru
+# Explicitly pass env variables to ensure child process picks up .env settings (RPC, Contract, Key)
+$proc = Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$backendPath'; `$env:DB_HOST='localhost'; `$env:RPC_URL='$($env:RPC_URL)'; `$env:CONTRACT_ADDRESS='$($env:CONTRACT_ADDRESS)'; `$env:RELAYER_PRIVATE_KEY='$($env:RELAYER_PRIVATE_KEY)'; `$env:BATCH_THRESHOLD='$($env:BATCH_THRESHOLD)'; Write-Host 'Witness Service' -ForegroundColor Cyan; npm run dev:witness" -WindowStyle Normal -PassThru
 Add-Content -Path $PidFile -Value "witness:$($proc.Id)"
-Write-Host "      > Started (batching every 10 seconds)" -ForegroundColor Green
+Write-Host "      > Started (batching enabled)" -ForegroundColor Green
 
 # ============================================================
 # 5. Frontend Vite Dev Server
@@ -209,7 +225,8 @@ if (-not $SkipFrontend) {
     else {
         Write-Host "      Starting in new window..." -ForegroundColor Gray
         
-        $proc = Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$ProjectRoot'; Write-Host 'Frontend Dev Server' -ForegroundColor Cyan; npm run dev" -WindowStyle Normal -PassThru
+        # Pass VITE_ variables to the frontend dev server process
+        $proc = Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$ProjectRoot'; `$env:VITE_CONTRACT_ADDRESS='$($env:VITE_CONTRACT_ADDRESS)'; `$env:VITE_RPC_URL='$($env:VITE_RPC_URL)'; `$env:VITE_CHAIN_ID='$($env:VITE_CHAIN_ID)'; Write-Host 'Frontend Dev Server' -ForegroundColor Cyan; npm run dev" -WindowStyle Normal -PassThru
         Add-Content -Path $PidFile -Value "frontend:$($proc.Id)"
         
         Write-Host "      Waiting for Frontend to start..." -ForegroundColor Gray
@@ -236,9 +253,10 @@ Write-Host "[6/6] Watcher Service (Audit & Verification)" -ForegroundColor Yello
 Write-Host "      Starting in new window..." -ForegroundColor Gray
 
 $backendPath = Join-Path $ProjectRoot "backend"
-$proc = Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$backendPath'; `$env:DB_HOST='localhost'; `$env:RPC_URL='http://localhost:8545'; `$env:CONTRACT_ADDRESS='0x5FbDB2315678afecb367f032d93F642f64180aa3'; `$env:STORAGE_ROOT='./did-logs'; Write-Host 'Watcher Service' -ForegroundColor Cyan; npm run dev:watcher" -WindowStyle Normal -PassThru
+# Explicitly pass env variables
+$proc = Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$backendPath'; `$env:DB_HOST='localhost'; `$env:RPC_URL='$($env:RPC_URL)'; `$env:CONTRACT_ADDRESS='$($env:CONTRACT_ADDRESS)'; `$env:STORAGE_ROOT='$($env:STORAGE_ROOT)'; Write-Host 'Watcher Service' -ForegroundColor Cyan; npm run dev:watcher" -WindowStyle Normal -PassThru
 Add-Content -Path $PidFile -Value "watcher:$($proc.Id)"
-Write-Host "      > Started (auditing every 5 minutes)" -ForegroundColor Green
+Write-Host "      > Started (auditing enabled)" -ForegroundColor Green
 
 # ============================================================
 # Final Status Check

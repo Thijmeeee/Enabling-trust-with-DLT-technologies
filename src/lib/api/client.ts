@@ -131,6 +131,7 @@ export const identityApi = {
     type: string;
     model: string;
     metadata?: Record<string, unknown>;
+    ownerDid?: string;
   }): Promise<CreateProductResponse> {
     return fetchApi<CreateProductResponse>(API_CONFIG.IDENTITY.CREATE, {
       method: 'POST',

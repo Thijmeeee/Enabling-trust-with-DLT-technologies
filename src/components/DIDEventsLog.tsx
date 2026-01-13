@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Clock, FileText, Shield, Link2, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Search, Filter } from 'lucide-react';
+import { Clock, FileText, Shield, Link2, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Search, Filter, ExternalLink } from 'lucide-react';
 import { hybridDataStore } from '../lib/data/hybridDataStore';
 import type { AnchoringEvent, WitnessAttestation } from '../lib/data/localData';
+import { etherscanTxUrl } from '../lib/api/config';
 
 interface DIDEvent {
   id: string;
@@ -164,6 +165,7 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
           eventType: (attestation.attestation_data as any)?.eventType || attestation.attestation_type,
           data: attestation.attestation_data,
           signature: attestation.signature,
+          txHash: attestation.tx_hash,
           isDIDEvent: isDIDEvent,
           isLifecycleEvent: isLifecycleEvent,
         },
@@ -321,11 +323,24 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
                             {event.type === 'attestation' && (
                               <div>
                                 <p className="mb-1"><span className="font-medium">Witness:</span> {event.details.witness.split(':').pop()}</p>
-                                {event.details.isDIDEvent && (
-                                  <div className="mt-2 px-2 py-1 bg-green-50 border border-green-200 rounded text-green-800 font-medium">
-                                    ✓ DID Event - Monitored by Witnesses
-                                  </div>
-                                )}
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                  {event.details.isDIDEvent && (
+                                    <div className="px-2 py-1 bg-green-50 border border-green-200 rounded text-green-800 font-medium">
+                                      ✓ DID Event - Anchored
+                                    </div>
+                                  )}
+                                  {event.details.txHash && (
+                                    <a 
+                                      href={etherscanTxUrl(event.details.txHash) || '#'}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="px-2 py-1 bg-purple-50 border border-purple-200 rounded text-purple-700 font-medium flex items-center gap-1 hover:bg-purple-100 transition-colors"
+                                    >
+                                      Blockchain Proof <ExternalLink size={10} />
+                                    </a>
+                                  )}
+                                </div>
                               </div>
                             )}
                             {event.type === 'update' && event.details.isLifecycleEvent && (
@@ -360,9 +375,20 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
                                     <span className="text-gray-600 dark:text-gray-400 font-medium capitalize min-w-fit">
                                       {key.replace(/([A-Z])/g, ' $1').trim()}:
                                     </span>
-                                    <span className="text-gray-900 dark:text-white font-mono break-all text-right">
-                                      {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
-                                    </span>
+                                    {key === 'txHash' && typeof value === 'string' ? (
+                                      <a 
+                                        href={etherscanTxUrl(value) || '#'}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-purple-600 dark:text-purple-400 font-mono hover:underline flex items-center gap-1"
+                                      >
+                                        {value.substring(0, 16)}... <ExternalLink size={10} />
+                                      </a>
+                                    ) : (
+                                      <span className="text-gray-900 dark:text-white font-mono break-all text-right">
+                                        {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                                      </span>
+                                    )}
                                   </div>
                                 ))}
                             </div>
