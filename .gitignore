@@ -23,6 +23,8 @@ dist-ssr
 
 # Environment files (contain secrets)
 .env
+.env.example
+.env.*.example
 .env.local
 .env.*.local
 

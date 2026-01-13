@@ -51,17 +51,25 @@ Write-Host "============================================================" -Foreg
 Write-Host "  DPP Trust System - Development Environment" -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 
-# Load .env file from deployment folder if it exists
-$envPath = Join-Path $ProjectRoot "deployment\.env"
-if (Test-Path $envPath) {
-    Write-Host "Loading environment from deployment/.env" -ForegroundColor Gray
-    Get-Content $envPath | ForEach-Object {
-        if ($_ -match '^([^#\s][^=]+)=(.*)$') {
-            $name = $matches[1].Trim()
-            $value = $matches[2].Trim().Trim("'").Trim('"')
-            # Set the environment variable for this session and child processes
-            [System.Environment]::SetEnvironmentVariable($name, $value)
-            Set-Content -Path "env:$name" -Value $value
+# Load .env files from multiple locations (Root, Web, Deployment)
+$envFiles = @(
+    Join-Path $ProjectRoot "deployment\.env"
+)
+
+foreach ($envPath in $envFiles) {
+    if (Test-Path $envPath) {
+        Write-Host "Loading environment from $(Split-Path $envPath -Leaf)" -ForegroundColor Gray
+        Get-Content $envPath | ForEach-Object {
+            if ($_ -match '^([^#\s][^=]+)=(.*)$') {
+                $name = $matches[1].Trim()
+                $value = $matches[2].Trim().Trim("'").Trim('"')
+                # Always overwrite to ensure session is in sync with latest file changes
+                [System.Environment]::SetEnvironmentVariable($name, $value)
+                Set-Item -Path "env:$name" -Value $value
+                if ($name -eq "CONTRACT_ADDRESS") {
+                    Write-Host "      Set $name=$value" -ForegroundColor DarkGray
+                }
+            }
         }
     }
 }
