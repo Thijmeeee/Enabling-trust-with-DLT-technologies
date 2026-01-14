@@ -19,7 +19,8 @@ import {
   ExternalLink,
   Info,
   RefreshCw,
-  Hash
+  Hash,
+  AlertCircle
 } from 'lucide-react';
 import { 
   buildProofPath,
@@ -29,7 +30,6 @@ import {
   type VerificationStep,
   type VerificationResult,
 } from '../../lib/utils/merkleTree';
-import type { WatcherAlert } from '../../lib/data/localData';
 import { type AnchoringProof } from '../../types/witness';
 import ProofPathRenderer from './ProofPathRenderer';
 import VerificationPanel from './VerificationPanel';
@@ -38,14 +38,18 @@ interface Props {
   selectedProof?: AnchoringProof;
   localOperation?: any; 
   onVerificationComplete?: (result: VerificationResult) => void;
-  alerts?: WatcherAlert[];
+  alerts?: any[];
 }
 
 export default function MerkleTreeVisualizer({ 
   selectedProof,
   localOperation,
   onVerificationComplete,
+  alerts = []
 }: Props) {
+  // Check if current event has active alerts
+  const hasActiveAlert = alerts.some(a => a.status === 'active' || !a.status);
+
   // State
   const [proofPath, setProofPath] = useState<ProofPathStructure | null>(null);
   const [verificationSteps, setVerificationSteps] = useState<VerificationStep[]>([]);
@@ -161,8 +165,8 @@ export default function MerkleTreeVisualizer({
       onVerificationComplete?.({
         steps: verificationSteps,
         computedRoot: verificationSteps[verificationSteps.length-1].output,
-        expectedRoot: proofPath.merkleRoot,
-        isValid: proofPath.isValid
+        expectedRoot: proofPath?.merkleRoot || '',
+        isValid: proofPath?.isValid || false
       });
     }
     return () => clearTimeout(timer);
@@ -175,20 +179,6 @@ export default function MerkleTreeVisualizer({
     setCurrentStep(0);
     setVerifiedLevels(new Set());
     setIsVerifying(false);
-  };
-  const handleStepForward = () => {
-    if (currentStep < verificationSteps.length) {
-      setVerifiedLevels(prev => new Set([...prev, currentStep]));
-      setCurrentStep(prev => prev + 1);
-    }
-  };
-  const handleStepBackward = () => {
-    if (currentStep > 0) {
-      const nextLevels = new Set(verifiedLevels);
-      nextLevels.delete(currentStep - 1);
-      setVerifiedLevels(nextLevels);
-      setCurrentStep(prev => prev - 1);
-    }
   };
 
   const copyToClipboard = (text: string) => {
@@ -212,14 +202,30 @@ export default function MerkleTreeVisualizer({
   }
 
   return (
-    <div className="flex flex-col gap-4 relative">
+    <div className={`flex flex-col gap-4 relative transition-all duration-700 ${
+      hasActiveAlert ? 'ring-4 ring-red-500/20 rounded-2xl p-2 bg-red-50/10 dark:bg-red-900/5' : ''
+    }`}>
       {/* Visualizer Header */}
-      <div className="flex items-center justify-between bg-white dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+      <div className={`flex items-center justify-between p-3 rounded-lg border shadow-sm transition-colors duration-300 ${
+        hasActiveAlert 
+          ? 'bg-red-50 dark:bg-red-900/40 border-red-200 dark:border-red-800' 
+          : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+      }`}>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <Shield className="w-5 h-5 text-indigo-500" />
-            <span className="text-sm font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest">Merkle Proof Visualizer</span>
+            <Shield className={`w-5 h-5 ${hasActiveAlert ? 'text-red-500' : 'text-indigo-500'}`} />
+            <span className="text-sm font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest">
+              {hasActiveAlert ? 'COMPROMISED ASSET AUDIT' : 'Merkle Proof Visualizer'}
+            </span>
           </div>
+          
+          {hasActiveAlert && (
+            <div className="flex items-center gap-2 px-3 py-1 bg-red-600 text-white text-[10px] font-black rounded-full">
+              <AlertCircle className="w-3 h-3" />
+              FLAGGED INCONSISTENCY
+            </div>
+          )}
+
           <div className="hidden lg:block h-6 w-px bg-gray-200 dark:bg-gray-700 mx-2"></div>
           <div className="hidden lg:flex items-center gap-2">
             <Database className="w-4 h-4 text-gray-400" />

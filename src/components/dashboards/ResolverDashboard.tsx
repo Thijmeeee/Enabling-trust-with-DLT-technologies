@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { 
   Search, 
   CheckCircle, 
@@ -8,17 +8,12 @@ import {
   History, 
   ShieldCheck, 
   Copy, 
-  ExternalLink,
-  ChevronRight,
   ChevronDown,
   ChevronUp,
   Loader2,
   Info,
   Network,
-  Fingerprint,
-  Zap,
-  Building2,
-  Cpu
+  Zap
 } from 'lucide-react';
 import { ResolverApi } from '../../lib/utils/resolverApi';
 import { DIDResolutionResult, LogEntry, DIDVerificationResult } from '../../types/didwebvh';
@@ -283,7 +278,7 @@ export default function ResolverDashboard() {
                             
                             <div className="font-mono text-[10px] bg-slate-900 text-slate-400 px-3 py-2 rounded-lg border border-slate-800 group-hover:text-blue-300 transition-colors break-all max-w-md shadow-inner">
                               <span className="text-slate-600 mr-2">PROOF:</span>
-                              {entry.proof[0]?.proofValue.substring(0, 48)}...
+                              {entry.proof[0]?.proofValue?.substring(0, 48) || 'No proof value'}...
                             </div>
                           </div>
 
@@ -338,7 +333,7 @@ export default function ResolverDashboard() {
                                           <span className="font-mono text-purple-600 dark:text-purple-400 font-bold">{p.merkleRoot.substring(0, 16)}...</span>
                                         </div>
                                         <div className="flex flex-wrap gap-1">
-                                          {p.path?.map((pathPart: string, pathIdx: number) => (
+                                          {p.path?.map((_: string, pathIdx: number) => (
                                             <span key={pathIdx} className="text-[8px] px-1 bg-purple-50 dark:bg-purple-900/30 text-purple-400 dark:text-purple-300 rounded border border-purple-100 dark:border-purple-900/50">
                                               Path {pathIdx}
                                             </span>

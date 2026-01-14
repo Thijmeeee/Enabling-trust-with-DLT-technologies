@@ -1,7 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { CheckCircle2, Factory, ShieldCheck, Truck, Recycle, User, Info } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { CheckCircle2, Factory, ShieldCheck, Recycle, User } from 'lucide-react';
 import { hybridDataStore } from '../lib/data/hybridDataStore';
-import { useUI } from '../lib/utils/UIContext';
 
 interface StoryEvent {
   id: string;
@@ -16,7 +15,6 @@ interface StoryEvent {
 export default function SimpleStoryTimeline({ did }: { did: string }) {
   const [events, setEvents] = useState<StoryEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const { viewMode } = useUI();
 
   useEffect(() => {
     loadStory();

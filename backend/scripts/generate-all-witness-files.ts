@@ -64,6 +64,7 @@ async function generateAllWitnessFiles() {
                         continue;
                     }
 
+                const witnessProofs: any[] = [];
                 for (let i = 0; i < logEntries.length; i++) {
                     const entry = logEntries[i];
                     const entryBuf = Buffer.from(JSON.stringify(entry));

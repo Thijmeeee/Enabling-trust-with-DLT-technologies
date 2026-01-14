@@ -6,7 +6,7 @@ import type { AnchoringEvent } from '../lib/data/localData';
 import { etherscanTxUrl, etherscanBlockUrl } from '../lib/api';
 
 export default function DLTTrustAnchor({ did }: { did: string }) {
-  const { viewMode, t } = useUI();
+  const { t } = useUI();
   const [anchorings, setAnchorings] = useState<AnchoringEvent[]>([]);
   const [loading, setLoading] = useState(true);
 

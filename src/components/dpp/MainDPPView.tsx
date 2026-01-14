@@ -81,7 +81,6 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
   const [selectedAttestation, setSelectedAttestation] = useState<any>(null);
   const [showTrustTooltip, setShowTrustTooltip] = useState(false);
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
-  const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
   const [recentEvents, setRecentEvents] = useState<any[]>([]);
   const [openEventId, setOpenEventId] = useState<string | null>(null);
 
@@ -129,7 +128,7 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
       const pOp = JSON.parse(currentPending);
       const result = await getPendingAndRejectedOperations(data.dpp.id);
       
-      if (result.success) {
+      if (result) {
         // Check if our operation is still pending or if it has been anchored
         const historyResult = await getDIDOperationsHistory(data.dpp.id);
         if (historyResult.success) {
@@ -498,34 +497,9 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
       });
 
       console.log('MainDPPView: Pending approvals found:', pending.length, pending);
-      setPendingApprovals(pending);
     } catch (error) {
       console.error('Error loading pending approvals:', error);
     }
-  }
-
-  function handleEventCreated() {
-    console.log('MainDPPView: handleEventCreated called, incrementing refresh key');
-    // Increment the refresh key to force DIDEventsLog to re-render
-    setEventRefreshKey(prev => {
-      const newKey = prev + 1;
-      console.log('MainDPPView: eventRefreshKey updated from', prev, 'to', newKey);
-      return newKey;
-    });
-    // Also reload data to update metrics and pending approvals
-    loadData();
-  }
-
-  async function handleExport() {
-    const { exportHierarchyToJSON } = await import('../../lib/operations/bulkOperations');
-    const json = await exportHierarchyToJSON(did);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `dpp-${did.split(':').pop()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
   }
 
   async function handleSaveDoP(dop: DeclarationOfPerformance) {
@@ -1395,6 +1369,31 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                   className="p-1 hover:bg-emerald-200 dark:hover:bg-emerald-800 rounded-lg transition-colors"
                 >
                   <ArrowLeft className="w-4 h-4 text-emerald-600 dark:text-emerald-400 rotate-90" />
+                </button>
+              </div>
+            )}
+
+            {currentRejectedOp && (
+              <div className="mb-6 p-4 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-2xl flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-rose-100 dark:bg-rose-900/40 rounded-full flex items-center justify-center text-rose-600 dark:text-rose-400">
+                    <AlertCircle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-rose-900 dark:text-rose-200 uppercase text-xs tracking-wider">Operation Rejected</h4>
+                    <p className="text-sm text-rose-700 dark:text-rose-300">
+                      Your recent <strong>{currentRejectedOp.type.replace('_', ' ')}</strong> was rejected by the network consensus.
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => {
+                    setCurrentRejectedOp(null);
+                    localStorage.removeItem(`rejected_op_${data.dpp.did}`);
+                  }}
+                  className="p-1 hover:bg-rose-200 dark:hover:bg-rose-800 rounded-lg transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4 text-rose-600 dark:text-rose-400 rotate-90" />
                 </button>
               </div>
             )}

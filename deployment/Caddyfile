@@ -36,8 +36,9 @@
     import security_headers
     import rate_limit
 
-    # 1. Route API requests to microservices with security
-    handle /api/identity/* {
+    # 1. Route API requests to the API Gateway (Identity Service)
+    # The Identity Service currently serves as the main API for products, events, and did-log metadata
+    handle /api/* {
         import api_security
         reverse_proxy identity:3000 {
             header_up X-Real-IP {remote_host}
@@ -46,44 +47,9 @@
         }
     }
 
-    handle /api/products/* {
-        import api_security
-        reverse_proxy identity:3000 {
-            header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-For {remote_host}
-            header_up X-Forwarded-Proto {scheme}
-        }
-    }
-
-    handle /api/events/* {
-        import api_security
-        reverse_proxy identity:3000 {
-            header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-For {remote_host}
-            header_up X-Forwarded-Proto {scheme}
-        }
-    }
-
-    handle /api/witness/* {
-        import api_security
-        reverse_proxy witness:3000 {
-            header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-For {remote_host}
-            header_up X-Forwarded-Proto {scheme}
-        }
-    }
-
-    handle /api/watcher/* {
-        import api_security
-        reverse_proxy watcher:3000 {
-            header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-For {remote_host}
-            header_up X-Forwarded-Proto {scheme}
-        }
-    }
-
-    # 2. DID resolution (static files) - with caching
-    handle /.well-known/did/* {
+    # 2. DID resolution (static files) - with prefix stripping
+    # Files are stored as /usr/share/caddy/did/[scid]/did.json
+    handle_path /.well-known/did/* {
         root * /usr/share/caddy/did
         file_server
         header Cache-Control "public, max-age=3600"

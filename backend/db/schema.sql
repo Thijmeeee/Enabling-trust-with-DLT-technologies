@@ -42,3 +42,14 @@ CREATE TABLE audits (
     details TEXT,
     checked_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Watcher Alerts (Reported by Watchers)
+CREATE TABLE watcher_alerts (
+    id SERIAL PRIMARY KEY,
+    did VARCHAR(255) REFERENCES identities(did),
+    event_id INTEGER REFERENCES events(id),
+    reason VARCHAR(100) NOT NULL,
+    details TEXT,
+    reporter VARCHAR(255),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);

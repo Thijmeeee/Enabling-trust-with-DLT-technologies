@@ -18,6 +18,7 @@ export interface InfrastructureEntity {
   type: 'node' | 'database' | 'service' | 'client';
   description: string;
   icon: any;
+  status?: string;
 }
 
 export interface StakeholderProfile {

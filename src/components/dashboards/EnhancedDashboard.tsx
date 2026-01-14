@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Package, RefreshCw, Grid, List as ListIcon } from 'lucide-react';
+import { Package, Grid, List as ListIcon } from 'lucide-react';
 import { hybridDataStore as enhancedDB } from '../../lib/data/hybridDataStore';
 import { FilterPanel, FilterState } from '../modals/FilterPanel';
 import { DPPCard } from '../dpp/DPPCard';
-import { generateMixedTestData } from '../../lib/operations/bulkOperations';
 import type { DPP } from '../../lib/data/localData';
 
 type ViewMode = 'grid' | 'list';
@@ -73,27 +72,6 @@ export default function EnhancedDashboard({
     setTotalResults(result.total);
     setLoading(false);
   }, [currentPage]);
-
-  const handleGenerateTestData = async () => {
-    if (!confirm('This will generate 90 test products. Continue?')) return;
-
-    setLoading(true);
-    try {
-      await generateMixedTestData();
-      await loadData();
-      alert('Test data generated successfully!');
-    } catch (error) {
-      alert('Error generating data: ' + error);
-    }
-    setLoading(false);
-  };
-
-  const handleClearAll = async () => {
-    if (!confirm('DELETE ALL data? This cannot be undone!')) return;
-
-    await enhancedDB.clearAll();
-    await loadData();
-  };
 
   const totalPages = Math.ceil(totalResults / itemsPerPage);
 

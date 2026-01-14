@@ -199,7 +199,7 @@ export default function EcosystemView() {
                                   <div className="mt-2 flex items-center gap-1.5">
                                     <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
                                     <span className="text-[10px] font-mono text-green-600 dark:text-green-400 uppercase">
-                                      {entity.status}
+                                      {entity.status || 'Active'}
                                     </span>
                                   </div>
                                 </div>

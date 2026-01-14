@@ -1234,6 +1234,49 @@ app.get('/api/audits', async (req, res) => {
     }
 });
 
+// Get Watcher Alerts
+app.get('/api/watcher/alerts', async (req, res) => {
+    const { did } = req.query;
+    try {
+        let query = 'SELECT id, did, event_id, reason, details, reporter, created_at FROM watcher_alerts';
+        let params: any[] = [];
+
+        if (did) {
+            query += ' WHERE did = $1';
+            params.push(did);
+        }
+        query += ' ORDER BY created_at DESC';
+
+        const result = await pool.query(query, params);
+        return res.json(result.rows);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Create Watcher Alert
+app.post('/api/watcher/alerts', async (req, res) => {
+    const { did, event_id, reason, details, reporter } = req.body;
+    
+    if (!did || !reason) {
+        return res.status(400).json({ error: 'Missing required fields: did, reason' });
+    }
+
+    try {
+        const result = await pool.query(
+            `INSERT INTO watcher_alerts (did, event_id, reason, details, reporter, created_at) 
+             VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING *`,
+            [did, event_id, reason, details, reporter || 'Watcher Node']
+        );
+        
+        console.log(`🚨 Watcher Alert created for ${did}: ${reason}`);
+        
+        return res.json(result.rows[0]);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Health check
 app.get('/health', (req, res) => {
     res.json({

@@ -82,7 +82,7 @@ export default function ProofPathRenderer({
         bgColorClass = 'bg-rose-100 border-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.3)] dark:bg-rose-900/40 dark:border-rose-400';
         iconColorClass = 'text-rose-600 dark:text-rose-400';
       } else if (isActive) {
-        bgColorClass = 'bg-rose-50 border-rose-500 animate-pulse shadow-[0_0_20px_rgba(244,63,94,0.4)] dark:bg-rose-900/40 dark:border-rose-400';
+        bgColorClass = 'bg-rose-50 border-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.4)] dark:bg-rose-900/40 dark:border-rose-400';
         iconColorClass = 'text-rose-600 dark:text-rose-300';
       } else {
         bgColorClass = 'bg-rose-50 border-rose-200 dark:bg-rose-950/20 dark:border-rose-900/50';
@@ -95,7 +95,7 @@ export default function ProofPathRenderer({
         bgColorClass = 'bg-blue-100 border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)] dark:bg-blue-900/40 dark:border-blue-400';
         iconColorClass = 'text-blue-600 dark:text-blue-400';
       } else if (isActive) {
-        bgColorClass = 'bg-blue-50 border-blue-500 animate-pulse shadow-[0_0_20px_rgba(59,130,246,0.4)] dark:bg-blue-900/40 dark:border-blue-400';
+        bgColorClass = 'bg-blue-50 border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.4)] dark:bg-blue-900/40 dark:border-blue-400';
         iconColorClass = 'text-blue-600 dark:text-blue-300';
       } else {
         bgColorClass = 'bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-900/50';
@@ -110,7 +110,7 @@ export default function ProofPathRenderer({
         bgColorClass = 'bg-emerald-100 border-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.4)] dark:bg-emerald-900/40 dark:border-emerald-400';
         iconColorClass = 'text-emerald-600 dark:text-emerald-400';
       } else if (isActive) {
-        bgColorClass = 'bg-indigo-50 border-indigo-500 animate-pulse shadow-[0_0_25px_rgba(99,102,241,0.5)] dark:bg-indigo-900/40 dark:border-indigo-400';
+        bgColorClass = 'bg-indigo-50 border-indigo-500 shadow-[0_0_25px_rgba(99,102,241,0.5)] dark:bg-indigo-900/40 dark:border-indigo-400';
         iconColorClass = 'text-indigo-600 dark:text-indigo-300';
       } else {
         bgColorClass = 'bg-gray-50 border-gray-200 dark:bg-gray-800/60 dark:border-gray-700';
@@ -165,7 +165,7 @@ export default function ProofPathRenderer({
                   isVerified 
                     ? 'stroke-emerald-500 dark:stroke-emerald-400 opacity-100' 
                     : isActive 
-                      ? 'stroke-indigo-500 dark:stroke-indigo-400 opacity-100 animate-pulse' 
+                      ? 'stroke-indigo-500 dark:stroke-indigo-400 opacity-100' 
                       : 'stroke-gray-300 dark:stroke-gray-700 opacity-40'
                 }`}
                 strokeLinecap="round"
@@ -176,7 +176,7 @@ export default function ProofPathRenderer({
                   isVerified 
                     ? 'stroke-emerald-500 dark:stroke-emerald-400 opacity-100' 
                     : isActive 
-                      ? 'stroke-indigo-500 dark:stroke-indigo-400 opacity-100 animate-pulse' 
+                      ? 'stroke-indigo-500 dark:stroke-indigo-400 opacity-100' 
                       : 'stroke-gray-300 dark:stroke-gray-700 opacity-40'
                 }`}
                 strokeLinecap="round"

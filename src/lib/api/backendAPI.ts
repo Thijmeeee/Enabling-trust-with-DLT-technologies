@@ -41,6 +41,16 @@ export interface BackendAudit {
     checked_at: string;
 }
 
+export interface WatcherAlert {
+    id: number;
+    did: string;
+    event_id: number | null;
+    reason: string;
+    details: string;
+    reporter: string;
+    created_at: string;
+}
+
 class BackendAPI {
     private baseUrl: string;
 
@@ -134,6 +144,27 @@ class BackendAPI {
             return await this.fetch<BackendAudit[]>('/api/audits');
         } catch {
             return [];
+        }
+    }
+
+    // Watcher Alerts
+    async getWatcherAlerts(did?: string): Promise<WatcherAlert[]> {
+        try {
+            const query = did ? `?did=${encodeURIComponent(did)}` : '';
+            return await this.fetch<WatcherAlert[]>(`/api/watcher/alerts${query}`);
+        } catch {
+            return [];
+        }
+    }
+
+    async createWatcherAlert(alert: Omit<WatcherAlert, 'id' | 'created_at'>): Promise<WatcherAlert | null> {
+        try {
+            return await this.fetch<WatcherAlert>('/api/watcher/alerts', {
+                method: 'POST',
+                body: JSON.stringify(alert),
+            });
+        } catch {
+            return null;
         }
     }
 
