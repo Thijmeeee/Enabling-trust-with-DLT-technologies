@@ -440,6 +440,7 @@ export async function getAttestationsByDID(did: string): Promise<WitnessAttestat
             approval_status: 'approved' as const, 
             witness_status: event.witness_proofs?.txHash ? 'anchored' : 'pending',
             tx_hash: event.witness_proofs?.txHash,
+            witness_proofs: event.witness_proofs,
           });
         } else {
           backendAttestations.push({
@@ -455,6 +456,7 @@ export async function getAttestationsByDID(did: string): Promise<WitnessAttestat
             approval_status: 'approved' as const,
             witness_status: event.witness_proofs?.txHash ? 'anchored' : 'pending',
             tx_hash: event.witness_proofs?.txHash,
+            witness_proofs: event.witness_proofs,
           });
         }
       }
