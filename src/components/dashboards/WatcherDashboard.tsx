@@ -30,7 +30,10 @@ export default function WatcherDashboard() {
   const [expandedComponents, setExpandedComponents] = useState<Set<string>>(new Set());
   const [selectedDPPForDetails, setSelectedDPPForDetails] = useState<MonitoredDPP | null>(null);
   const [didHistory, setDidHistory] = useState<any[]>([]);
+  const [selectedOperationIndex, setSelectedOperationIndex] = useState<number | null>(null);
   const [attestations, setAttestations] = useState<any[]>([]);
+  const [rawLog, setRawLog] = useState<string | null>(null);
+  const [rawWitness, setRawWitness] = useState<string | null>(null);
   const [showAlertModal, setShowAlertModal] = useState(false);
   const [showMerkleTree, setShowMerkleTree] = useState(true);
   const [alertModalDPP, setAlertModalDPP] = useState<MonitoredDPP | null>(null);
@@ -481,14 +484,38 @@ export default function WatcherDashboard() {
   async function loadDPPDetails(dpp: MonitoredDPP) {
     setSelectedDPPForDetails(dpp);
     setFilter('selected'); // Auto-switch to selected product tab
+    setRawLog(null);
+    setRawWitness(null);
 
     // Load DID history (operations) - pass DPP ID not DID
     const historyResult = await getDIDOperationsHistory(dpp.id);
-    setDidHistory(historyResult.success ? historyResult.operations : []);
+    const ops = historyResult.success ? historyResult.operations : [];
+    setDidHistory(ops);
+    
+    // Default to the first (latest) operation for Merkle visualization
+    if (ops.length > 0) {
+      setSelectedOperationIndex(0);
+    } else {
+      setSelectedOperationIndex(null);
+    }
 
     // Load attestations
     const atts = await enhancedDB.getAttestationsByDID(dpp.did);
     setAttestations(atts);
+
+    // Fetch raw files from backend
+    try {
+      const scid = dpp.did.split(':').pop();
+      if (scid) {
+        const logRes = await fetch(`http://localhost:3000/.well-known/did/${scid}/did.jsonl`);
+        if (logRes.ok) setRawLog(await logRes.text());
+
+        const witnessRes = await fetch(`http://localhost:3000/.well-known/did/${scid}/did-witness.json`);
+        if (witnessRes.ok) setRawWitness(await witnessRes.text());
+      }
+    } catch (err) {
+      console.error('Failed to fetch raw files:', err);
+    }
   }
 
   return (
@@ -560,7 +587,7 @@ export default function WatcherDashboard() {
 
         {/* Merkle Tree Integrity Visualization */}
         <div className="mb-6">
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors">
             <div className="border-b border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                 <GitBranch className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
@@ -583,8 +610,14 @@ export default function WatcherDashboard() {
               <div className="p-4 bg-gray-50 dark:bg-gray-900/40">
                 {selectedDPPForDetails ? (
                   <MerkleTreeVisualizer 
-                    selectedDPPDid={selectedDPPForDetails.did}
-                    operations={didHistory}
+                    selectedProof={
+                      selectedOperationIndex !== null && didHistory[selectedOperationIndex] 
+                        ? didHistory[selectedOperationIndex].witness_proofs 
+                        : undefined
+                    }
+                    localOperation={
+                      selectedOperationIndex !== null ? didHistory[selectedOperationIndex] : undefined
+                    }
                     alerts={alerts.filter(a => a.did === selectedDPPForDetails.did)}
                   />
                 ) : (
@@ -850,9 +883,19 @@ export default function WatcherDashboard() {
                     ) : (
                       <div className="space-y-2">
                         {didHistory.map((op: any, idx: number) => (
-                          <div key={idx} className="bg-white dark:bg-gray-800 rounded p-2 text-xs">
+                          <div 
+                            key={idx} 
+                            onClick={() => setSelectedOperationIndex(idx)}
+                            className={`rounded p-2 text-xs transition-all cursor-pointer border-2 ${
+                              selectedOperationIndex === idx 
+                                ? 'bg-blue-100 dark:bg-blue-800 border-blue-500 dark:border-blue-400 shadow-sm scale-[1.02]' 
+                                : 'bg-white dark:bg-gray-800 border-transparent hover:border-gray-300 dark:hover:border-gray-600'
+                            }`}
+                          >
                             <div className="flex items-center justify-between mb-1">
-                              <span className="font-semibold text-blue-900 dark:text-blue-300">{op.attestation_type.replace(/_/g, ' ').toUpperCase()}</span>
+                              <span className={`font-semibold ${selectedOperationIndex === idx ? 'text-blue-900 dark:text-blue-200' : 'text-blue-900 dark:text-blue-300'}`}>
+                                {op.attestation_type.replace(/_/g, ' ').toUpperCase()}
+                              </span>
                               <span className="text-gray-500 dark:text-gray-400">{new Date(op.timestamp).toLocaleString()}</span>
                             </div>
                             <div className="space-y-1">
@@ -860,9 +903,21 @@ export default function WatcherDashboard() {
                                 <span className="text-gray-600 dark:text-gray-400">Witness:</span>
                                 <p className="font-mono text-gray-900 dark:text-gray-200 break-all">{op.witness_did}</p>
                               </div>
+                              {selectedOperationIndex === idx && op.witness_proofs && (
+                                <div className="mt-2 text-[10px] bg-blue-50 dark:bg-blue-900/40 p-1.5 rounded border border-blue-200 dark:border-blue-700">
+                                  <div className="flex items-center gap-1 text-blue-700 dark:text-blue-300 font-medium mb-1">
+                                    <Shield className="w-3 h-3" />
+                                    <span>Merkle Proof Available</span>
+                                  </div>
+                                  <p className="text-gray-600 dark:text-gray-400">
+                                    This operation is anchored in batch: 
+                                    <span className="ml-1 font-mono text-gray-800 dark:text-gray-200">{op.witness_proofs.merkleRoot.substring(0, 16)}...</span>
+                                  </p>
+                                </div>
+                              )}
                               <div>
                                 <span className="text-gray-600 dark:text-gray-400">Signature:</span>
-                                <p className="font-mono text-gray-900 dark:text-gray-200 break-all">{op.signature}</p>
+                                <p className="font-mono text-gray-900 dark:text-gray-200 break-all truncate">{op.signature}</p>
                               </div>
                               {op.approval_status && (
                                 <div>
@@ -919,6 +974,46 @@ export default function WatcherDashboard() {
                       </div>
                     )}
                   </div>
+
+                  {/* Raw Data Files */}
+                  {(rawLog || rawWitness) && (
+                    <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+                      <h3 className="font-semibold text-gray-900 dark:text-white mb-3 text-sm flex items-center gap-2">
+                        <Package className="w-4 h-4 text-orange-500" />
+                        Trust Protocol: Raw Data Files
+                      </h3>
+                      
+                      <div className="space-y-4">
+                        {rawLog && (
+                          <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-[10px] uppercase font-black text-gray-500 tracking-wider">DID Log (did.jsonl)</span>
+                              <span className="text-[9px] px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-600 dark:text-gray-400">Read-Only</span>
+                            </div>
+                            <div className="max-h-48 overflow-y-auto bg-black rounded-lg p-2.5 border border-white/5 font-mono text-[10px] leading-relaxed">
+                              <pre className="text-emerald-400 whitespace-pre-wrap">{rawLog}</pre>
+                            </div>
+                          </div>
+                        )}
+
+                        {rawWitness && (
+                          <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-[10px] uppercase font-black text-gray-500 tracking-wider">Witness Proofs (did-witness.json)</span>
+                              <span className="text-[9px] px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-600 dark:text-gray-400">Cryptographic</span>
+                            </div>
+                            <div className="max-h-48 overflow-y-auto bg-black rounded-lg p-2.5 border border-white/5 font-mono text-[10px] leading-relaxed">
+                              <pre className="text-blue-400 whitespace-pre-wrap">{rawWitness}</pre>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      
+                      <p className="mt-3 text-[10px] text-gray-400 dark:text-gray-500 italic">
+                        These raw files are fetched directly from the DID controller's well-known endpoint for independent verification by this Watcher node.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

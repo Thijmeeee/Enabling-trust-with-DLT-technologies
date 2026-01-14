@@ -22,7 +22,6 @@ import {
   Flame,
   Droplets,
   FileCheck,
-  Clock,
   FileJson,
   PlusSquare,
   FileEdit,
@@ -41,9 +40,9 @@ import DIDEventsLog from '../DIDEventsLog';
 import SimpleStoryTimeline from '../SimpleStoryTimeline';
 import { ProtectedField, ProtectedMetadata } from '../ProtectedField';
 import WindowLifecycleVisualization from '../visualizations/WindowLifecycleVisualization';
-import { LifecycleControls } from '../LifecycleControls';
 import DIDOperationsPanel from '../DIDOperationsPanel';
 import TrustValidationTab from '../TrustValidationTab';
+import ProtocolFilesTab from '../ProtocolFilesTab';
 import DoPerformanceView from '../DoPerformanceView';
 import DoPerformanceEditor from '../DoPerformanceEditor';
 import AttestationDetailsModal from '../modals/AttestationDetailsModal';
@@ -76,7 +75,7 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
   const [loading, setLoading] = useState(true);
   const [showQR, setShowQR] = useState(false);
   const [showRawData, setShowRawData] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'story' | 'specifications' | 'components' | 'lifecycle' | 'did-operations' | 'did-operations-simple' | 'trust-validation' | 'events'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'story' | 'specifications' | 'components' | 'lifecycle' | 'did-operations' | 'did-operations-simple' | 'trust-validation' | 'events' | 'protocol-files'>('overview');
   const [eventRefreshKey, setEventRefreshKey] = useState(0);
   const [editingDoP, setEditingDoP] = useState(false);
   const [selectedAttestation, setSelectedAttestation] = useState<any>(null);
@@ -654,6 +653,7 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
               { id: 'did-operations', label: t('DID Operations'), showFor: ['main', 'component'], technicalOnly: true },
               { id: 'did-operations-simple', label: 'Management', showFor: ['main', 'component'], simpleOnly: true },
               { id: 'trust-validation', label: t('Trust & Validation'), showFor: ['main', 'component'] },
+              { id: 'protocol-files', label: 'Protocol Files', showFor: ['main', 'component'], technicalOnly: true },
               { id: 'events', label: t('Events'), showFor: ['main', 'component'], technicalOnly: true },
             ].filter(tab => {
               if (tab.simpleOnly && viewMode !== 'simple') return false;
@@ -1478,6 +1478,10 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
         <div className={activeTab === 'trust-validation' ? 'block' : 'hidden'}>
           <TrustValidationTab did={did} />
         </div>
+
+        {activeTab === 'protocol-files' && (
+          <ProtocolFilesTab did={did} />
+        )}
 
         {activeTab === 'events' && (
           <DIDEventsLog key={`events-${eventRefreshKey}`} did={did} openEventId={openEventId} />

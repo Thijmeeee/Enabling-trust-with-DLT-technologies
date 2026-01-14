@@ -22,8 +22,9 @@ import {
 } from 'lucide-react';
 import { ResolverApi } from '../../lib/utils/resolverApi';
 import { DIDResolutionResult, LogEntry, DIDVerificationResult } from '../../types/didwebvh';
+import WitnessFileView from '../WitnessFileView';
 
-type TabType = 'document' | 'log' | 'verification';
+type TabType = 'document' | 'log' | 'verification' | 'witness';
 
 export default function ResolverDashboard() {
   const [did, setDid] = useState('');
@@ -204,6 +205,15 @@ export default function ResolverDashboard() {
             >
               <ShieldCheck className="h-4 w-4" />
               Verification
+            </button>
+            <button
+              onClick={() => setActiveTab('witness')}
+              className={`px-8 py-4 text-sm font-bold flex items-center gap-2 transition-all border-b-2 ${
+                activeTab === 'witness' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900/50'
+              }`}
+            >
+              <Zap className="h-4 w-4" />
+              Witness Proofs
             </button>
           </div>
 
@@ -459,6 +469,12 @@ export default function ResolverDashboard() {
                     <div>Version: v{verificationResult?.versionId}</div>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {activeTab === 'witness' && (
+              <div className="p-8">
+                <WitnessFileView did={resolutionResult?.didDocument?.id || verificationResult?.did || ''} />
               </div>
             )}
 

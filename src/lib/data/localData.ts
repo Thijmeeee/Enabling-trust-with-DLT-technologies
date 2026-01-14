@@ -106,6 +106,7 @@ export type WitnessAttestation = {
   approval_status?: 'pending' | 'approved' | 'rejected';
   witness_status?: 'pending' | 'anchored';
   tx_hash?: string;
+  witness_proofs?: any; // Add witness proofs for Merkle Tree visualization
 };
 
 export type Specification = {

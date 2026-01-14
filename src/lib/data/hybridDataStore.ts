@@ -440,6 +440,7 @@ export async function getAttestationsByDID(did: string): Promise<WitnessAttestat
             approval_status: 'approved' as const, 
             witness_status: event.witness_proofs?.txHash ? 'anchored' : 'pending',
             tx_hash: event.witness_proofs?.txHash,
+            witness_proofs: event.witness_proofs,
           });
         } else {
           backendAttestations.push({
@@ -455,6 +456,7 @@ export async function getAttestationsByDID(did: string): Promise<WitnessAttestat
             approval_status: 'approved' as const,
             witness_status: event.witness_proofs?.txHash ? 'anchored' : 'pending',
             tx_hash: event.witness_proofs?.txHash,
+            witness_proofs: event.witness_proofs,
           });
         }
       }
@@ -599,6 +601,11 @@ export async function getDIDDocumentByDID(did: string) {
           id: `${did}#product-service`,
           type: 'ProductPassport',
           serviceEndpoint: `https://dpp.example.com/products/${dpp.id}`
+        },
+        {
+          id: `${did}#witness-service`,
+          type: 'RelativeWitnessService',
+          serviceEndpoint: `./did-witness.json`
         }
       ],
       service_endpoints: [`https://dpp.example.com/products/${dpp.id}`],

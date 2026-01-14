@@ -1,6 +1,7 @@
 import { localDB } from '../data/localData';
 import { enhancedDB } from '../data/enhancedDataStore';
 import { hybridDataStore } from '../data/hybridDataStore';
+import { verifyProtocolFiles } from '../operations/didResolverLocal';
 import type { DPP } from '../data/localData';
 
 export async function verifyDPPIntegrity(dpp: DPP): Promise<{
@@ -88,43 +89,47 @@ export async function calculateTrustScore(dppId: string): Promise<{
 
   console.log('calculateTrustScore: Found DPP:', dppData.did, dppData.model);
 
-  // 1. DID Document Resolution - check if document exists and has valid verification methods
-  const didDoc = await hybridDataStore.getDIDDocumentByDID(dppData.did);
+  // NEW: Comprehensive Verification from Protocol Files (DIRECT FROM FILESYSTEM/HTTPS)
+  const protocolResults = await verifyProtocolFiles(dppData.did);
 
-  if (didDoc) {
-    // Base score for having a DID document
+  // 1. DID Document Resolution - derived from did.jsonl integrity
+  if (protocolResults.hashChainValid && protocolResults.logEntries.length > 0) {
+    didResolutionScore = 25;
+  } else if (protocolResults.logEntries.length > 0) {
     didResolutionScore = 15;
-    if (didDoc.verification_method && Array.isArray(didDoc.verification_method) && didDoc.verification_method.length > 0) {
-      didResolutionScore = 25;
-    }
   } else if (dppData.did && dppData.did.startsWith('did:webvh:')) {
-    // If DPP has a valid DID format, give partial credit
     didResolutionScore = 10;
   }
 
-  // 2. Blockchain Anchoring - check for anchoring events
-  const anchors = await hybridDataStore.getAnchoringEventsByDID(dppData.did);
-
-  if (anchors && anchors.length > 0) {
+  // 2. Blockchain Anchoring - derived from proofs in did-witness.json
+  if (protocolResults.witnessValid && protocolResults.proofs.length > 0) {
     anchoringScore = 25;
+  } else {
+    // Fallback to DB check for older or alternative anchoring methods
+    const anchors = await hybridDataStore.getAnchoringEventsByDID(dppData.did);
+    if (anchors && anchors.length > 0) {
+      anchoringScore = 25;
+    }
   }
 
-  // 3. Witness Attestations - check for attestations (DID events)
-  const attestations = await hybridDataStore.getAttestationsByDID(dppData.did);
+  // 3. Witness Attestations - derived from witness file first
+  if (protocolResults.witnessCount > 0) {
+    attestationScore = Math.min(25, 15 + protocolResults.witnessCount * 2);
+  } else {
+    // Fallback to database for attestations not yet in protocol files
+    const attestations = await hybridDataStore.getAttestationsByDID(dppData.did);
 
-  if (attestations && attestations.length > 0) {
-    // Filter for approved attestations
-    const approvedAttestations = attestations.filter(a => 
-      a.approval_status === 'approved' || 
-      (a.signature && !a.signature.startsWith('pending-'))
-    );
-    
-    if (approvedAttestations.length > 0) {
-      // Base 15 points for having attestations, up to 25 for multiple
-      attestationScore = Math.min(25, 15 + approvedAttestations.length * 2);
-    } else if (attestations.length > 0) {
-      // Pending attestations give partial credit
-      attestationScore = 5;
+    if (attestations && attestations.length > 0) {
+      const approvedAttestations = attestations.filter(a => 
+        a.approval_status === 'approved' || 
+        (a.signature && !a.signature.startsWith('pending-'))
+      );
+      
+      if (approvedAttestations.length > 0) {
+        attestationScore = Math.min(25, 15 + approvedAttestations.length * 2);
+      } else {
+        attestationScore = 5;
+      }
     }
   }
 

@@ -13,8 +13,10 @@
 import express from 'express';
 import { Pool } from 'pg';
 import * as fs from 'fs/promises';
+import path from 'path';
 import * as crypto from 'crypto';
 import 'dotenv/config';
+import { witnessFileManager } from '../../utils/witnessFileManager.js';
 
 // Import didwebvh-ts library functions
 import { createDID, resolveDID, updateDID, deactivateDID } from 'didwebvh-ts';
@@ -111,6 +113,42 @@ function extractScidFromDid(did: string): string {
 }
 
 // ============================================
+// DID RESOLUTION - Static File Serving
+// ============================================
+
+/**
+ * Route for did:webvh resolution following the spec:
+ * /.well-known/did/{scid}/did.jsonl
+ * /.well-known/did/{scid}/did-witness.json
+ */
+app.get('/.well-known/did/:scid/:filename', (req, res) => {
+    const { scid, filename } = req.params;
+    
+    // Safety check for filename
+    if (filename !== 'did.jsonl' && filename !== 'did-witness.json') {
+        return res.status(404).json({ error: 'File not found' });
+    }
+
+    const filePath = path.join(process.cwd(), STORAGE_ROOT, scid, filename);
+    
+    // For did.jsonl, some clients expect application/json-seq or text/plain
+    // For did-witness.json it MUST be application/json
+    const contentType = filename.endsWith('.json') ? 'application/json' : 'text/plain';
+    
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Access-Control-Allow-Origin', '*'); // Redundant but good for compliance
+    
+    res.sendFile(filePath, (err) => {
+        if (err) {
+            console.log(`[Identity] Resource not found: ${scid}/${filename}`);
+            if (!res.headersSent) {
+                res.status(404).json({ error: 'File not found' });
+            }
+        }
+    });
+});
+
+// ============================================
 // DID CREATION - Using didwebvh-ts
 // ============================================
 
@@ -181,7 +219,8 @@ app.post('/api/products/create', async (req, res) => {
 
         // 4. Save DID log to filesystem (JSONL format)
         await saveDIDLog(scid, log);
-        console.log('[Identity] Saved DID log for:', scid);
+        await witnessFileManager.initialize(scid);
+        console.log('[Identity] Saved DID log and initialized witness file for:', scid);
 
         // 5. Store in database
         await pool.query(
@@ -255,11 +294,18 @@ async function createDIDFallback(options: {
         }],
         authentication: ['#key-1'],
         assertionMethod: ['#key-1'],
-        service: [{
-            id: '#product-service',
-            type: 'ProductPassport',
-            serviceEndpoint: `https://${domain}/api/products`
-        }]
+        service: [
+            {
+                id: '#product-service',
+                type: 'ProductPassport',
+                serviceEndpoint: `https://${domain}/api/products`
+            },
+            {
+                id: '#witness-service',
+                type: 'RelativeWitnessService',
+                serviceEndpoint: './did-witness.json'
+            }
+        ]
     };
 
     if (controller) {

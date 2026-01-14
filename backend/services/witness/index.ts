@@ -5,6 +5,7 @@ import { MerkleTree } from 'merkletreejs';
 import { sha256 } from '@noble/hashes/sha256';
 import 'dotenv/config';
 import { createServiceLogger } from '../../utils/logger.js';
+import { witnessFileManager, AnchoringProof } from '../../utils/witnessFileManager.js';
 
 // Initialize structured logger
 const log = createServiceLogger('witness');
@@ -67,25 +68,25 @@ async function processBatch() {
         // B. Check threshold
         const threshold = parseInt(process.env.BATCH_THRESHOLD || '1');
         const maxWaitMs = parseInt(process.env.BATCH_MAX_WAIT_MS || '60000'); // Default 1 minute
-        
+
         // Find oldest unanchored event to check wait time
         const { rows: oldest } = await pool.query('SELECT MIN(timestamp) as oldest_ts FROM events WHERE witness_proofs IS NULL');
         const oldestTs = oldest[0]?.oldest_ts ? Number(oldest[0].oldest_ts) : Date.now();
         const waitTime = Date.now() - oldestTs;
 
         if (events.length < threshold && waitTime < maxWaitMs) {
-            log.info('Threshold not met, skipping batch', { 
-                currentCount: events.length, 
-                threshold, 
+            log.info('Threshold not met, skipping batch', {
+                currentCount: events.length,
+                threshold,
                 waitTimeMs: waitTime,
-                maxWaitMs 
+                maxWaitMs
             });
             return;
         }
 
-        log.info('Batch threshold met or timeout reached, processing...', { 
-            eventCount: events.length, 
-            reason: events.length >= threshold ? 'threshold' : 'timeout' 
+        log.info('Batch threshold met or timeout reached, processing...', {
+            eventCount: events.length,
+            reason: events.length >= threshold ? 'threshold' : 'timeout'
         });
 
         // B. Build Merkle Tree
@@ -98,7 +99,7 @@ async function processBatch() {
             const hash = sha256(Buffer.from(e.version_id, 'utf8'));
             return Buffer.from(hash);
         });
-        
+
         const tree = new MerkleTree(leaves, sha256Buffer, { sortPairs: true });
         const root = tree.getHexRoot();
 
@@ -112,7 +113,7 @@ async function processBatch() {
         if (!privateKey) {
             throw new Error('RELAYER_PRIVATE_KEY not set');
         }
-        
+
         // Ensure 0x prefix for ethers
         if (!privateKey.startsWith('0x')) {
             privateKey = '0x' + privateKey;
@@ -120,21 +121,21 @@ async function processBatch() {
 
         const wallet = new ethers.Wallet(privateKey, provider);
 
-        log.info('Relayer status', { 
-            address: wallet.address, 
+        log.info('Relayer status', {
+            address: wallet.address,
             eventsFound: events.length,
             rpc: rpcUrl.split('@')[rpcUrl.split('@').length - 1] // Hide credentials if any
         });
 
         // Check balance
         const balance = await provider.getBalance(wallet.address);
-        log.info('Balance check', { 
+        log.info('Balance check', {
             balance: ethers.formatEther(balance) + ' ETH',
             network: (await provider.getNetwork()).name
         });
 
         if (balance === 0n && !rpcUrl.includes('localhost') && !rpcUrl.includes('127.0.0.1')) {
-            log.error('CRITICAL: Relayer has 0 ETH on Sepolia. Transactions will fail.', null, { address: wallet.address });
+            log.error('CRITICAL: Relayer has 0 ETH on Sepolia. Transactions will fail.', { address: wallet.address });
             return;
         }
 
@@ -146,14 +147,14 @@ async function processBatch() {
         const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, wallet);
 
         log.info('Anchoring to blockchain', { contractAddress, merkleRoot: root });
-        
+
         const tx = await contract.anchor(root);
         log.info('Transaction sent', { txHash: tx.hash });
-        
+
         const receipt = await tx.wait();
 
-        log.info('Transaction confirmed', { 
-            txHash: receipt.hash, 
+        log.info('Transaction confirmed', {
+            txHash: receipt.hash,
             blockNumber: receipt.blockNumber,
             gasUsed: receipt.gasUsed?.toString()
         });
@@ -161,7 +162,7 @@ async function processBatch() {
         // D. Parse the Anchored event to get the REAL batch ID from the contract
         // The contract returns batchId via the Anchored event
         let contractBatchId: number;
-        
+
         const iface = new ethers.Interface(CONTRACT_ABI);
         const anchoredLog = receipt.logs.find((log: any) => {
             try {
@@ -187,7 +188,7 @@ async function processBatch() {
         if (contractBatchId === 0) {
             const existingBatches = await pool.query('SELECT COUNT(*) FROM batches');
             if (parseInt(existingBatches.rows[0].count) > 0) {
-                log.warn('Blockchain reset detected', { 
+                log.warn('Blockchain reset detected', {
                     reason: 'Batch 0 anchored but DB has existing batches',
                     action: 'Clearing old batch references'
                 });
@@ -210,14 +211,16 @@ async function processBatch() {
         );
 
         const batchId = contractBatchId;
-        log.info('Batch anchored successfully', { 
-            batchId, 
-            merkleRoot: root, 
+        log.info('Batch anchored successfully', {
+            batchId,
+            merkleRoot: root,
             txHash: receipt.hash,
             blockNumber: receipt.blockNumber
         });
 
         // F. Update events with batch reference AND individual Merkle proofs
+        const scidGroups = new Map<string, AnchoringProof[]>();
+
         for (let i = 0; i < events.length; i++) {
             const event = events[i];
 
@@ -227,7 +230,8 @@ async function processBatch() {
             const leafHash = '0x' + leaves[i].toString('hex');
 
             // Store complete witness proof data
-            const witnessProofData = {
+            const witnessProofData: AnchoringProof = {
+                versionId: event.version_id,
                 batchId: batchId,
                 merkleRoot: root,
                 leafHash: leafHash,
@@ -243,24 +247,42 @@ async function processBatch() {
                 [JSON.stringify(witnessProofData), event.id]
             );
 
+            // Group for file writing
+            const scid = event.did.split(':').pop() || '';
+            if (scid) {
+                if (!scidGroups.has(scid)) scidGroups.set(scid, []);
+                scidGroups.get(scid)!.push(witnessProofData);
+            }
+
             log.debug('Stored proof for event', { eventId: event.id, leafIndex: i, totalLeaves: events.length });
         }
 
-        log.info('Batch processing completed', { 
-            batchId, 
+        // G. Sync proofs to did-witness.json files
+        log.info('Syncing proofs to did-witness.json files...', { scidCount: scidGroups.size });
+        for (const [scid, proofs] of scidGroups.entries()) {
+            try {
+                await witnessFileManager.addProofs(scid, proofs);
+            } catch (err) {
+                log.error('Failed to write witness file during batch', { scid, error: err });
+                // Continue to next SCID, don't fail the whole batch
+            }
+        }
+
+        log.info('Batch processing completed', {
+            batchId,
             eventCount: events.length,
             merkleRoot: root
         });
 
     } catch (err) {
-        log.error('Batch processing failed', err, { phase: 'processBatch' });
+        log.error('Batch processing failed', { phase: 'processBatch', error: err });
     } finally {
         isProcessing = false;
     }
 }
 
 // Immediate run on startup
-log.info('Witness Engine starting', { 
+log.info('Witness Engine starting', {
     rpcUrl: process.env.RPC_URL || 'http://blockchain:8545',
     contractAddress: process.env.CONTRACT_ADDRESS || 'NOT SET',
     schedule: 'every 10 seconds (testing mode)'

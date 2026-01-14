@@ -14,7 +14,8 @@
     },
     "include": [
         "services/**/*",
-        "db/**/*"
+        "db/**/*",
+        "utils/**/*"
     ],
     "exclude": [
         "node_modules",
