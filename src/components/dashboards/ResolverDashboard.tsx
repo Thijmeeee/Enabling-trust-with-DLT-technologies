@@ -84,65 +84,75 @@ export default function ResolverDashboard() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
-      {/* Header & Search */}
-      <div className="mb-10">
-        <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Universal Resolver</h1>
-        <p className="text-slate-600 dark:text-slate-400 mb-6">
-          Resolve and verify did:webvh Identifiers across the trust network.
-        </p>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6 pt-20 transition-colors">
+      <div className="max-w-[1920px] mx-auto">
+        {/* Header & Search */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 mb-6 transition-colors">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
+                <Network className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Universal Resolver</h1>
+                <p className="text-gray-600 dark:text-gray-400">Resolve and verify did:webvh Identifiers across the trust network.</p>
+              </div>
+            </div>
+            
+            <div className="flex-1 max-w-2xl">
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Search className="h-5 w-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                </div>
+                <input
+                  type="text"
+                  className="block w-full pl-11 pr-32 py-4 border-2 border-slate-200 dark:border-slate-700 rounded-xl leading-5 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-lg shadow-sm"
+                  placeholder="did:webvh:..."
+                  value={did}
+                  onChange={(e) => setDid(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleResolve()}
+                />
+                <div className="absolute inset-y-2 right-2 flex items-center">
+                  <button
+                    onClick={() => handleResolve()}
+                    disabled={loading}
+                    className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition-colors flex items-center gap-2 shadow-sm"
+                  >
+                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Resolve'}
+                  </button>
+                </div>
+              </div>
 
-        <div className="relative group">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-            <Search className="h-5 w-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
-          </div>
-          <input
-            type="text"
-            className="block w-full pl-11 pr-32 py-4 border-2 border-slate-200 dark:border-slate-700 rounded-xl leading-5 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-lg shadow-sm"
-            placeholder="did:webvh:..."
-            value={did}
-            onChange={(e) => setDid(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleResolve()}
-          />
-          <div className="absolute inset-y-2 right-2 flex items-center">
-            <button
-              onClick={() => handleResolve()}
-              disabled={loading}
-              className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition-colors flex items-center gap-2 shadow-sm"
-            >
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Resolve'}
-            </button>
+              {/* Quick Access */}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Examples:</span>
+                {quickDIDs.map((item) => (
+                  <button
+                    key={item.did}
+                    onClick={() => handleResolve(item.did)}
+                    className="text-xs px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-md border border-slate-200 dark:border-slate-700 transition-colors truncate max-w-[150px]"
+                    title={item.did}
+                  >
+                    {item.name}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Quick Access */}
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Examples:</span>
-          {quickDIDs.map((item) => (
-            <button
-              key={item.did}
-              onClick={() => handleResolve(item.did)}
-              className="text-sm px-3 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-full border border-slate-200 dark:border-slate-700 transition-colors truncate max-w-[200px]"
-              title={item.did}
-            >
-              {item.name}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {error && (
-        <div className="mb-8 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/50 rounded-xl flex gap-3 text-red-700 dark:text-red-400">
-          <AlertTriangle className="h-6 w-6 flex-shrink-0" />
-          <div>
-            <h3 className="font-bold">Resolution Error</h3>
-            <p className="text-sm opacity-90">{error}</p>
+        {error && (
+          <div className="mb-8 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/50 rounded-xl flex gap-3 text-red-700 dark:text-red-400">
+            <AlertTriangle className="h-6 w-6 flex-shrink-0" />
+            <div>
+              <h3 className="font-bold">Resolution Error</h3>
+              <p className="text-sm opacity-90">{error}</p>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {resolutionResult && !error && (
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
+        {resolutionResult && !error && (
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden mb-10">
           {/* Status Bar */}
           <div className="px-6 py-4 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -249,7 +259,7 @@ export default function ResolverDashboard() {
                                 <span className={`w-2 h-2 rounded-full ${index === 0 ? 'bg-blue-500' : 'bg-slate-400 dark:bg-slate-500'}`}></span>
                                 <span className="font-bold text-slate-900 dark:text-white">Version {entry.versionId}</span>
                                 <span className="text-[10px] px-2 py-0.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-500 dark:text-slate-400 font-bold tracking-wider">
-                                  {entry.parameters.method.toUpperCase()}
+                                  {(entry.parameters?.method || 'unknown').toUpperCase()}
                                 </span>
                               </div>
                               <div className="text-[11px] text-slate-400 dark:text-slate-500 font-medium flex items-center gap-1">
@@ -465,6 +475,7 @@ export default function ResolverDashboard() {
           </p>
         </div>
       )}
+      </div>
     </div>
   );
 }

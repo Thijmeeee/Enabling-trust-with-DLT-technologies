@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Clock, FileText, Shield, Link2, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Search, Filter, ExternalLink } from 'lucide-react';
 import { hybridDataStore } from '../lib/data/hybridDataStore';
+import { useUI } from '../lib/utils/UIContext';
 import type { AnchoringEvent, WitnessAttestation } from '../lib/data/localData';
 import { etherscanTxUrl } from '../lib/api/config';
 
@@ -16,6 +17,7 @@ interface DIDEvent {
 }
 
 export default function DIDEventsLog({ did, openEventId }: { did: string; openEventId?: string | null }) {
+  const { viewMode, t } = useUI();
   const [events, setEvents] = useState<DIDEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedEvent, setExpandedEvent] = useState<string | null>(null);
@@ -59,7 +61,7 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
       timestamp: dpp.created_at,
       type: 'creation',
       did: dpp.did,
-      description: String('DPP Created'),
+      description: t('DPP Created'),
       details: {
         type: dpp.type,
         model: dpp.model,
@@ -130,16 +132,16 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
       if (isDIDEvent) {
         // These are witness attestations of DID operations
         const eventNames: Record<string, string> = {
-          'did_creation': 'Product Identity Registered',
-          'create': 'Product Identity Registered',
-          'key_rotation': 'Security Key Rotated',
-          'rotate_key': 'Security Key Rotated',
-          'ownership_change': 'Ownership Transferred',
-          'ownership_transfer': 'Ownership Transferred',
-          'transfer_ownership': 'Ownership Transferred',
-          'did_update': 'Identity Document Updated',
-          'update': 'Identity Document Updated',
-          'did_lifecycle_update': 'Lifecycle Status Changed'
+          'did_creation': t('Product Identity Registered'),
+          'create': t('Product Identity Registered'),
+          'key_rotation': t('Security Key Rotated'),
+          'rotate_key': t('Security Key Rotated'),
+          'ownership_change': t('Ownership Transferred'),
+          'ownership_transfer': t('Ownership Transferred'),
+          'transfer_ownership': t('Ownership Transferred'),
+          'did_update': t('Identity Document Updated'),
+          'update': t('Identity Document Updated'),
+          'did_lifecycle_update': t('Lifecycle Status Changed')
         };
         description = eventNames[attestation.attestation_type.toLowerCase()] || 
                       attestation.attestation_type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -372,8 +374,8 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
                                 })
                                 .map(([key, value]) => (
                                   <div key={key} className="flex justify-between items-start gap-2">
-                                    <span className="text-gray-600 dark:text-gray-400 font-medium capitalize min-w-fit">
-                                      {key.replace(/([A-Z])/g, ' $1').trim()}:
+                                    <span className="text-gray-600 dark:text-gray-400 font-medium min-w-fit">
+                                      {t(key)}:
                                     </span>
                                     {key === 'txHash' && typeof value === 'string' ? (
                                       <a 

@@ -42,16 +42,7 @@ export default function IntroductionPage({ onContinue }: IntroductionPageProps) 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800 flex flex-col transition-colors">
       {/* Header with Progress and Skip */}
-      <div className="px-6 py-8 flex justify-between items-center max-w-6xl mx-auto w-full">
-        <div className="flex gap-3">
-          {steps.map((_, idx) => (
-            <div
-              key={idx}
-              className={`h-2 w-24 rounded-full transition-all duration-300 ${idx <= currentStep ? 'bg-blue-600' : 'bg-gray-200'
-                }`}
-            />
-          ))}
-        </div>
+      <div className="px-6 py-8 flex justify-end items-center max-w-6xl mx-auto w-full">
         <button
           onClick={onContinue}
           className="text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 font-medium flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -69,25 +60,39 @@ export default function IntroductionPage({ onContinue }: IntroductionPageProps) 
 
       {/* Navigation Footer */}
       <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm sticky bottom-0 transition-colors">
-        <div className="max-w-5xl mx-auto flex justify-between items-center">
-          <button
-            onClick={handleBack}
-            disabled={currentStep === 0}
-            className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-colors ${currentStep === 0
-              ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-              : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
-              }`}
-          >
-            <ArrowLeft className="w-5 h-5" /> Back
-          </button>
+        <div className="max-w-5xl mx-auto grid grid-cols-3 items-center">
+          <div className="flex justify-start">
+            <button
+              onClick={handleBack}
+              disabled={currentStep === 0}
+              className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-colors ${currentStep === 0
+                ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
+                }`}
+            >
+              <ArrowLeft className="w-5 h-5" /> Back
+            </button>
+          </div>
 
-          <button
-            onClick={handleNext}
-            className="flex items-center gap-2 px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-105"
-          >
-            {currentStep === steps.length - 1 ? 'Get Started' : 'Next Step'}
-            <ArrowRight className="w-5 h-5" />
-          </button>
+          <div className="flex justify-center gap-3">
+            {steps.map((_, idx) => (
+              <div
+                key={idx}
+                className={`h-1.5 w-12 rounded-full transition-all duration-300 ${idx <= currentStep ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+                  }`}
+              />
+            ))}
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              onClick={handleNext}
+              className="flex items-center gap-2 px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-105"
+            >
+              {currentStep === steps.length - 1 ? 'Get Started' : 'Next Step'}
+              <ArrowRight className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -118,7 +123,7 @@ function WelcomeStep() {
           In a circular economy, products like windows move through many hands—from
           manufacturers to installers to recyclers. The challenge is: <strong>How do you trust the data?</strong>
         </p>
-        <p className="text-gray-700 leading-relaxed text-lg">
+        <p className="text-gray-700 dark:text-gray-400 leading-relaxed text-lg font-medium bg-blue-50/50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30">
           This system gives every product a <strong>Digital Product Passport</strong> (technically known as a <strong>DID</strong>).
           Think of it as an unforgeable birth certificate that travels with the product
           forever, recording every significant event along the way.
@@ -146,7 +151,7 @@ function TrustStep() {
 
       <div className="grid md:grid-cols-3 gap-6">
         {/* Witnesses */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex flex-col">
           <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-6 text-center">
             <Shield className="w-12 h-12 text-white mx-auto mb-3" />
             <h3 className="text-xl font-bold text-white">Witnesses</h3>
@@ -156,14 +161,14 @@ function TrustStep() {
             <p className="text-gray-700 dark:text-gray-300 mb-4 flex-1">
               When an event happens (like production), a Witness reviews and digitally signs it.
             </p>
-            <div className="bg-emerald-50 rounded-lg p-3 text-sm text-emerald-800 border border-emerald-100">
+            <div className="bg-emerald-50 dark:bg-emerald-900/30 rounded-lg p-3 text-sm text-emerald-800 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-800/50">
               <strong>Analogy:</strong> Like a notary public stamping a document to prove it's official.
             </div>
           </div>
         </div>
 
         {/* Watchers */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex flex-col">
           <div className="bg-gradient-to-br from-amber-500 to-amber-600 p-6 text-center">
             <Eye className="w-12 h-12 text-white mx-auto mb-3" />
             <h3 className="text-xl font-bold text-white">Watchers</h3>
@@ -173,14 +178,14 @@ function TrustStep() {
             <p className="text-gray-700 dark:text-gray-300 mb-4 flex-1">
               They continuously monitor data for tampering and verify that components belong to the right products.
             </p>
-            <div className="bg-amber-50 rounded-lg p-3 text-sm text-amber-800 border border-amber-100">
+            <div className="bg-amber-50 dark:bg-amber-900/30 rounded-lg p-3 text-sm text-amber-800 dark:text-amber-300 border border-amber-100 dark:border-amber-800/50">
               <strong>Analogy:</strong> Security cameras and inspectors that raise an alarm if something looks wrong.
             </div>
           </div>
         </div>
 
         {/* Resolvers */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex flex-col">
           <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-6 text-center">
             <Search className="w-12 h-12 text-white mx-auto mb-3" />
             <h3 className="text-xl font-bold text-white">Resolvers</h3>
@@ -190,7 +195,7 @@ function TrustStep() {
             <p className="text-gray-700 dark:text-gray-300 mb-4 flex-1">
               Looks up the unique ID (DID) and retrieves the full, verified history of the product.
             </p>
-            <div className="bg-blue-50 rounded-lg p-3 text-sm text-blue-800 border border-blue-100">
+            <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-3 text-sm text-blue-800 dark:text-blue-300 border border-blue-100 dark:border-blue-800/50">
               <strong>Analogy:</strong> A search engine that finds the right file instantly when you scan a code.
             </div>
           </div>

@@ -24,6 +24,10 @@ import {
   FileCheck,
   Clock,
   FileJson,
+  PlusSquare,
+  FileEdit,
+  ShieldCheck,
+  Recycle,
 } from 'lucide-react';
 import { getDPPWithRelations, getAggregatedMetrics } from '../../lib/data/enhancedAdapter';
 import { calculateTrustScore } from '../../lib/utils/verificationLocal';
@@ -31,8 +35,10 @@ import { getSchemaForType } from '../../lib/schemas/productSchema';
 import { getDoP } from '../../lib/schemas/declarationOfPerformance';
 import type { DeclarationOfPerformance } from '../../lib/schemas/declarationOfPerformance';
 import { useRole } from '../../lib/utils/roleContext';
+import { useUI } from '../../lib/utils/UIContext';
 import QRCodeDisplay from '../visualizations/QRCodeDisplay';
 import DIDEventsLog from '../DIDEventsLog';
+import SimpleStoryTimeline from '../SimpleStoryTimeline';
 import { ProtectedField, ProtectedMetadata } from '../ProtectedField';
 import WindowLifecycleVisualization from '../visualizations/WindowLifecycleVisualization';
 import { LifecycleControls } from '../LifecycleControls';
@@ -43,6 +49,18 @@ import DoPerformanceEditor from '../DoPerformanceEditor';
 import AttestationDetailsModal from '../modals/AttestationDetailsModal';
 import RawDataModal from '../modals/RawDataModal';
 import DIDWebVHStatusPanel from '../DIDWebVHStatusPanel';
+import TransferOwnershipModal from '../modals/TransferOwnershipModal';
+import UpdateDIDModal from '../modals/UpdateDIDModal';
+import DeactivateDIDModal from '../modals/DeactivateDIDModal';
+import CertifyProductModal from '../modals/CertifyProductModal';
+import { 
+  transferOwnership, 
+  deactivateDID, 
+  updateDIDViaBackend,
+  certifyProduct,
+  getPendingAndRejectedOperations,
+  getDIDOperationsHistory
+} from '../../lib/operations/didOperationsLocal';
 
 export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
   did: string;
@@ -51,13 +69,14 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
   backLabel?: string;
 }) {
   const { currentRole } = useRole();
+  const { viewMode, t } = useUI();
   const [data, setData] = useState<any>(null);
   const [metrics, setMetrics] = useState<any>(null);
   const [trustScore, setTrustScore] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showQR, setShowQR] = useState(false);
   const [showRawData, setShowRawData] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'specifications' | 'components' | 'lifecycle' | 'did-operations' | 'trust-validation' | 'events'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'story' | 'specifications' | 'components' | 'lifecycle' | 'did-operations' | 'did-operations-simple' | 'trust-validation' | 'events'>('overview');
   const [eventRefreshKey, setEventRefreshKey] = useState(0);
   const [editingDoP, setEditingDoP] = useState(false);
   const [selectedAttestation, setSelectedAttestation] = useState<any>(null);
@@ -66,6 +85,226 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
   const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
   const [recentEvents, setRecentEvents] = useState<any[]>([]);
   const [openEventId, setOpenEventId] = useState<string | null>(null);
+
+  // DID Operation Modal states
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [showCertifyModal, setShowCertifyModal] = useState(false);
+  const [updateModalType, setUpdateModalType] = useState<'service' | 'metadata'>('metadata');
+  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
+  const [opLoading, setOpLoading] = useState(false);
+
+  // Status states for decentralized operations
+  const [currentPendingOp, setCurrentPendingOp] = useState<{ type: string; details: any } | null>(null);
+  const [currentApprovedOp, setCurrentApprovedOp] = useState<{ type: string; details: any } | null>(null);
+  const [currentRejectedOp, setCurrentRejectedOp] = useState<{ type: string; details: any } | null>(null);
+
+  // Automatically switch tabs when view mode changes to make the impact obvious
+  useEffect(() => {
+    if (viewMode === 'simple') {
+      setActiveTab('story');
+    } else {
+      setActiveTab('overview');
+    }
+  }, [viewMode]);
+
+  // Polling logic for operation status (Sync with Technical Mode)
+  useEffect(() => {
+    if (!data?.dpp?.did) return;
+
+    const did = data.dpp.did;
+
+    // Load initial states from localStorage
+    const pendingJson = localStorage.getItem(`pending_op_${did}`);
+    const approvedJson = localStorage.getItem(`approved_op_${did}`);
+    const rejectedJson = localStorage.getItem(`rejected_op_${did}`);
+
+    if (pendingJson) setCurrentPendingOp(JSON.parse(pendingJson));
+    if (approvedJson) setCurrentApprovedOp(JSON.parse(approvedJson));
+    if (rejectedJson) setCurrentRejectedOp(JSON.parse(rejectedJson));
+
+    const interval = setInterval(async () => {
+      const currentPending = localStorage.getItem(`pending_op_${did}`);
+      if (!currentPending) return;
+
+      const pOp = JSON.parse(currentPending);
+      const result = await getPendingAndRejectedOperations(data.dpp.id);
+      
+      if (result.success) {
+        // Check if our operation is still pending or if it has been anchored
+        const historyResult = await getDIDOperationsHistory(data.dpp.id);
+        if (historyResult.success) {
+          const wasApproved = historyResult.operations.some((op: any) => {
+            const opTime = new Date(op.timestamp).getTime();
+            const pTime = new Date(pOp.details.timestamp).getTime();
+            return op.type === pOp.type && Math.abs(opTime - pTime) < 10000;
+          });
+
+          if (wasApproved) {
+            localStorage.removeItem(`pending_op_${did}`);
+            localStorage.setItem(`approved_op_${did}`, JSON.stringify(pOp));
+            setCurrentPendingOp(null);
+            setCurrentApprovedOp(pOp);
+            setEventRefreshKey(prev => prev + 1);
+            await loadData();
+          }
+        }
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [data?.dpp?.did, data?.dpp?.id]);
+
+  const handleTransfer = async (newOwnerDID: string) => {
+    if (!data?.dpp) return;
+    setOpLoading(true);
+    try {
+      const result = await transferOwnership(data.dpp.id, data.dpp.owner, newOwnerDID);
+      if (result.success) {
+        // Manage operation status for persistent UI updates (matches Technical Mode)
+        const opDetails = {
+          type: 'ownership_change',
+          details: {
+            from: data.dpp.owner,
+            to: newOwnerDID,
+            timestamp: new Date().toISOString()
+          }
+        };
+
+        // Clear existing op flags
+        localStorage.removeItem(`pending_op_${data.dpp.did}`);
+        localStorage.removeItem(`approved_op_${data.dpp.did}`);
+        localStorage.removeItem(`rejected_op_${data.dpp.did}`);
+
+        if (result.message.includes('via backend')) {
+          localStorage.setItem(`approved_op_${data.dpp.did}`, JSON.stringify(opDetails));
+          alert('✅ Ownership transferred and anchored to blockchain!');
+        } else {
+          localStorage.setItem(`pending_op_${data.dpp.did}`, JSON.stringify(opDetails));
+          alert('⏳ Operation submitted. Waiting for witness approval...');
+        }
+
+        setShowTransferModal(false);
+        await loadData();
+        setEventRefreshKey(prev => prev + 1);
+      } else {
+        alert('Error during transfer: ' + result.message);
+      }
+    } catch (err) {
+      alert('An unexpected error occurred.');
+    } finally {
+      setOpLoading(false);
+    }
+  };
+
+  const handleUpdateDID = async (params: any) => {
+    if (!data?.dpp) return;
+    setOpLoading(true);
+    try {
+      const result = await updateDIDViaBackend(data.dpp.id, data.dpp.owner, {
+        serviceEndpoints: params.updateType === 'service' ? [{
+          id: `#${params.selectedServiceType.toLowerCase()}-service`,
+          type: params.selectedServiceType,
+          serviceEndpoint: params.serviceEndpoint
+        }] : undefined,
+        description: params.updateType === 'metadata' ? params.description : undefined
+      });
+
+      if (result.success) {
+        const opDetails = {
+          type: 'did_update',
+          details: {
+            updateType: params.updateType,
+            timestamp: new Date().toISOString()
+          }
+        };
+
+        localStorage.removeItem(`pending_op_${data.dpp.did}`);
+        localStorage.removeItem(`approved_op_${data.dpp.did}`);
+
+        if (result.message.includes('via backend')) {
+          localStorage.setItem(`approved_op_${data.dpp.did}`, JSON.stringify(opDetails));
+          alert('✅ Passport successfully updated and anchored!');
+        } else {
+          localStorage.setItem(`pending_op_${data.dpp.did}`, JSON.stringify(opDetails));
+          alert('⏳ Update submitted. Waiting for blockchain confirmation...');
+        }
+
+        setShowUpdateModal(false);
+        await loadData();
+        setEventRefreshKey(prev => prev + 1);
+      } else {
+        alert('Error during update: ' + result.message);
+      }
+    } catch (err) {
+      alert('An unexpected error occurred.');
+    } finally {
+      setOpLoading(false);
+    }
+  };
+
+  const handleCertify = async (certData: any) => {
+    if (!data?.dpp) return;
+    setOpLoading(true);
+    try {
+      const result = await certifyProduct(data.dpp.id, data.dpp.owner, certData);
+      if (result.success) {
+        const opDetails = {
+          type: 'certification',
+          details: {
+            ...certData,
+            timestamp: new Date().toISOString()
+          }
+        };
+
+        // For certification, we immediately record it as approved as it's an attestation
+        localStorage.removeItem(`pending_op_${data.dpp.did}`);
+        localStorage.setItem(`approved_op_${data.dpp.did}`, JSON.stringify(opDetails));
+
+        alert('✅ Product successfully certified and anchored!');
+        setShowCertifyModal(false);
+        await loadData();
+        setEventRefreshKey(prev => prev + 1);
+      } else {
+        alert('Error during certification: ' + result.message);
+      }
+    } catch (err) {
+      alert('An unexpected error occurred.');
+    } finally {
+      setOpLoading(false);
+    }
+  };
+
+  const handleDeactivate = async (reason: string) => {
+    if (!data?.dpp) return;
+    setOpLoading(true);
+    try {
+      const result = await deactivateDID(data.dpp.id, data.dpp.owner, reason);
+      if (result.success) {
+        const opDetails = {
+          type: 'deactivation',
+          details: {
+            reason,
+            timestamp: new Date().toISOString()
+          }
+        };
+
+        localStorage.removeItem(`pending_op_${data.dpp.did}`);
+        localStorage.setItem(`approved_op_${data.dpp.did}`, JSON.stringify(opDetails));
+
+        alert('✅ Passport successfully deactivated.');
+        setShowDeactivateModal(false);
+        await loadData();
+        setEventRefreshKey(prev => prev + 1);
+      } else {
+        alert('Error during deactivation: ' + result.message);
+      }
+    } catch (err) {
+      alert('An unexpected error occurred.');
+    } finally {
+      setOpLoading(false);
+    }
+  };
 
   // Helper to get icon color based on product type
   const getIconColor = (productType: string) => {
@@ -363,9 +602,11 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                 <div className="bg-gradient-to-r from-blue-50 via-purple-50 to-blue-50 dark:from-blue-900/30 dark:via-purple-900/30 dark:to-blue-900/30 border-2 border-blue-500 dark:border-blue-600 rounded-lg p-4 mb-3 shadow-sm transition-colors">
                   <div className="flex items-center gap-2 mb-2">
                     <Link2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                    <span className="text-sm font-bold text-blue-900 dark:text-blue-300 uppercase tracking-wide">DID:webvh Identifier</span>
+                    <span className="text-sm font-bold text-blue-900 dark:text-blue-300 uppercase tracking-wide">{t('did_identifier')}</span>
                   </div>
-                  <p className="text-base text-gray-900 dark:text-gray-100 font-mono break-all leading-relaxed">{dpp.did}</p>
+                  <p className="text-base text-gray-900 dark:text-gray-100 font-mono break-all leading-relaxed">
+                    {viewMode === 'simple' ? `${dpp.did.substring(0, 25)}...${dpp.did.substring(dpp.did.length - 15)}` : dpp.did}
+                  </p>
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -376,7 +617,9 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                     {dpp.type === 'main' ? 'Main Product' : 'Component'}
                   </span>
                   <span className="text-sm text-gray-700 dark:text-gray-300 font-medium capitalize px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-full transition-colors">{dpp.lifecycle_status}</span>
-                  <span className="text-sm text-gray-700 dark:text-gray-300 font-medium px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-full transition-colors">Version {dpp.version}</span>
+                  {viewMode === 'technical' && (
+                    <span className="text-sm text-gray-700 dark:text-gray-300 font-medium px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-full transition-colors">Version {dpp.version}</span>
+                  )}
                 </div>
               </div>
             </div>
@@ -403,14 +646,20 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
 
           <div className="flex gap-2 mt-6 border-b border-gray-200 dark:border-gray-700">
             {[
-              { id: 'overview', label: 'Overview', showFor: ['main', 'component'] },
-              { id: 'specifications', label: 'Specifications', showFor: ['main', 'component'] },
-              { id: 'components', label: 'Components', showFor: ['main'] },
-              { id: 'lifecycle', label: 'Lifecycle', showFor: ['main', 'component'] },
-              { id: 'did-operations', label: 'DID Operations', showFor: ['main', 'component'] },
-              { id: 'trust-validation', label: 'Trust & Validation', showFor: ['main', 'component'] },
-              { id: 'events', label: 'Events', showFor: ['main', 'component'] },
-            ].filter(tab => tab.showFor.includes(dpp.type)).map((tab) => (
+              { id: 'overview', label: t('Passport'), showFor: ['main', 'component'] },
+              { id: 'story', label: t('Story'), showFor: ['main', 'component'], simpleOnly: true },
+              { id: 'specifications', label: t('Specifications'), showFor: ['main', 'component'] },
+              { id: 'components', label: t('Components'), showFor: ['main'] },
+              { id: 'lifecycle', label: t('Lifecycle'), showFor: ['main', 'component'] },
+              { id: 'did-operations', label: t('DID Operations'), showFor: ['main', 'component'], technicalOnly: true },
+              { id: 'did-operations-simple', label: 'Management', showFor: ['main', 'component'], simpleOnly: true },
+              { id: 'trust-validation', label: t('Trust & Validation'), showFor: ['main', 'component'] },
+              { id: 'events', label: t('Events'), showFor: ['main', 'component'], technicalOnly: true },
+            ].filter(tab => {
+              if (tab.simpleOnly && viewMode !== 'simple') return false;
+              if (tab.technicalOnly && viewMode !== 'technical') return false;
+              return tab.showFor.includes(dpp.type);
+            }).map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
@@ -550,45 +799,59 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
               </div>
 
               {/* Technical Details - Collapsible */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors">
-                <button
-                  onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
-                  className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <FileCheck className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                    <span className="font-semibold text-gray-900 dark:text-white">Technical Specifications</span>
-                  </div>
-                  {showTechnicalDetails ? (
-                    <ChevronUp className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                  ) : (
-                    <ChevronDown className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                  )}
-                </button>
-
-                {showTechnicalDetails && (
-                  <div className="border-t border-gray-200 dark:border-gray-700 p-6">
-                    {dop ? (
-                      <DoPerformanceView dop={dop} onEdit={canEdit ? () => setEditingDoP(true) : undefined} />
+              {viewMode === 'technical' && (
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors">
+                  <button
+                    onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
+                    className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <FileCheck className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                      <span className="font-semibold text-gray-900 dark:text-white">Technical Specifications</span>
+                    </div>
+                    {showTechnicalDetails ? (
+                      <ChevronUp className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                     ) : (
-                      <div className="text-center py-8">
-                        <p className="text-gray-500 dark:text-gray-400 mb-4">No Declaration of Performance available for this product.</p>
-                        {canEdit && (
-                          <button
-                            onClick={() => setEditingDoP(true)}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                          >
-                            Create DoP
-                          </button>
-                        )}
-                      </div>
+                      <ChevronDown className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                     )}
-                  </div>
-                )}
-              </div>
+                  </button>
+
+                  {showTechnicalDetails && (
+                    <div className="border-t border-gray-200 dark:border-gray-700 p-6">
+                      {dop ? (
+                        <DoPerformanceView dop={dop} onEdit={canEdit ? () => setEditingDoP(true) : undefined} />
+                      ) : (
+                        <div className="text-center py-8">
+                          <p className="text-gray-500 dark:text-gray-400 mb-4">No Declaration of Performance available for this product.</p>
+                          {canEdit && (
+                            <button
+                              onClick={() => setEditingDoP(true)}
+                              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                            >
+                              Create DoP
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         })()}
+
+        {activeTab === 'story' && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8 shadow-sm">
+            <div className="max-w-3xl mx-auto">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-8 flex items-center gap-3">
+                <Clock className="w-8 h-8 text-blue-600" />
+                {t('Story')}
+              </h2>
+              <SimpleStoryTimeline did={did} />
+            </div>
+          </div>
+        )}
 
         {activeTab === 'overview' && (
           <div className="grid grid-cols-3 gap-6">
@@ -663,7 +926,7 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                           <div className="text-sm font-semibold text-gray-900 dark:text-white">{dpp.metadata.weight} kg</div>
                         </div>
                       )}
-                      {dpp.metadata?.batch && (
+                      {dpp.metadata?.batch && viewMode === 'technical' && (
                         <ProtectedField field="operations" label="Batch Number" value={dpp.metadata.batch}>
                           <div className="bg-purple-50 dark:bg-purple-900/30 rounded-lg p-3">
                             <div className="text-xs text-purple-600 dark:text-purple-400 font-medium mb-1">Batch Number</div>
@@ -1091,6 +1354,115 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
           </div>
         )}
 
+        {activeTab === 'did-operations-simple' && (
+          <div className="max-w-4xl mx-auto py-8">
+            {/* Decentralized Status Feedback */}
+            {currentPendingOp && (
+              <div className="mb-6 p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-2xl flex items-center justify-between animate-pulse">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/40 rounded-full flex items-center justify-center text-orange-600 dark:text-orange-400">
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-orange-900 dark:text-orange-200 uppercase text-xs tracking-wider">Awaiting Witness Approval</h4>
+                    <p className="text-sm text-orange-700 dark:text-orange-300">
+                      Processing <strong>{currentPendingOp.type.replace('_', ' ')}</strong>. This is being witnessed across the network.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 px-3 py-1 bg-white/50 dark:bg-black/20 rounded-full text-[10px] font-mono text-orange-600 dark:text-orange-400">
+                  <Activity className="w-3 h-3" />
+                  DLT-ANCHOR-PENDING
+                </div>
+              </div>
+            )}
+
+            {currentApprovedOp && (
+              <div className="mb-6 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-2xl flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/40 rounded-full flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                    <CheckCircle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-emerald-900 dark:text-emerald-200 uppercase text-xs tracking-wider">Operation Anchored</h4>
+                    <p className="text-sm text-emerald-700 dark:text-emerald-300">
+                      Your recent <strong>{currentApprovedOp.type.replace('_', ' ')}</strong> has been successfully verified by multiple nodes.
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setCurrentApprovedOp(null)}
+                  className="p-1 hover:bg-emerald-200 dark:hover:bg-emerald-800 rounded-lg transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4 text-emerald-600 dark:text-emerald-400 rotate-90" />
+                </button>
+              </div>
+            )}
+
+            <div className="text-center mb-8">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Product Operations</h2>
+              <p className="text-gray-500 dark:text-gray-400">Perform critical updates to this product passport</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Evolution - Update Information */}
+              <button
+                onClick={() => {
+                  setUpdateModalType('service');
+                  setShowUpdateModal(true);
+                }}
+                className="flex flex-col items-center justify-center p-8 bg-emerald-50 dark:bg-emerald-900/20 border-2 border-emerald-100 dark:border-emerald-800 rounded-3xl hover:border-emerald-500 dark:hover:border-emerald-400 hover:shadow-xl transition-all group transform hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <div className="w-20 h-20 bg-emerald-500 text-white rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-lg shadow-emerald-500/20">
+                  <FileEdit className="w-10 h-10" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Update Information</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 text-center max-w-xs px-4">Modify product specifications and update information in the digital passport.</p>
+                <div className="mt-4 px-3 py-1 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 text-xs font-bold rounded-full uppercase tracking-wider">DID:Update</div>
+              </button>
+
+              {/* Certification - Status & Inspection */}
+              <button
+                onClick={() => setShowCertifyModal(true)}
+                className="flex flex-col items-center justify-center p-8 bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-100 dark:border-amber-800 rounded-3xl hover:border-amber-500 dark:hover:border-amber-400 hover:shadow-xl transition-all group transform hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <div className="w-20 h-20 bg-amber-500 text-white rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-lg shadow-amber-500/20">
+                  <ShieldCheck className="w-10 h-10" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Status & Inspection</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 text-center max-w-xs px-4">Record important milestones such as inspection reports or maintenance.</p>
+                <div className="mt-4 px-3 py-1 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs font-bold rounded-full uppercase tracking-wider">DID:Attest</div>
+              </button>
+
+              {/* Ownership - Transfer */}
+              <button
+                onClick={() => setShowTransferModal(true)}
+                className="flex flex-col items-center justify-center p-8 bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-100 dark:border-blue-800 rounded-3xl hover:border-blue-500 dark:hover:border-blue-400 hover:shadow-xl transition-all group transform hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <div className="w-20 h-20 bg-blue-500 text-white rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-lg shadow-blue-500/20">
+                  <Link2 className="w-10 h-10" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Transfer Ownership</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 text-center max-w-xs px-4">Transfer the digital ownership of this product to a new owner.</p>
+                <div className="mt-4 px-3 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold rounded-full uppercase tracking-wider">DID:Transfer</div>
+              </button>
+
+              {/* Termination - End of Life */}
+              <button
+                onClick={() => setShowDeactivateModal(true)}
+                className="flex flex-col items-center justify-center p-8 bg-rose-50 dark:bg-rose-900/20 border-2 border-rose-100 dark:border-rose-800 rounded-3xl hover:border-rose-500 dark:hover:border-rose-400 hover:shadow-xl transition-all group transform hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <div className="w-20 h-20 bg-rose-500 text-white rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-lg shadow-rose-500/20">
+                  <Recycle className="w-10 h-10" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Recycling & End-of-Life</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 text-center max-w-xs px-4">Register the product for recycling and permanently deactivate the passport.</p>
+                <div className="mt-4 px-3 py-1 bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 text-xs font-bold rounded-full uppercase tracking-wider">DID:Deactivate</div>
+              </button>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'did-operations' && (
           <>
             {canSeeAdvancedFeatures() && (
@@ -1103,9 +1475,9 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
           </>
         )}
 
-        {activeTab === 'trust-validation' && (
+        <div className={activeTab === 'trust-validation' ? 'block' : 'hidden'}>
           <TrustValidationTab did={did} />
-        )}
+        </div>
 
         {activeTab === 'events' && (
           <DIDEventsLog key={`events-${eventRefreshKey}`} did={did} openEventId={openEventId} />
@@ -1134,6 +1506,40 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
         <RawDataModal
           data={data}
           onClose={() => setShowRawData(false)}
+        />
+      )}
+
+      {showTransferModal && data?.dpp && (
+        <TransferOwnershipModal
+          currentOwnerDID={data.dpp.owner}
+          onClose={() => setShowTransferModal(false)}
+          onTransfer={handleTransfer}
+          loading={opLoading}
+        />
+      )}
+
+      {showCertifyModal && (
+        <CertifyProductModal
+          onClose={() => setShowCertifyModal(false)}
+          onCertify={handleCertify}
+          loading={opLoading}
+        />
+      )}
+
+      {showUpdateModal && (
+        <UpdateDIDModal
+          initialType={updateModalType}
+          onClose={() => setShowUpdateModal(false)}
+          onUpdate={handleUpdateDID}
+          loading={opLoading}
+        />
+      )}
+
+      {showDeactivateModal && (
+        <DeactivateDIDModal
+          onClose={() => setShowDeactivateModal(false)}
+          onDeactivate={handleDeactivate}
+          loading={opLoading}
         />
       )}
     </div>

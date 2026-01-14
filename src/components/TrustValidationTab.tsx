@@ -25,6 +25,7 @@ import {
 import { hybridDataStore, getRecentBlockchainAnchors, getBlockchainVerification } from '../lib/data/hybridDataStore';
 import { etherscanTxUrl, etherscanBlockUrl } from '../lib/api/config';
 import { useRole } from '../lib/utils/roleContext';
+import { useUI } from '../lib/utils/UIContext';
 import { verifyHashChain, type HashChainEntry } from '../lib/utils/merkle';
 import type { WitnessAttestation, WatcherAlert, AnchoringEvent } from '../lib/data/localData';
 
@@ -334,6 +335,7 @@ function AlertItem({ alert }: { alert: WatcherAlert }) {
 
 export default function TrustValidationTab({ did }: TrustValidationTabProps) {
   const { currentRole } = useRole();
+  const { viewMode, t } = useUI();
   const [attestations, setAttestations] = useState<WitnessAttestation[]>([]);
   const [alerts, setAlerts] = useState<WatcherAlert[]>([]);
   const [anchorings, setAnchorings] = useState<AnchoringEvent[]>([]);
@@ -708,7 +710,7 @@ export default function TrustValidationTab({ did }: TrustValidationTabProps) {
                 <Clock className="w-5 h-5 text-gray-300 flex-shrink-0" />
               )}
               <div>
-                <p className="text-sm font-semibold text-gray-900 dark:text-white">Blockchain Immutability</p>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">{t('Blockchain Immutability')}</p>
                 <p className="text-[10px] text-gray-500 dark:text-gray-400">
                   {verification.details.blockNumber ? `Block #${verification.details.blockNumber}` : 'Pending anchor'}
                 </p>
@@ -725,7 +727,7 @@ export default function TrustValidationTab({ did }: TrustValidationTabProps) {
                 <Clock className="w-5 h-5 text-gray-300 flex-shrink-0" />
               )}
               <div>
-                <p className="text-sm font-semibold text-gray-900 dark:text-white">Regulatory Readiness</p>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">{t('Regulatory Readiness')}</p>
                 <p className="text-[10px] text-gray-500 dark:text-gray-400">EU DPP 2024/1781</p>
               </div>
             </div>
@@ -738,7 +740,7 @@ export default function TrustValidationTab({ did }: TrustValidationTabProps) {
             <div className="flex items-center gap-3">
               <Eye className="w-5 h-5 text-orange-500" />
               <div>
-                <p className="text-sm font-semibold text-gray-900 dark:text-white">Watcher Network Status</p>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">{t('Watcher Network Status')}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
                   {activeAlerts.length === 0 
                     ? '✅ No anomalies detected by monitoring network' 
@@ -760,13 +762,13 @@ export default function TrustValidationTab({ did }: TrustValidationTabProps) {
       {/* ============================================ */}
       <div className="space-y-3">
         <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest px-1">
-          Technical Audit Trail
+          {t('Technical Audit Trail')}
         </h3>
 
         {/* Integrity Verification Section */}
         <CollapsibleSection
           icon={Hash}
-          title="Integrity Verification"
+          title={t('Integrity Verification')}
           subtitle="Cryptographic hash chain validation"
           badge={<StatusBadge status={verification.hashChain} />}
           expanded={expandedSection === 'integrity'}
@@ -776,7 +778,7 @@ export default function TrustValidationTab({ did }: TrustValidationTabProps) {
           <div className="space-y-3">
             <VerificationCheck
               icon={Link2}
-              label="Hash Chain Integrity"
+              label={t('Hash Chain Integrity')}
               description="Validates backlinks between all DID log entries"
               status={verification.hashChain}
               details={verification.hashChain === 'valid' 
@@ -795,7 +797,7 @@ export default function TrustValidationTab({ did }: TrustValidationTabProps) {
         {/* Witness Network Section */}
         <CollapsibleSection
           icon={Network}
-          title="Witness Network"
+          title={t('Witness Network')}
           subtitle="Independent validator attestations"
           badge={
             <span className="text-xs font-semibold text-gray-600 dark:text-gray-300">
@@ -848,7 +850,7 @@ export default function TrustValidationTab({ did }: TrustValidationTabProps) {
               </h4>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-600 dark:text-gray-400">Merkle Root:</span>
+                  <span className="text-xs text-gray-600 dark:text-gray-400">{t('merkleRoot')}:</span>
                   <span className="text-xs font-mono text-gray-800 dark:text-gray-200 truncate max-w-[200px]">
                     {verification.details.merkleRoot}
                   </span>

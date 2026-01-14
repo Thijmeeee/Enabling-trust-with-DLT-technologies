@@ -144,13 +144,13 @@ export default function EcosystemView() {
               return (
                 <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 p-6 h-full transition-all duration-500 animate-in fade-in slide-in-from-right-4 overflow-hidden relative">
                   
-                  {/* Subtle Role-colored header background - Hidden for Manufacturer to keep it white */}
+                  {/* Subtle Role-colored header background */}
                   {!theme.isDark && (
-                    <div className={`absolute top-0 left-0 right-0 h-32 ${theme.bg} opacity-10 pointer-events-none`}></div>
+                    <div className={`absolute top-0 left-0 right-0 h-32 ${theme.bg} opacity-10 dark:opacity-[0.03] pointer-events-none transition-opacity`}></div>
                   )}
 
                   <div className="flex items-center gap-4 mb-6 pb-6 border-b border-gray-100 dark:border-gray-700 relative z-10">
-                    <div className={`p-3 rounded-xl shadow-lg ${theme.isDark ? 'bg-black text-white' : 'bg-blue-600 text-white'}`}>
+                    <div className={`p-3 rounded-xl shadow-lg ${theme.isDark ? 'bg-black text-white' : 'bg-blue-600 dark:bg-blue-500 text-white'}`}>
                        <HeaderIcon className="w-8 h-8" />
                     </div>
                     <div>

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link2, Database, Hash, CheckCircle2, ExternalLink, Blocks } from 'lucide-react';
 import { hybridDataStore } from '../lib/data/hybridDataStore';
+import { useUI } from '../lib/utils/UIContext';
 import type { AnchoringEvent } from '../lib/data/localData';
 import { etherscanTxUrl, etherscanBlockUrl } from '../lib/api';
 
 export default function DLTTrustAnchor({ did }: { did: string }) {
+  const { viewMode, t } = useUI();
   const [anchorings, setAnchorings] = useState<AnchoringEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -149,7 +151,7 @@ export default function DLTTrustAnchor({ did }: { did: string }) {
                 <div className="bg-white rounded-lg p-3 border border-gray-200">
                   <div className="flex items-center gap-2 mb-1">
                     <Hash className="w-4 h-4 text-gray-500" />
-                    <p className="text-xs font-medium text-gray-600">Transaction Hash</p>
+                    <p className="text-xs font-medium text-gray-600">{t('transactionHash')}</p>
                   </div>
                   {explorerUrl ? (
                     <a 
@@ -168,7 +170,7 @@ export default function DLTTrustAnchor({ did }: { did: string }) {
                 </div>
 
                 <div className="bg-white rounded-lg p-3 border border-gray-200">
-                  <p className="text-xs font-medium text-gray-600 mb-1">Block & Merkle</p>
+                  <p className="text-xs font-medium text-gray-600 mb-1">{t('Block & Merkle')}</p>
                   {renderBlockInfo(anchor.block_number, anchor.merkle_root)}
                 </div>
 

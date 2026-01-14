@@ -284,7 +284,8 @@ export async function getDIDOperationsHistory(dppId: string) {
         'did_creation',
         'did_deactivation',
         'create',
-        'deactivate'
+        'deactivate',
+        'certification'
       ].includes(att.attestation_type);
 
       // Explicitly exclude rejected operations
@@ -521,5 +522,81 @@ export async function updateDIDViaBackend(
   } catch (error) {
     console.error('Error updating DID:', error);
     return { success: false, message: 'Failed to update DID' };
+  }
+}
+
+/**
+ * Certify a product (Add a certification attestation)
+ */
+export async function certifyProduct(
+  dppId: string,
+  ownerDID: string,
+  certificationData: {
+    inspector: string;
+    certificateType: string;
+    notes: string;
+    status: string;
+  }
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const dpp = await enhancedDB.getDPPById(dppId);
+    if (!dpp) return { success: false, message: 'Product not found' };
+
+    // Update the lifecycle status if specified
+    if (certificationData.status) {
+      await enhancedDB.updateDPP(dppId, { lifecycle_status: certificationData.status });
+      await localDB.updateDPP(dppId, { lifecycle_status: certificationData.status });
+    }
+
+    // Try to anchor this certification on the blockchain via the DID Update endpoint
+    try {
+      const response = await fetch(`http://localhost:3000/api/did/${encodeURIComponent(dpp.did)}/update`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keyId: 'default-key',
+          updates: {
+            document: {
+              description: `Certification: ${certificationData.certificateType} by ${certificationData.inspector}. Notes: ${certificationData.notes}`
+            }
+          }
+        })
+      });
+
+      if (response.ok) {
+        console.log('[DID Operations] Certification successfully anchored via backend');
+      }
+    } catch (backendError) {
+      console.log('[DID Operations] Backend not available for certification anchoring, using local only');
+    }
+
+    // Create an attestation for this certification
+    const attestation = {
+      dpp_id: dppId,
+      did: dpp.did,
+      witness_did: 'did:webvh:example.com:witnesses:certification-authority',
+      attestation_type: 'certification',
+      timestamp: new Date().toISOString(),
+      attestation_data: {
+        timestamp: new Date().toISOString(),
+        inspector: certificationData.inspector,
+        certificateType: certificationData.certificateType,
+        notes: certificationData.notes,
+        result: 'Certified / Approved',
+        organization: 'Independent Inspection Bureau',
+      },
+      signature: `cert-mock-${Date.now()}`,
+      approval_status: 'approved' as const,
+    };
+
+    await enhancedDB.insertAttestation(attestation);
+
+    return {
+      success: true,
+      message: 'Product successfully certified'
+    };
+  } catch (error) {
+    console.error('Error certifying product:', error);
+    return { success: false, message: 'Certification failed' };
   }
 }

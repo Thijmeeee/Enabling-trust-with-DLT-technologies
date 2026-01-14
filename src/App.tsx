@@ -13,15 +13,17 @@ import WindowRegistrationWizard from './components/dashboards/WindowRegistration
 import IntroductionPage from './components/IntroductionPage';
 import { RoleProvider, useRole } from './lib/utils/roleContext';
 import { ThemeProvider, useTheme } from './lib/utils/ThemeContext';
+import { UIProvider, useUI } from './lib/utils/UIContext';
 import { hybridDataStore as enhancedDB } from './lib/data/hybridDataStore';
 import { generateMixedTestData } from './lib/operations/bulkOperations';
-import { User, ChevronDown, HelpCircle, Wallet, ToggleLeft, ToggleRight, Moon, Sun, Trash2 } from 'lucide-react';
+import { User, ChevronDown, HelpCircle, Wallet, ToggleLeft, ToggleRight, Moon, Sun, Trash2, Cpu, Zap } from 'lucide-react';
 
 type View = 'dashboard' | 'dpp-main' | 'dpp-component' | 'create-dpp' | 'manufacturer-wallet' | 'register-wizard';
 
 function AppContent() {
   const { currentRole, setRole } = useRole();
   const { theme, toggleTheme } = useTheme();
+  const { viewMode, toggleViewMode } = useUI();
   const [view, setView] = useState<View>('dashboard');
   const [currentDID, setCurrentDID] = useState<string>('');
   const [isInitializing, setIsInitializing] = useState(true);
@@ -216,6 +218,25 @@ function AppContent() {
           </span>
         </button>
 
+        {/* View Mode Toggle (Simple vs Technical) */}
+        <button
+          onClick={toggleViewMode}
+          className={`flex items-center gap-2 px-3 py-2 border rounded-lg shadow-sm transition-all ${viewMode === 'simple'
+            ? 'bg-gradient-to-r from-blue-600 to-indigo-600 border-blue-500 text-white shadow-blue-200 dark:shadow-none'
+            : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+            }`}
+          title={viewMode === 'simple' ? 'Current: Simple Mode. Click for Technical.' : 'Current: Technical Mode. Click for Simple.'}
+        >
+          {viewMode === 'simple' ? (
+            <Zap className="w-5 h-5 fill-white" />
+          ) : (
+            <Cpu className="w-5 h-5 text-gray-500" />
+          )}
+          <span className="text-xs font-bold uppercase tracking-wider">
+            {viewMode === 'simple' ? 'Simple Mode' : 'Technical'}
+          </span>
+        </button>
+
         {/* Theme Toggle */}
         <button
           onClick={toggleTheme}
@@ -375,9 +396,11 @@ function AppContent() {
 export default function App() {
   return (
     <ThemeProvider>
-      <RoleProvider>
-        <AppContent />
-      </RoleProvider>
+      <UIProvider>
+        <RoleProvider>
+          <AppContent />
+        </RoleProvider>
+      </UIProvider>
     </ThemeProvider>
   );
 }

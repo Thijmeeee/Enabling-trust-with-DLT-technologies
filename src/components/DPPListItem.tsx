@@ -43,7 +43,7 @@ export default function DPPListItem({ dpp, onSelect }: { dpp: DPP; onSelect: () 
                 </span>
                 <span className={`px-3 py-1 text-xs font-semibold rounded-full border ${getStatusColor()}`}>
                   {isActive && '🟢 '}
-                  {dpp.lifecycle_status.toUpperCase()}
+                  {(dpp.lifecycle_status || 'active').toUpperCase()}
                 </span>
                 {hasAttestation && (
                   <span className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 text-xs font-semibold rounded-full border border-blue-300">

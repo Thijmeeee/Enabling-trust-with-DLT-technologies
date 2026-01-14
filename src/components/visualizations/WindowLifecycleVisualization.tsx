@@ -317,7 +317,7 @@ export default function WindowLifecycleVisualization({ dpp, events }: {
       <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-900/30 dark:to-green-900/30 rounded-lg border border-blue-200 dark:border-blue-700">
         <p className="text-sm text-gray-800 dark:text-gray-200 space-y-2">
           <span className="block">
-            <strong>Lifecycle Status:</strong> {dpp.lifecycle_status.toUpperCase()}
+            <strong>Lifecycle Status:</strong> {(dpp.lifecycle_status || 'active').toUpperCase()}
           </span>
           <span className="block">
             <strong>Current Owner:</strong> <span className="font-mono text-blue-700 dark:text-blue-400">{dpp.owner.split(':').pop()}</span>

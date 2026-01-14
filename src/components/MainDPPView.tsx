@@ -31,8 +31,10 @@ import { getSchemaForType } from '../lib/schemas/productSchema';
 import { getDoP } from '../lib/schemas/declarationOfPerformance';
 import type { DeclarationOfPerformance } from '../lib/schemas/declarationOfPerformance';
 import { useRole } from '../lib/utils/roleContext';
+import { useUI } from '../lib/utils/UIContext';
 import QRCodeDisplay from './visualizations/QRCodeDisplay';
 import DIDEventsLog from './DIDEventsLog';
+import SimpleStoryTimeline from './SimpleStoryTimeline';
 import WitnessFlowVisualization from './visualizations/WitnessFlowVisualization';
 import DLTTrustAnchor from './DLTTrustAnchor';
 import { ProtectedField, ProtectedMetadata } from './ProtectedField';
@@ -50,18 +52,28 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
   onNavigate: (did: string) => void;
 }) {
   const { currentRole } = useRole();
+  const { viewMode, t } = useUI();
   const [data, setData] = useState<any>(null);
   const [metrics, setMetrics] = useState<any>(null);
   const [trustScore, setTrustScore] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showQR, setShowQR] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'specifications' | 'components' | 'lifecycle' | 'did-operations' | 'trust-validation' | 'events'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'story' | 'specifications' | 'components' | 'lifecycle' | 'did-operations' | 'trust-validation' | 'events'>('overview');
   const [eventRefreshKey, setEventRefreshKey] = useState(0);
   const [editingDoP, setEditingDoP] = useState(false);
   const [selectedAttestation, setSelectedAttestation] = useState<any>(null);
   const [showTrustTooltip, setShowTrustTooltip] = useState(false);
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
   const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
+
+  // Automatically switch tabs when view mode changes to make the impact obvious
+  useEffect(() => {
+    if (viewMode === 'simple') {
+      setActiveTab('story');
+    } else {
+      setActiveTab('overview');
+    }
+  }, [viewMode]);
 
   // Helper to get icon color based on product type
   const getIconColor = (productType: string) => {
@@ -272,27 +284,37 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
                 <Package className="w-8 h-8 text-white" />
               </div>
               <div className="flex-1">
-                <h1 className="text-3xl font-bold text-gray-900 mb-3">{dpp.model}</h1>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-3">{dpp.model}</h1>
                 
                 {/* Prominent DID Display */}
-                <div className="bg-gradient-to-r from-blue-50 via-purple-50 to-blue-50 border-2 border-blue-500 rounded-lg p-4 mb-3 shadow-sm">
+                <div className={`${
+                  viewMode === 'simple' 
+                    ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' 
+                    : 'bg-gradient-to-r from-blue-50 via-purple-50 to-blue-50 dark:from-gray-800 dark:to-gray-800 border-blue-500'
+                } border-2 rounded-lg p-4 mb-3 shadow-sm`}>
                   <div className="flex items-center gap-2 mb-2">
-                    <Link2 className="w-5 h-5 text-blue-600" />
-                    <span className="text-sm font-bold text-blue-900 uppercase tracking-wide">DID:webvh Identifier</span>
+                    <Shield className="w-5 h-5 text-blue-600" />
+                    <span className="text-sm font-bold text-blue-900 dark:text-blue-300 uppercase tracking-wide">
+                      {viewMode === 'simple' ? 'Verified Identity Card' : t('DID:webvh Identifier')}
+                    </span>
                   </div>
-                  <p className="text-base text-gray-900 font-mono break-all leading-relaxed">{dpp.did}</p>
+                  <p className="text-base text-gray-900 dark:text-white font-mono break-all leading-relaxed">
+                    {viewMode === 'simple' ? `ID: ${dpp.did.substring(0, 15)}...${dpp.did.substring(dpp.did.length - 10)}` : dpp.did}
+                  </p>
                 </div>
 
                 <div className="flex items-center gap-3">
                   <span className={`px-4 py-1.5 bg-gradient-to-r text-sm font-semibold rounded-full border ${
                     dpp.type === 'main' 
-                      ? 'from-blue-100 to-blue-200 text-blue-800 border-blue-300'
-                      : 'from-purple-100 to-purple-200 text-purple-800 border-purple-300'
+                      ? 'from-blue-100 to-blue-200 text-blue-800 border-blue-300 dark:from-blue-900/40 dark:to-blue-800/40 dark:text-blue-200 dark:border-blue-700'
+                      : 'from-purple-100 to-purple-200 text-purple-800 border-purple-300 dark:from-purple-900/40 dark:to-purple-800/40 dark:text-purple-200 dark:border-purple-700'
                   }`}>
-                    {dpp.type === 'main' ? 'Main Product' : 'Component'}
+                    {dpp.type === 'main' ? t('Main Product') : t('Component')}
                   </span>
-                  <span className="text-sm text-gray-700 font-medium capitalize px-3 py-1 bg-gray-100 rounded-full">{dpp.lifecycle_status}</span>
-                  <span className="text-sm text-gray-700 font-medium px-3 py-1 bg-gray-100 rounded-full">Version {dpp.version}</span>
+                  <span className="text-sm text-gray-700 dark:text-gray-300 font-medium capitalize px-3 py-1 bg-gray-100 dark:bg-gray-800 rounded-full">{dpp.lifecycle_status}</span>
+                  {viewMode === 'technical' && (
+                    <span className="text-sm text-gray-700 dark:text-gray-300 font-medium px-3 py-1 bg-gray-100 dark:bg-gray-800 rounded-full">Version {dpp.version}</span>
+                  )}
                 </div>
               </div>
             </div>
@@ -308,16 +330,21 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
             </div>
           </div>
 
-          <div className="flex gap-2 mt-6 border-b border-gray-200">
+          <div className="flex gap-2 mt-6 border-b border-gray-200 dark:border-gray-700">
             {[
-              { id: 'overview', label: 'Overview', showFor: ['main', 'component'] },
-              { id: 'specifications', label: 'Specifications', showFor: ['main', 'component'] },
-              { id: 'components', label: 'Components', showFor: ['main'] },
-              { id: 'lifecycle', label: 'Lifecycle', showFor: ['main', 'component'] },
-              { id: 'did-operations', label: 'DID Operations', showFor: ['main', 'component'] },
-              { id: 'trust-validation', label: 'Trust & Validation', showFor: ['main', 'component'] },
-              { id: 'events', label: 'Events', showFor: ['main', 'component'] },
-            ].filter(tab => tab.showFor.includes(dpp.type)).map((tab) => (
+              { id: 'overview', label: t('Passport'), showFor: ['main', 'component'] },
+              { id: 'story', label: t('Story'), showFor: ['main', 'component'], simpleOnly: true },
+              { id: 'specifications', label: t('Specifications'), showFor: ['main', 'component'] },
+              { id: 'components', label: t('Components'), showFor: ['main'] },
+              { id: 'lifecycle', label: t('Lifecycle'), showFor: ['main', 'component'] },
+              { id: 'did-operations', label: t('DID Operations'), showFor: ['main', 'component'], technicalOnly: true },
+              { id: 'trust-validation', label: t('Trust & Validation'), showFor: ['main', 'component'] },
+              { id: 'events', label: t('Events'), showFor: ['main', 'component'], technicalOnly: true },
+            ].filter(tab => {
+              if (tab.simpleOnly && viewMode !== 'simple') return false;
+              if (tab.technicalOnly && viewMode !== 'technical') return false;
+              return tab.showFor.includes(dpp.type);
+            }).map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
@@ -335,6 +362,18 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-6">
+        {activeTab === 'story' && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8">
+            <div className="max-w-3xl mx-auto">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-8 flex items-center gap-3">
+                <Clock className="w-8 h-8 text-blue-600" />
+                The Product Journey
+              </h2>
+              <SimpleStoryTimeline did={did} />
+            </div>
+          </div>
+        )}
+
         {activeTab === 'specifications' && (() => {
           const dop = getDoP(dpp);
           const canEdit = currentRole === 'Manufacturer';
@@ -458,42 +497,44 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
               </div>
 
               {/* Technical Details - Collapsible */}
-              <div className="bg-white rounded-lg border border-gray-200">
-                <button
-                  onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
-                  className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <FileCheck className="w-5 h-5 text-gray-600" />
-                    <span className="font-semibold text-gray-900">Technical Specifications</span>
-                  </div>
-                  {showTechnicalDetails ? (
-                    <ChevronUp className="w-5 h-5 text-gray-600" />
-                  ) : (
-                    <ChevronDown className="w-5 h-5 text-gray-600" />
-                  )}
-                </button>
-                
-                {showTechnicalDetails && (
-                  <div className="border-t border-gray-200 p-6">
-                    {dop ? (
-                      <DoPerformanceView dop={dop} onEdit={canEdit ? () => setEditingDoP(true) : undefined} />
+              {viewMode === 'technical' && (
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <button
+                    onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
+                    className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <FileCheck className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                      <span className="font-semibold text-gray-900 dark:text-white">Technical Specifications</span>
+                    </div>
+                    {showTechnicalDetails ? (
+                      <ChevronUp className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                     ) : (
-                      <div className="text-center py-8">
-                        <p className="text-gray-500 mb-4">No Declaration of Performance available for this product.</p>
-                        {canEdit && (
-                          <button
-                            onClick={() => setEditingDoP(true)}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                          >
-                            Create DoP
-                          </button>
-                        )}
-                      </div>
+                      <ChevronDown className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                     )}
-                  </div>
-                )}
-              </div>
+                  </button>
+                  
+                  {showTechnicalDetails && (
+                    <div className="border-t border-gray-200 dark:border-gray-700 p-6">
+                      {dop ? (
+                        <DoPerformanceView dop={dop} onEdit={canEdit ? () => setEditingDoP(true) : undefined} />
+                      ) : (
+                        <div className="text-center py-8">
+                          <p className="text-gray-500 dark:text-gray-400 mb-4">No Declaration of Performance available for this product.</p>
+                          {canEdit && (
+                            <button
+                              onClick={() => setEditingDoP(true)}
+                              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                            >
+                              Create DoP
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         })()}
@@ -544,46 +585,47 @@ export default function MainDPPView({ did, onBack, onNavigate }: {
                     
                     {/* Key Product Features */}
                     <div className="mb-6">
-                      <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Key Features</h3>
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-3">
+                        {viewMode === 'simple' ? 'Verified Product Benefits' : 'Key Technical Features'}
+                      </h3>
                       <div className="space-y-2.5">
                         {getProductFeatures(dpp).map((feature, idx) => (
                           <div key={idx} className="flex items-start gap-3">
                             <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                            <span className="text-gray-700 leading-relaxed">{feature}</span>
+                            <span className="text-gray-700 dark:text-gray-300 leading-relaxed">{feature}</span>
                           </div>
                         ))}
                       </div>
                     </div>
                     
-                    {/* Technical Specs Grid */}
                     <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-200">
                       {dpp.metadata?.dimensions && (
-                        <div className="bg-gray-50 rounded-lg p-3">
-                          <div className="text-xs text-gray-500 font-medium mb-1">Dimensions</div>
-                          <div className="text-sm font-semibold text-gray-900">
+                        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                          <div className="text-xs text-gray-500 font-medium mb-1">{t('Dimensions')}</div>
+                          <div className="text-sm font-semibold text-gray-900 dark:text-white">
                             {dpp.metadata.dimensions.width} × {dpp.metadata.dimensions.height} mm
                           </div>
                         </div>
                       )}
                       {dpp.metadata?.weight && (
-                        <div className="bg-gray-50 rounded-lg p-3">
-                          <div className="text-xs text-gray-500 font-medium mb-1">Weight</div>
-                          <div className="text-sm font-semibold text-gray-900">{dpp.metadata.weight} kg</div>
+                        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                          <div className="text-xs text-gray-500 font-medium mb-1">{t('Weight')}</div>
+                          <div className="text-sm font-semibold text-gray-900 dark:text-white">{dpp.metadata.weight} kg</div>
                         </div>
                       )}
-                      {dpp.metadata?.batch && (
+                      {viewMode === 'technical' && dpp.metadata?.batch && (
                         <ProtectedField field="operations" label="Batch Number" value={dpp.metadata.batch}>
-                          <div className="bg-purple-50 rounded-lg p-3">
+                          <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3">
                             <div className="text-xs text-purple-600 font-medium mb-1">Batch Number</div>
-                            <div className="text-sm font-semibold text-purple-900">{dpp.metadata.batch}</div>
+                            <div className="text-sm font-semibold text-purple-900 dark:text-purple-300">{dpp.metadata.batch}</div>
                           </div>
                         </ProtectedField>
                       )}
                       {dpp.created_at && (
                         <ProtectedField field="operations" label="Production Date" value={new Date(dpp.created_at).toLocaleDateString()}>
-                          <div className="bg-gray-50 rounded-lg p-3">
-                            <div className="text-xs text-gray-500 font-medium mb-1">Production Date</div>
-                            <div className="text-sm font-semibold text-gray-900">
+                          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                            <div className="text-xs text-gray-500 font-medium mb-1">{t('Production Date')}</div>
+                            <div className="text-sm font-semibold text-gray-900 dark:text-white">
                               {new Date(dpp.created_at).toLocaleDateString()}
                             </div>
                           </div>
