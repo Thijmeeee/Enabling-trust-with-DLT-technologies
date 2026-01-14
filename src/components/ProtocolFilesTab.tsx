@@ -72,7 +72,7 @@ export default function ProtocolFilesTab({ did }: ProtocolFilesTabProps) {
         <p className="text-[10px] text-gray-500 dark:text-gray-400 italic">
           Files are addressed via the did:webvh HTTPS transformation
         </p>
-        <div className="flex items-center gap-1 text-[10px] font-medium text-gray-400">
+        <div className="flex items-center gap-1 text-[10px] font-medium text-gray-400 dark:text-gray-500">
           <FileJson className="w-3 h-3" />
           JSON-LD / JSONL
         </div>
