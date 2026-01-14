@@ -85,6 +85,13 @@ async function saveDIDLog(scid: string, log: any[]): Promise<void> {
     // Write each log entry as a separate line (JSONL format)
     const content = log.map(entry => JSON.stringify(entry)).join('\n') + '\n';
     await fs.writeFile(logPath, content);
+
+    // Always ensure witness file is initialized/exists alongside did.jsonl
+    try {
+        await witnessFileManager.initialize(scid);
+    } catch (err) {
+        console.error(`[Identity] Failed to initialize witness file for ${scid}:`, err);
+    }
 }
 
 /**

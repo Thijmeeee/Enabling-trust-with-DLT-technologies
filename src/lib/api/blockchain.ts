@@ -40,6 +40,9 @@ export interface VerificationResult {
 
 let provider: ethers.JsonRpcProvider | null = null;
 let contract: ethers.Contract | null = null;
+let isBlockchainReachable = true;
+let lastReachabilityCheck = 0;
+const REACHABILITY_TTL = 60000; // 1 minute
 
 // Caches to avoid redundant RPC calls
 const batchCache = new Map<number, BatchInfo>();
@@ -56,12 +59,21 @@ const BATCH_COUNT_TTL = 10000; // 10 seconds
  */
 function getProvider(): ethers.JsonRpcProvider {
   if (!provider) {
-    provider = new ethers.JsonRpcProvider(API_CONFIG.BLOCKCHAIN.RPC_URL);
+    // Determine the network from config to avoid auto-probing
+    const chainId = API_CONFIG.BLOCKCHAIN.CHAIN_ID;
+    provider = new ethers.JsonRpcProvider(API_CONFIG.BLOCKCHAIN.RPC_URL, chainId, {
+      staticNetwork: new ethers.Network(chainId === 11155111 ? 'sepolia' : 'hardhat', chainId),
+      batchMaxCount: 1
+    });
   }
   return provider;
 }
 
 function getContract(): ethers.Contract {
+  if (!isBlockchainReachable && (Date.now() - lastReachabilityCheck < REACHABILITY_TTL)) {
+    throw new Error('Blockchain is currently unreachable (CORS or network error). Skipping.');
+  }
+
   if (!contract) {
     const contractAddress = API_CONFIG.BLOCKCHAIN.CONTRACT_ADDRESS;
     if (!contractAddress) {
@@ -73,6 +85,33 @@ function getContract(): ethers.Contract {
 }
 
 /**
+ * Check if the blockchain is reachable (one-time check per interval)
+ */
+async function checkReachability(): Promise<boolean> {
+  const now = Date.now();
+  if (now - lastReachabilityCheck < REACHABILITY_TTL) {
+    return isBlockchainReachable;
+  }
+
+  try {
+    const p = getProvider();
+    // Use a tiny timeout for the reachability check to fail fast for CORS
+    const result = await Promise.race([
+      p.getBlockNumber(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000))
+    ]);
+    isBlockchainReachable = true;
+    lastReachabilityCheck = now;
+    return true;
+  } catch (e) {
+    console.warn('Blockchain RPC is unreachable or blocked by CORS:', e);
+    isBlockchainReachable = false;
+    lastReachabilityCheck = now;
+    return false;
+  }
+}
+
+/**
  * Get the total number of batches anchored
  */
 export async function getBatchCount(): Promise<number> {
@@ -81,11 +120,18 @@ export async function getBatchCount(): Promise<number> {
     return cachedBatchCount;
   }
 
-  const contract = getContract();
-  const count = await contract.batchCount();
-  cachedBatchCount = Number(count);
-  lastBatchCountFetch = now;
-  return cachedBatchCount;
+  if (!(await checkReachability())) return 0;
+
+  try {
+    const contract = getContract();
+    const count = await contract.batchCount();
+    cachedBatchCount = Number(count);
+    lastBatchCountFetch = now;
+    return cachedBatchCount;
+  } catch (e) {
+    console.error('getBatchCount failed:', e);
+    return 0;
+  }
 }
 
 /**
@@ -96,22 +142,31 @@ export async function getBatch(batchId: number): Promise<BatchInfo> {
     return batchCache.get(batchId)!;
   }
 
-  const contract = getContract();
-  const [root, timestamp, blockNum] = await contract.getBatch(batchId);
-  
-  const info: BatchInfo = {
-    batchId,
-    merkleRoot: root,
-    timestamp: Number(timestamp),
-    blockNumber: Number(blockNum),
-    etherscanBlockUrl: etherscanBlockUrl(Number(blockNum)),
-  };
-
-  if (root && root !== '0x' + '0'.repeat(64)) {
-    batchCache.set(batchId, info);
+  if (!(await checkReachability())) {
+    throw new Error('Blockchain unreachable');
   }
 
-  return info;
+  try {
+    const contract = getContract();
+    const [root, timestamp, blockNum] = await contract.getBatch(batchId);
+    
+    const info: BatchInfo = {
+      batchId,
+      merkleRoot: root,
+      timestamp: Number(timestamp),
+      blockNumber: Number(blockNum),
+      etherscanBlockUrl: etherscanBlockUrl(Number(blockNum)),
+    };
+
+    if (root && root !== '0x' + '0'.repeat(64)) {
+      batchCache.set(batchId, info);
+    }
+
+    return info;
+  } catch (e) {
+    console.error(`getBatch(${batchId}) failed:`, e);
+    throw e;
+  }
 }
 
 /**
@@ -121,21 +176,38 @@ export async function verifyOnChain(
   batchId: number, 
   expectedRoot: string
 ): Promise<VerificationResult> {
-  // Use cached getBatch to avoid redundant RPC calls
-  const batch = await getBatch(batchId);
-  
-  // Verification is simple comparison of roots
-  const verified = batch.merkleRoot === expectedRoot;
-  
-  return {
-    verified,
+  const defaultResult: VerificationResult = {
+    verified: false,
     batchId,
-    onChainRoot: batch.merkleRoot,
+    onChainRoot: '0x',
     expectedRoot,
-    blockNumber: batch.blockNumber,
-    timestamp: new Date(batch.timestamp * 1000),
-    etherscanBlockUrl: batch.etherscanBlockUrl,
+    blockNumber: 0,
+    timestamp: new Date(),
+    etherscanBlockUrl: null,
   };
+
+  if (!(await checkReachability())) return defaultResult;
+
+  try {
+    // Use cached getBatch to avoid redundant RPC calls
+    const batch = await getBatch(batchId);
+    
+    // Verification is simple comparison of roots
+    const verified = batch.merkleRoot === expectedRoot;
+    
+    return {
+      verified,
+      batchId,
+      onChainRoot: batch.merkleRoot,
+      expectedRoot,
+      blockNumber: batch.blockNumber,
+      timestamp: new Date(batch.timestamp * 1000),
+      etherscanBlockUrl: batch.etherscanBlockUrl,
+    };
+  } catch (e) {
+    console.error(`Verification failed for batch ${batchId}:`, e);
+    return defaultResult;
+  }
 }
 
 /**
@@ -175,26 +247,33 @@ export async function getAnchoredEvents(fromBlock: number = 0): Promise<Array<{
     return cachedAnchors;
   }
 
-  const contract = getContract();
-  
-  const filter = contract.filters.Anchored();
-  const events = await contract.queryFilter(filter, fromBlock);
-  
-  const results = events.map(event => {
-    const log = event as ethers.Log & { args: [bigint, string, bigint, bigint] };
-    return {
-      batchId: Number(log.args[0]),
-      root: log.args[1],
-      timestamp: Number(log.args[2]),
-      blockNumber: Number(log.args[3]),
-      transactionHash: log.transactionHash,
-      etherscanTxUrl: etherscanTxUrl(log.transactionHash),
-    };
-  });
+  if (!(await checkReachability())) return [];
 
-  cachedAnchors = results;
-  lastAnchorFetch = now;
-  return results;
+  try {
+    const contract = getContract();
+    
+    const filter = contract.filters.Anchored();
+    const events = await contract.queryFilter(filter, fromBlock);
+    
+    const results = events.map(event => {
+      const log = event as ethers.Log & { args: [bigint, string, bigint, bigint] };
+      return {
+        batchId: Number(log.args[0]),
+        root: log.args[1],
+        timestamp: Number(log.args[2]),
+        blockNumber: Number(log.args[3]),
+        transactionHash: log.transactionHash,
+        etherscanTxUrl: etherscanTxUrl(log.transactionHash),
+      };
+    });
+
+    cachedAnchors = results;
+    lastAnchorFetch = now;
+    return results;
+  } catch (e) {
+    console.error('getAnchoredEvents failed:', e);
+    return [];
+  }
 }
 
 /**

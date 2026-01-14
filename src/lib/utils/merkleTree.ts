@@ -392,11 +392,51 @@ export function buildProofPath(proof: any): ProofPathStructure {
   const levels: ProofPathLevel[] = [];
   
   // Normalize proof data (handle both AnchoringProof and WitnessProof types)
-  const merkleProof = proof.merkleProof || proof.siblings || [];
+  let merkleProof = proof.merkleProof || proof.siblings || [];
   const leafHash = (proof.leafHash || proof.hash || '0x' + '0'.repeat(64)).replace('0x', '');
   const merkleRoot = (proof.merkleRoot || '').replace('0x', '');
-  const leafIndex = typeof proof.leafIndex === 'number' ? proof.leafIndex : 0;
   
+  // Detect if the proof is root-to-leaf (user preference) or leaf-to-root (standard)
+  // We do this by trying to verify one step from the leaf.
+  if (merkleProof.length > 0) {
+    const firstSibling = merkleProof[0].replace('0x', '');
+    const lastSibling = merkleProof[merkleProof.length - 1].replace('0x', '');
+    
+    // Try to see if the LAST one is the leaf sibling (standard leaf-to-root has it at 0)
+    // Actually, a more foolproof way is to try the whole path if it's short, 
+    // but usually checking if the first element starts at the leaf or root is enough.
+    // If it's root-to-leaf, we reverse it back to leaf-to-root for the calculation loop.
+    
+    let current = leafHash;
+    const isLeafToRoot = (sibling: string) => {
+        const left = current.toLowerCase() < sibling.toLowerCase() ? current : sibling;
+        const right = current.toLowerCase() < sibling.toLowerCase() ? sibling : current;
+        // This is a heuristic: does the first element combined with leaf look like it's 
+        // part of the proof? We can't know for sure without the whole tree,
+        // but if the user specifically asked for "first from above" to be at [0],
+        // then we know [0] is root-level.
+        return false; // Dummy, we'll use a better check below
+    };
+
+    // Better check: Try to verify it as leaf-to-root. 
+    // If it fails but the reverse succeeds, then it was root-to-leaf.
+    const checkValid = (p: string[]) => {
+        let h = leafHash;
+        for (const s of p) {
+            const sClean = s.replace('0x', '');
+            const left = h.toLowerCase() < sClean.toLowerCase() ? h : sClean;
+            const right = h.toLowerCase() < sClean.toLowerCase() ? sClean : h;
+            h = combineHashes(left, right, true);
+        }
+        return h === merkleRoot;
+    };
+
+    if (!checkValid(merkleProof) && checkValid([...merkleProof].reverse())) {
+        console.log('Detected root-to-leaf proof, reversing for calculation');
+        merkleProof = [...merkleProof].reverse();
+    }
+  }
+
   let currentHash = leafHash;
   // No longer rely on currentIndex for sorting, as backend uses sortPairs: true
   
@@ -440,10 +480,25 @@ export function verifyProofPath(proof: any): VerificationResult {
   const steps: VerificationStep[] = [];
   
   // Normalize proof data
-  const merkleProof = proof.merkleProof || proof.siblings || [];
+  let merkleProof = proof.merkleProof || proof.siblings || [];
   const leafHash = (proof.leafHash || proof.hash || '0x' + '0'.repeat(64)).replace('0x', '');
   const merkleRoot = (proof.merkleRoot || '').replace('0x', '');
-  const leafIndex = typeof proof.leafIndex === 'number' ? proof.leafIndex : 0;
+
+  // Detect and handle root-to-leaf proofs
+  const checkValid = (p: string[]) => {
+    let h = leafHash;
+    for (const s of p) {
+        const sClean = s.replace('0x', '');
+        const left = h.toLowerCase() < sClean.toLowerCase() ? h : sClean;
+        const right = h.toLowerCase() < sClean.toLowerCase() ? sClean : h;
+        h = combineHashes(left, right, true);
+    }
+    return h === merkleRoot;
+  };
+
+  if (merkleProof.length > 0 && !checkValid(merkleProof) && checkValid([...merkleProof].reverse())) {
+      merkleProof = [...merkleProof].reverse();
+  }
 
   let currentHash = leafHash;
 

@@ -103,6 +103,9 @@ export class WitnessFileManager {
         await fs.rename(tempPath, filePath);
 
         log.info('Updated witness file', { scid, addedCount: proofs.length, totalCount: updatedData.length });
+
+        // 5. Update did.jsonl if it exists (Sync proofs into the log itself)
+        await this.syncToLogFile(scid, proofs);
       } catch (err) {
         log.error('Failed to update witness file', { scid, error: err });
         // Clean up temp file if it exists
@@ -120,6 +123,59 @@ export class WitnessFileManager {
       // but usually delete is fine
       if (this.locks.get(scid) === operation) {
         this.locks.delete(scid);
+      }
+    }
+  }
+
+  /**
+   * Internal helper to sync witness proofs back into the did.jsonl file
+   */
+  private static async syncToLogFile(scid: string, proofs: AnchoringProof[]): Promise<void> {
+    const logPath = path.join(process.cwd(), STORAGE_ROOT, scid, 'did.jsonl');
+    
+    try {
+      await fs.access(logPath);
+      const content = await fs.readFile(logPath, 'utf-8');
+      const lines = content.trim().split('\n').filter(l => l.length > 0);
+      const entries = lines.map(l => JSON.parse(l));
+      
+      let modified = false;
+      for (const entry of entries) {
+        const proof = proofs.find(p => p.versionId === entry.versionId);
+        if (proof) {
+          if (!entry.proof) entry.proof = [];
+          
+          const witnessIdx = entry.proof.findIndex((p: any) => p.proofPurpose === 'witness');
+          const witnessEntry = {
+            type: 'MerkleProof2019',
+            proofPurpose: 'witness',
+            merkleRoot: proof.merkleRoot,
+            path: proof.merkleProof,
+            anchor: {
+              type: 'EthereumSepolia',
+              contract: process.env.CONTRACT_ADDRESS || '0x06563e...Placeholder',
+              block: proof.blockNumber
+            }
+          };
+
+          if (witnessIdx !== -1) {
+            entry.proof[witnessIdx] = witnessEntry;
+          } else {
+            entry.proof.push(witnessEntry);
+          }
+          modified = true;
+        }
+      }
+
+      if (modified) {
+        const newContent = entries.map(e => JSON.stringify(e)).join('\n') + '\n';
+        await fs.writeFile(`${logPath}.tmp`, newContent);
+        await fs.rename(`${logPath}.tmp`, logPath);
+        log.info('Synced witness proofs to did.jsonl', { scid });
+      }
+    } catch (err: any) {
+      if (err.code !== 'ENOENT') {
+        log.error('Failed to sync to did.jsonl', { scid, error: err.message });
       }
     }
   }

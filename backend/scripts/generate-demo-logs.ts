@@ -16,7 +16,11 @@ const DEMO_IDENTITIES = [
     { scid: 'z-demo-window-002', did: 'did:webvh:localhost:3000:z-demo-window-002', type: 'window', model: 'Double Glass Standard Window', manufacturer: 'EcoGlass BV' },
     { scid: 'z-demo-window-003', did: 'did:webvh:localhost:3000:z-demo-window-003', type: 'window', model: 'Smart Window with Sensors', manufacturer: 'SmartGlass Tech' },
     { scid: 'z-demo-glass-001', did: 'did:webvh:localhost:3000:z-demo-glass-001', type: 'glass', model: 'Triple Layer Tempered Glass', manufacturer: 'Glass Solutions BV' },
+    { scid: 'z-demo-glass-002', did: 'did:webvh:localhost:3000:z-demo-glass-002', type: 'glass', model: 'Double Layer Tempered Glass', manufacturer: 'Glass Solutions BV' },
+    { scid: 'z-demo-glass-003', did: 'did:webvh:localhost:3000:z-demo-glass-003', type: 'glass', model: 'Single Layer Tempered Glass', manufacturer: 'Glass Solutions BV' },
     { scid: 'z-demo-frame-001', did: 'did:webvh:localhost:3000:z-demo-frame-001', type: 'frame', model: 'Aluminum Thermal Break Frame', manufacturer: 'Frame Masters NV' },
+    { scid: 'z-demo-frame-002', did: 'did:webvh:localhost:3000:z-demo-frame-002', type: 'frame', model: 'Wood Grain Aluminum Frame', manufacturer: 'Frame Masters NV' },
+    { scid: 'z-demo-frame-003', did: 'did:webvh:localhost:3000:z-demo-frame-003', type: 'frame', model: 'Steel Reinforced Frame', manufacturer: 'Frame Masters NV' },
 ];
 
 /**
@@ -136,6 +140,29 @@ async function generateDemoLogs() {
         const logContent = [JSON.stringify(v1Entry), JSON.stringify(v2Entry)].join('\n') + '\n';
         await fs.writeFile(logPath, logContent);
         console.log(`   ✅ Created ${logPath} (REAL Merkle hashes generated)`);
+
+        // 4. GENERATE did-witness.json (for visualization)
+        const witnessPath = path.join(dirPath, 'did-witness.json');
+        const witnessProofs = [v1Entry, v2Entry].map((entry, idx) => {
+            const leaf = idx === 0 ? v1Leaf : v2Leaf;
+            const proof = tree.getHexProof(leaf);
+            
+            return {
+                versionId: entry.versionId,
+                batchId: 100 + idx,
+                merkleRoot: root,
+                leafHash: '0x' + leaf.toString('hex'),
+                merkleProof: proof,
+                leafIndex: idx, // In our dummy tree v1 is 0, v2 is 1
+                txHash: '0x' + crypto.randomBytes(32).toString('hex'),
+                blockNumber: 5432100 + idx,
+                timestamp: entry.versionTime,
+                chainId: '11155111' // Sepolia
+            };
+        });
+
+        await fs.writeFile(witnessPath, JSON.stringify(witnessProofs, null, 2));
+        console.log(`   ✅ Created ${witnessPath}`);
     }
 
     console.log('✅ Demo logs updated with mathematically valid Merkle proofs!');

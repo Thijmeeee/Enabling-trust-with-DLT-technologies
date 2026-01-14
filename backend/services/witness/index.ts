@@ -226,7 +226,8 @@ async function processBatch() {
 
             // Get the Merkle proof for this specific leaf
             const proof = tree.getProof(leaves[i]);
-            const proofHashes = proof.map(p => '0x' + p.data.toString('hex'));
+            // Reverse the proof hashes to be root-to-leaf (user preference: "first from above")
+            const proofHashes = proof.map(p => '0x' + p.data.toString('hex')).reverse();
             const leafHash = '0x' + leaves[i].toString('hex');
 
             // Store complete witness proof data

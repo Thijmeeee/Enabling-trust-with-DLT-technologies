@@ -35,6 +35,8 @@ backend/key-store/
 # DID logs (may contain sensitive data)
 did-logs/
 backend/did-logs/
+test-logs/
+deployment/test-logs/
 
 # Development PIDs
 .dev-pids

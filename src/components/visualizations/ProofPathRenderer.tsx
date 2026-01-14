@@ -124,26 +124,26 @@ export default function ProofPathRenderer({
       <div className="flex flex-col items-center">
         {/* Node Box */}
         <div className={`
-          relative z-10 flex flex-col items-center p-3 rounded-2xl border-[3px] transition-all duration-700 min-w-[200px]
+          relative z-10 flex flex-col items-center p-2 rounded-xl border-2 transition-all duration-700 min-w-[160px]
           ${bgColorClass}
-          ${isActive ? 'scale-110 z-20' : 'scale-100'}
+          ${isActive ? 'scale-105 z-20' : 'scale-100'}
         `}>
-          <div className="flex items-center gap-2 mb-2 w-full justify-center">
-            <Icon className={`w-4 h-4 transition-colors ${iconColorClass}`} />
-            <span className={`text-[10px] font-black uppercase tracking-wider transition-colors ${isVerified || isActive ? iconColorClass : 'text-gray-400 dark:text-gray-500'}`}>
+          <div className="flex items-center gap-2 mb-1.5 w-full justify-center">
+            <Icon className={`w-3.5 h-3.5 transition-colors ${iconColorClass}`} />
+            <span className={`text-[9px] font-black uppercase tracking-wider transition-colors ${isVerified || isActive ? iconColorClass : 'text-gray-400 dark:text-gray-500'}`}>
               {label}
             </span>
           </div>
           
           <div className={`
-            w-full rounded-xl p-2.5 border transition-all duration-500 text-center
+            w-full rounded-lg p-2 border transition-all duration-500 text-center
             ${isVerified || isActive 
                 ? 'bg-white/80 dark:bg-black/40 border-black/5 dark:border-white/10 shadow-sm' 
                 : 'bg-gray-100/50 dark:bg-gray-900/50 border-transparent'}
           `}>
-            <div className="text-[9px] opacity-40 font-black mb-1 text-gray-500 dark:text-gray-400 uppercase tracking-widest">sha256 hash</div>
+            <div className="text-[8px] opacity-40 font-black mb-0.5 text-gray-500 dark:text-gray-400 uppercase tracking-widest">sha256 hash</div>
             <div className={`
-              font-mono text-[11px] font-bold truncate px-1 transition-all duration-500
+              font-mono text-[10px] font-bold truncate px-1 transition-all duration-500
               ${isVerified || isActive ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-600'}
             `}>
               {truncateHash(node.hash, showFullHashes)}
@@ -153,15 +153,15 @@ export default function ProofPathRenderer({
 
         {/* Children Container */}
         {node.type === 'internal' && (
-          <div className="flex mt-20 relative min-w-full">
+          <div className="flex mt-16 relative min-w-full">
             {/* Connection Lines - Uniform Theme and Step Feedback */}
             <svg 
-              className="absolute -top-20 left-0 w-full h-20 pointer-events-none overflow-visible"
+              className="absolute -top-16 left-0 w-full h-16 pointer-events-none overflow-visible"
               preserveAspectRatio="none"
             >
               <line 
                 x1="50%" y1="0" x2="25%" y2="100%" 
-                className={`transition-all duration-700 stroke-[3px] ${
+                className={`transition-all duration-700 stroke-[2px] ${
                   isVerified 
                     ? 'stroke-emerald-500 dark:stroke-emerald-400 opacity-100' 
                     : isActive 
@@ -172,7 +172,7 @@ export default function ProofPathRenderer({
               />
               <line 
                 x1="50%" y1="0" x2="75%" y2="100%" 
-                className={`transition-all duration-700 stroke-[3px] ${
+                className={`transition-all duration-700 stroke-[2px] ${
                   isVerified 
                     ? 'stroke-emerald-500 dark:stroke-emerald-400 opacity-100' 
                     : isActive 
@@ -183,10 +183,10 @@ export default function ProofPathRenderer({
               />
             </svg>
             
-            <div className="w-1/2 flex justify-center px-4">
+            <div className="w-1/2 flex justify-center px-2">
               {renderTreeNode(node.left, depth + 1)}
             </div>
-            <div className="w-1/2 flex justify-center px-4">
+            <div className="w-1/2 flex justify-center px-2">
               {renderTreeNode(node.right, depth + 1)}
             </div>
           </div>
@@ -194,7 +194,6 @@ export default function ProofPathRenderer({
       </div>
     );
   };
-
 
   return (
     <div className="flex flex-col items-center py-4 min-w-max">

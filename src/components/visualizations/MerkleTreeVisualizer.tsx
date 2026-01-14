@@ -54,11 +54,67 @@ export default function MerkleTreeVisualizer({
   const [isVerifying, setIsVerifying] = useState(false);
   const [verifiedLevels, setVerifiedLevels] = useState<Set<number>>(new Set());
   const [showFullHashes, setShowFullHashes] = useState(false);
-  const [zoomLevel, setZoomLevel] = useState(1);
+  const [zoomLevel, setZoomLevel] = useState(0.7);
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
+
+  // Dragging state for panning
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStart = useRef({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 });
 
   // Ref for the container
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Handle mouse events for panning
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!containerRef.current) return;
+    
+    setIsDragging(true);
+    dragStart.current = {
+      x: e.pageX - containerRef.current.offsetLeft,
+      y: e.pageY - containerRef.current.offsetTop,
+      scrollLeft: containerRef.current.scrollLeft,
+      scrollTop: containerRef.current.scrollTop
+    };
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || !containerRef.current) return;
+    
+    e.preventDefault();
+    const x = e.pageX - containerRef.current.offsetLeft;
+    const y = e.pageY - containerRef.current.offsetTop;
+    
+    const walkX = (x - dragStart.current.x) * 1.5; // Drag speed mult
+    const walkY = (y - dragStart.current.y) * 1.5;
+    
+    containerRef.current.scrollLeft = dragStart.current.scrollLeft - walkX;
+    containerRef.current.scrollTop = dragStart.current.scrollTop - walkY;
+  };
+
+  const handleMouseUpOrLeave = () => {
+    setIsDragging(false);
+  };
+
+  // Handle mouse wheel zoom with Ctrl key
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        setZoomLevel(prev => {
+          const newZoom = Math.min(2.5, Math.max(0.2, prev + delta));
+          return Number(newZoom.toFixed(2));
+        });
+      }
+    };
+
+    // Use capturing to ensure we catch it before other handlers
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => container.removeEventListener('wheel', handleWheel);
+  }, [containerRef.current]);
 
   // Build proof path when proof changes
   useEffect(() => {
@@ -157,24 +213,17 @@ export default function MerkleTreeVisualizer({
 
   return (
     <div className="flex flex-col gap-4 relative">
-      {/* Visualizer Controls */}
+      {/* Visualizer Header */}
       <div className="flex items-center justify-between bg-white dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
-            <span className="text-[10px] sm:text-xs font-medium text-gray-600 dark:text-gray-400">Anchor (Internal Node)</span>
+            <Shield className="w-5 h-5 text-indigo-500" />
+            <span className="text-sm font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest">Merkle Proof Visualizer</span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-rose-500"></div>
-            <span className="text-[10px] sm:text-xs font-medium text-gray-600 dark:text-gray-400">Target Leaf</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-            <span className="text-[10px] sm:text-xs font-medium text-gray-600 dark:text-gray-400">Batch Sibling</span>
-          </div>
-          <div className="hidden sm:flex items-center gap-2 border-l border-gray-200 dark:border-gray-700 pl-4 ml-2">
-            <Shield className="w-4 h-4 text-emerald-500" />
-            <span className="text-[10px] font-bold text-gray-500 uppercase">Hierarchical Proof Visualizer</span>
+          <div className="hidden lg:block h-6 w-px bg-gray-200 dark:bg-gray-700 mx-2"></div>
+          <div className="hidden lg:flex items-center gap-2">
+            <Database className="w-4 h-4 text-gray-400" />
+            <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Verification Protocol v1.0</span>
           </div>
         </div>
         
@@ -182,9 +231,9 @@ export default function MerkleTreeVisualizer({
           {/* Zoom Controls */}
           <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-md p-0.5 mr-2">
             <button 
-              onClick={() => setZoomLevel(prev => Math.max(0.4, prev - 0.1))}
+              onClick={() => setZoomLevel(prev => Math.max(0.2, prev - 0.1))}
               className="p-1.5 text-gray-500 hover:text-indigo-600 transition-colors"
-              title="Zoom Out"
+              title="Zoom Out (Ctrl + Scroll)"
             >
               <ZoomOut className="w-4 h-4" />
             </button>
@@ -192,14 +241,14 @@ export default function MerkleTreeVisualizer({
               {Math.round(zoomLevel * 100)}%
             </span>
             <button 
-              onClick={() => setZoomLevel(prev => Math.min(2, prev + 0.1))}
+              onClick={() => setZoomLevel(prev => Math.min(2.5, prev + 0.1))}
               className="p-1.5 text-gray-500 hover:text-indigo-600 transition-colors"
-              title="Zoom In"
+              title="Zoom In (Ctrl + Scroll)"
             >
               <ZoomIn className="w-4 h-4" />
             </button>
             <button 
-              onClick={() => setZoomLevel(1)}
+              onClick={() => setZoomLevel(0.7)}
               className="p-1.5 text-gray-500 hover:text-indigo-600 border-l border-gray-200 dark:border-gray-600 ml-0.5"
               title="Reset Zoom"
             >
@@ -224,56 +273,90 @@ export default function MerkleTreeVisualizer({
         </div>
       </div>
 
-      {/* Main Display */}
-      <div 
-        ref={containerRef}
-        className="relative bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8 overflow-auto min-h-[600px]"
-      >
-        <div 
-          className="flex flex-col items-center pt-8 transition-transform duration-300 ease-out overflow-visible"
-          style={{ 
-            transform: `scale(${zoomLevel})`,
-            transformOrigin: 'top center',
-            minWidth: 'fit-content',
-            width: '100%',
-            paddingLeft: '100px',
-            paddingRight: '100px'
-          }}
-        >
-           {proofPath ? (
-             <div className="flex flex-col lg:flex-row gap-12 w-full">
-               <div className="flex-1 min-w-0">
-                 <ProofPathRenderer 
-                   proofPath={proofPath}
-                   verificationProgress={currentStep - 1}
-                   verifiedLevels={verifiedLevels}
-                   showFullHashes={showFullHashes}
-                 />
-               </div>
-               <div className="w-full lg:w-96 shrink-0 pt-8">
-                 <VerificationPanel 
-                   steps={verificationSteps}
-                   currentStep={currentStep}
-                   totalLevels={verificationSteps.length}
-                   isVerifying={isVerifying}
-                   isValid={proofPath.isValid}
-                   isLeafValid={isLeafValid}
-                   merkleRoot={proofPath.merkleRoot}
-                   onPlay={handlePlay}
-                   onPause={handlePause}
-                   onReset={handleReset}
-                   showFullHashes={showFullHashes}
-                 />
-               </div>
-             </div>
-           ) : (
-             <div className="flex flex-col items-center justify-center h-96 text-gray-500">
-               <Database className="w-16 h-16 mb-4 opacity-20" />
-               <p className="font-medium">Selected operation has no witness proof data</p>
-               <p className="text-sm">A witness anchor is required for cryptographic verification</p>
-             </div>
-           )}
+      {/* Main Display Area - Side by Side Layout */}
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+        {/* Left Column: Zoomable Merkle Tree */}
+        <div className="flex-1 min-w-0 w-full">
+          <div 
+            ref={containerRef}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUpOrLeave}
+            onMouseLeave={handleMouseUpOrLeave}
+            className={`
+              relative bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 
+              overflow-auto min-h-[600px] max-h-[850px] shadow-inner transition-colors
+              bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] dark:bg-[radial-gradient(#374151_1px,transparent_1px)] 
+              [background-size:24px_24px] select-none
+              ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}
+            `}
+          >
+            {proofPath ? (
+              <div 
+                className="transition-transform duration-300 ease-out p-12 flex justify-center"
+                style={{ 
+                  transform: `scale(${zoomLevel})`,
+                  minWidth: 'fit-content',
+                  width: '100%',
+                  transformOrigin: 'top center'
+                }}
+              >
+                <div className="min-w-[500px]">
+                  <ProofPathRenderer 
+                    proofPath={proofPath}
+                    verificationProgress={currentStep - 1}
+                    verifiedLevels={verifiedLevels}
+                    showFullHashes={showFullHashes}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-[500px] text-gray-500">
+                <Database className="w-16 h-16 mb-4 opacity-20" />
+                <p className="font-medium">Selected operation has no witness proof data</p>
+                <p className="text-sm">A witness anchor is required for cryptographic verification</p>
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* Right Column: Static Verification Engine (Does not zoom) */}
+        {proofPath && (
+          <div className="w-full lg:w-[400px] shrink-0 sticky top-4">
+            <VerificationPanel 
+              steps={verificationSteps}
+              currentStep={currentStep}
+              totalLevels={verificationSteps.length}
+              isVerifying={isVerifying}
+              isValid={proofPath.isValid}
+              isLeafValid={isLeafValid}
+              merkleRoot={proofPath.merkleRoot}
+              onPlay={handlePlay}
+              onPause={handlePause}
+              onReset={handleReset}
+              showFullHashes={showFullHashes}
+            />
+            
+            {/* Legend inside the sidebar for better space usage */}
+            <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+              <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Map Legend</h4>
+              <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]"></div>
+                  <span className="text-xs text-gray-600 dark:text-gray-400">On-Chain Root / Verified Node</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.4)]"></div>
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Target Operation (Leaf)</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.4)]"></div>
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Batch Sibling Hash</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Protocol Metadata Footer */}
