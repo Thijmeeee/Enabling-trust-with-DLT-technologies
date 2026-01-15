@@ -1277,6 +1277,25 @@ app.post('/api/watcher/alerts', async (req, res) => {
     }
 });
 
+// Delete Watcher Alerts for a DID (Manual Override Removal)
+app.delete('/api/watcher/alerts', async (req, res) => {
+    const { did } = req.query;
+    if (!did) {
+        return res.status(400).json({ error: 'Missing required field: did' });
+    }
+
+    try {
+        const result = await pool.query(
+            'DELETE FROM watcher_alerts WHERE did = $1 OR did LIKE $2',
+            [did, `%${did}%`]
+        );
+        console.log(`🧹 Manual Override: Deleted ${result.rowCount} alerts for ${did}`);
+        return res.json({ success: true, deletedCount: result.rowCount });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Health check
 app.get('/health', (req, res) => {
     res.json({

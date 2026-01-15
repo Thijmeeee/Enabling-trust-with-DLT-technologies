@@ -67,6 +67,9 @@ export default function MerkleTreeVisualizer({
 
   // Ref for the container
   const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Track proof data to avoid resetting unnecessarily during refreshes
+  const lastProofKey = useRef<string>('');
 
   // Handle mouse events for panning
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -127,10 +130,12 @@ export default function MerkleTreeVisualizer({
       setVerificationSteps([]);
       setCurrentStep(0);
       setVerifiedLevels(new Set());
+      lastProofKey.current = '';
       return;
     }
 
     try {
+      const currentKey = `${selectedProof.versionId}-${selectedProof.merkleRoot}-${selectedProof.leafHash}`;
       const path = buildProofPath(selectedProof);
       const verification = verifyProofPath(selectedProof);
       
@@ -144,13 +149,19 @@ export default function MerkleTreeVisualizer({
 
       setProofPath(path);
       setVerificationSteps(verification.steps);
-      setCurrentStep(0);
-      setVerifiedLevels(new Set());
+
+      // Only reset progress if the proof has ACTUAL changes (new version or root)
+      // This prevents resetting every 10s during the background poll
+      if (lastProofKey.current !== currentKey) {
+        setCurrentStep(0);
+        setVerifiedLevels(new Set());
+        lastProofKey.current = currentKey;
+      }
     } catch (error) {
       console.error('Error building proof path:', error);
       setProofPath(null);
     }
-  }, [selectedProof]);
+  }, [selectedProof, localOperation]);
 
   // Verification Logic
   useEffect(() => {
@@ -162,9 +173,14 @@ export default function MerkleTreeVisualizer({
       }, 1000);
     } else if (currentStep >= verificationSteps.length && isVerifying) {
       setIsVerifying(false);
+      
+      const lastStep = verificationSteps.length > 0 
+        ? verificationSteps[verificationSteps.length - 1] 
+        : null;
+
       onVerificationComplete?.({
         steps: verificationSteps,
-        computedRoot: verificationSteps[verificationSteps.length-1].output,
+        computedRoot: lastStep ? lastStep.output : (proofPath?.leafHash || ''),
         expectedRoot: proofPath?.merkleRoot || '',
         isValid: proofPath?.isValid || false
       });
@@ -179,6 +195,13 @@ export default function MerkleTreeVisualizer({
     setCurrentStep(0);
     setVerifiedLevels(new Set());
     setIsVerifying(false);
+    // Force a re-run of the result reporting if needed, or just let users re-verify
+  };
+
+  const handleVerifyAgain = () => {
+    handleReset();
+    // Small delay to ensure state update before playing
+    setTimeout(() => setIsVerifying(true), 50);
   };
 
   const copyToClipboard = (text: string) => {
@@ -339,7 +362,7 @@ export default function MerkleTreeVisualizer({
               merkleRoot={proofPath.merkleRoot}
               onPlay={handlePlay}
               onPause={handlePause}
-              onReset={handleReset}
+              onReset={handleVerifyAgain}
               showFullHashes={showFullHashes}
             />
             

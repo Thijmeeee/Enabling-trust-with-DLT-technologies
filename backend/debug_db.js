@@ -11,8 +11,13 @@ const pool = new Pool({
 
 async function run() {
     try {
-        const res = await pool.query("SELECT did, event_type, payload, leaf_hash FROM events WHERE did LIKE '%zddR7zHr8lpQjdIAP9bMVzA%'");
-        console.log(JSON.stringify(res.rows, null, 2));
+        console.log("--- Watcher Alerts ---");
+        const alerts = await pool.query("SELECT did, reason, details FROM watcher_alerts");
+        console.table(alerts.rows);
+        
+        console.log("--- Identities ---");
+        const ids = await pool.query("SELECT did, scid FROM identities LIMIT 10");
+        console.table(ids.rows);
     } catch (err) {
         console.error(err);
     } finally {

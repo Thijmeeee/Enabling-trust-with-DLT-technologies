@@ -1,15 +1,34 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   Activity, CheckCircle, Shield, Eye, 
   Package, FileText, GitBranch,
-  Search, LayoutDashboard, Database, Flag
+  Search, LayoutDashboard, Database, Flag,
+  ShieldCheck, Lock, AlertTriangle, RefreshCw,
+  ExternalLink
 } from 'lucide-react';
 import { hybridDataStore as enhancedDB } from '../../lib/data/hybridDataStore';
 import { getDIDOperationsHistory } from '../../lib/operations/didOperationsLocal';
 import { useRole } from '../../lib/utils/roleContext';
 import { DPP } from '../../lib/data/localData';
-import { backendAPI, WatcherAlert } from '../../lib/api/backendAPI';
+import { api, type WatcherAlert } from '../../lib/api';
 import MerkleTreeVisualizer from '../visualizations/MerkleTreeVisualizer';
+
+/**
+ * Robust helper to extract SCID from any DID format
+ */
+function extractSCID(did: string): string {
+  if (!did) return '';
+  try {
+    const decoded = decodeURIComponent(did);
+    // SCID is always the last part of a : separated DID
+    const parts = decoded.split(':');
+    const lastPart = parts[parts.length - 1];
+    // Remove any potential fragments or query params
+    return lastPart.split('?')[0].split('#')[0].trim();
+  } catch (e) {
+    return (did || '').split(':').pop() || '';
+  }
+}
 
 interface MonitoredDPP extends DPP {
   scid: string;
@@ -25,6 +44,10 @@ export default function WatcherDashboard() {
   const [activeTab, setActiveTab] = useState<'audit' | 'resources'>('audit');
   const [selectedDPPId, setSelectedDPPId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [lastRefresh, setLastRefresh] = useState(Date.now());
+  
+  // Track manual verification results to override background alerts
+  const [manualVerificationResults, setManualVerificationResults] = useState<Record<string, boolean>>({});
   
   const [didHistory, setDidHistory] = useState<any[]>([]);
   const [selectedOperationIndex, setSelectedOperationIndex] = useState<number | null>(null);
@@ -42,7 +65,10 @@ export default function WatcherDashboard() {
 
   useEffect(() => {
     loadMonitoringData();
-    const interval = setInterval(loadMonitoringData, 30000); // 30s is enough
+    const interval = setInterval(() => {
+      loadMonitoringData();
+      setLastRefresh(Date.now());
+    }, 10000); // 10s for real-time feel
     return () => clearInterval(interval);
   }, []);
 
@@ -50,66 +76,104 @@ export default function WatcherDashboard() {
     if (selectedDPP) {
       loadDPPDetails(selectedDPP);
     }
+  }, [selectedDPPId, lastRefresh]);
+
+  // Reset operation selection when switching DPPs
+  useEffect(() => {
+    setSelectedOperationIndex(null);
   }, [selectedDPPId]);
+
+  // Auto-select first anchored event once history is loaded
+  useEffect(() => {
+    if (didHistory.length > 0 && selectedOperationIndex === null) {
+      const anchoredIndex = didHistory.findIndex(op => op.witness_proofs);
+      setSelectedOperationIndex(anchoredIndex !== -1 ? anchoredIndex : 0);
+    }
+  }, [didHistory, selectedOperationIndex]);
 
   async function loadMonitoringData() {
     try {
       const allDPPs = await enhancedDB.getAllDPPs();
-      const allAlerts = await backendAPI.getWatcherAlerts();
+      const allAlerts = await api.watcher.getAlerts();
+      
+      console.log('[WatcherDashboard] Syncing Alerts via SCID matching...', { alertsCount: allAlerts.length });
+      if (allAlerts.length > 0) {
+        console.table(allAlerts.map(a => ({ did: a.did, reason: a.reason, scid: extractSCID(a.did) })));
+      }
       
       // Calculate integrity and alert counts
       const monitored: MonitoredDPP[] = allDPPs.map(dpp => {
-        const dppAlerts = allAlerts.filter(a => a.did === dpp.did);
+        const dppScid = extractSCID(dpp.did);
         
-        // Simple integrity calculation for the dashboard view
+        // Find ALL alerts that match this SCID
+        const dppAlerts = allAlerts.filter(a => {
+          const alertScid = extractSCID(a.did);
+          return alertScid.toLowerCase() === dppScid.toLowerCase() && alertScid.length > 5;
+        });
+
+        // Deduplicate alerts for the counter to avoid "Spam" counts if backend loops
+        const uniqueAlerts = dppAlerts.filter((v, i, a) => 
+          a.findIndex(t => t.reason === v.reason && t.event_id === v.event_id) === i
+        );
+
+        // Calculate score
         let score = 100;
-        if (dppAlerts.length > 0) {
-          score -= 20 * dppAlerts.length;
+        const manuallyVerifiedOk = manualVerificationResults[dppScid] === true;
+
+        if (dppAlerts.length > 0 && !manuallyVerifiedOk) {
+          const hasCritical = dppAlerts.some(a => {
+            const searchBody = `${a.reason} ${a.details}`.toLowerCase();
+            return searchBody.includes('mismatch') || 
+                   searchBody.includes('failed') || 
+                   searchBody.includes('tamper') ||
+                   searchBody.includes('corrupt');
+          });
+          
+          score = hasCritical ? 0 : Math.max(0, 100 - (25 * uniqueAlerts.length));
         }
         
         return {
           ...dpp,
-          scid: dpp.did.split(':').pop() || '',
-          integrityScore: Math.max(0, score),
+          scid: dppScid,
+          integrityScore: manuallyVerifiedOk ? 100 : score,
           lastVerified: new Date().toISOString(),
-          alertCount: dppAlerts.length,
+          alertCount: manuallyVerifiedOk ? 0 : uniqueAlerts.length,
         };
       });
 
       setMonitoredDPPs(monitored);
       setAlerts(allAlerts);
 
-      // Auto-select first DPP if none selected
-      if (!selectedDPPId && monitored.length > 0) {
-        setSelectedDPPId(monitored[0].id);
-      }
+      // Auto-select first DPP if none selected - using functional update to avoid stale closure issues
+      setSelectedDPPId(prevId => {
+        if (!prevId && monitored.length > 0) {
+          return monitored[0].id;
+        }
+        return prevId;
+      });
     } catch (err) {
       console.error('Failed to load monitoring data:', err);
     }
   }
 
   async function loadDPPDetails(dpp: MonitoredDPP) {
-    setRawLog(null);
-    setRawWitness(null);
-
+    // Note: We don't clear rawLog/rawWitness here to prevent flickering during auto-refresh
+    
     // Load DID history (operations)
     const historyResult = await getDIDOperationsHistory(dpp.id);
     const ops = historyResult.success ? historyResult.operations : [];
     setDidHistory(ops);
     
-    // Default to latest anchor
-    const firstAnchoredIndex = ops.findIndex(op => op.witness_proofs);
-    setSelectedOperationIndex(firstAnchoredIndex !== -1 ? firstAnchoredIndex : 0);
-
-    // Fetch raw files
+    // Fetch raw files with cache-buster to ensure real-time updates
     try {
-      const scid = dpp.did.split(':').pop();
+      const scid = extractSCID(dpp.did);
       if (scid) {
-        // Use the backend proxy for stability
-        const logRes = await fetch(`http://localhost:3000/.well-known/did/${scid}/did.jsonl`);
+        const timestamp = Date.now();
+        // Use the relative path (proxied via Vite) for consistency
+        const logRes = await fetch(`/.well-known/did/${scid}/did.jsonl?t=${timestamp}`);
         if (logRes.ok) setRawLog(await logRes.text());
 
-        const witnessRes = await fetch(`http://localhost:3000/.well-known/did/${scid}/did-witness.json`);
+        const witnessRes = await fetch(`/.well-known/did/${scid}/did-witness.json?t=${timestamp}`);
         if (witnessRes.ok) setRawWitness(await witnessRes.text());
       }
     } catch (err) {
@@ -120,7 +184,7 @@ export default function WatcherDashboard() {
   async function handleFlagEvent() {
     if (!flagTargetEvent || !selectedDPP) return;
 
-    await backendAPI.createWatcherAlert({
+    await api.watcher.createAlert({
       did: selectedDPP.did,
       event_id: flagTargetEvent.id,
       reason: flagForm.reason,
@@ -134,18 +198,139 @@ export default function WatcherDashboard() {
     await loadMonitoringData();
   }
 
+  /**
+   * Automatically create a system alert if a manual verification fails
+   */
+  async function handleVerificationComplete(result: any) {
+    if (selectedDPP) {
+      const dppScid = extractSCID(selectedDPP.did);
+      console.log('[WatcherDashboard] Manual verification for', dppScid, 'result:', result.isValid);
+      
+      setManualVerificationResults(prev => ({
+        ...prev,
+        [dppScid]: result.isValid
+      }));
+
+      // SUCCESS CASE: If manual verification passes and the product was rejected,
+      // clean up all persistent alerts for this DID in the backend
+      if (result.isValid && selectedDPP.integrityScore < 100) {
+        console.log('[WatcherDashboard] Manual verification PASSED. Cleaning up backend alerts for:', dppScid);
+        try {
+          await api.watcher.deleteAlerts(selectedDPP.did);
+        } catch (err) {
+          console.error('[WatcherDashboard] Failed to auto-delete alerts:', err);
+        }
+      }
+
+      // Force refresh of the lists to reflect manual override immediately
+      setTimeout(() => loadMonitoringData(), 50);
+    }
+
+    if (!result.isValid && selectedDPP && selectedOperationIndex !== null) {
+      const dbOp = didHistory[selectedOperationIndex];
+      const selectedScid = extractSCID(selectedDPP.did);
+
+      // Extract numeric ID only
+      const numericIdMatch = String(dbOp.id).match(/(\d+)$/);
+      const numericEventId = numericIdMatch ? parseInt(numericIdMatch[1]) : null;
+
+      // Check current alerts state for duplicates via robustness
+      const isAlreadyAlerted = alerts.some(a => 
+        extractSCID(a.did).toLowerCase() === selectedScid.toLowerCase() &&
+        (a.event_id !== null && numericEventId !== null && Number(a.event_id) === Number(numericEventId))
+      );
+      
+      if (!isAlreadyAlerted) {
+        console.log('[WatcherDashboard] FORCING SYSTEM REJECTION for SCID:', selectedScid);
+        
+        try {
+          // 1. Create the alert
+          await api.watcher.createAlert({
+            did: selectedDPP.did,
+            event_id: numericEventId as any,
+            reason: 'proof_mismatch',
+            details: `CRITICAL AUDIT FAILURE: Root mismatch for event ${numericEventId}. Computed ${result.computedRoot.substring(0,10)} differs from DLT root ${result.expectedRoot.substring(0,10)}.`,
+            reporter: 'Cryptographic-Audit-Engine'
+          });
+          
+          // 2. Do NOT wait for interval, pull data now
+          const freshAlerts = await api.watcher.getAlerts();
+          setAlerts(freshAlerts);
+          
+          // 3. Force re-calculation of integrity scores
+          await loadMonitoringData();
+          
+          // 4. Force a state refresh trigger
+          setLastRefresh(Date.now());
+          
+          console.log('[WatcherDashboard] Rejection state propagated successfully.');
+        } catch (err) {
+          console.error('[WatcherDashboard] Failed to propagate rejection:', err);
+        }
+      }
+    }
+  }
+
   const filteredDPPs = monitoredDPPs.filter(dpp => 
     (dpp.model?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || 
     (dpp.did?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
     (dpp.scid?.toLowerCase() || '').includes(searchTerm.toLowerCase())
   );
 
+  // Extract the actual proof and operation from the raw files (simulating trustless auditor)
+  const fileBasedVerificationData = useMemo(() => {
+    if (selectedOperationIndex === null || !didHistory[selectedOperationIndex]) return null;
+    const dbOp = didHistory[selectedOperationIndex];
+    
+    let fileProof = undefined;
+    let fileOp = undefined;
+
+    // 1. Try to find the event in the raw .jsonl log
+    if (rawLog) {
+      const lines = rawLog.trim().split('\n');
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line);
+          if (entry.versionId === dbOp.version_id) {
+            fileOp = entry;
+            break;
+          }
+        } catch (e) { /* ignore parse errors */ }
+      }
+    }
+
+    // 2. Try to find the witness proof in the raw did-witness.json
+    if (rawWitness) {
+      try {
+        const witnessData = JSON.parse(rawWitness);
+        // Correctly handle if did-witness.json is a direct array or has a wrapper
+        const proofs = Array.isArray(witnessData) 
+          ? witnessData 
+          : (witnessData.anchoringProofs || witnessData.witnessProofs || []);
+          
+        fileProof = proofs.find((p: any) => 
+          String(p.versionId) === String(dbOp.version_id) || 
+          String(p.version_id) === String(dbOp.version_id)
+        );
+      } catch (e) { 
+        console.error('Error parsing raw witness:', e);
+      }
+    }
+
+    // Fallback to database data if the file hasn't loaded yet or entry wasn't found
+    // This prevents the "No Operation Selected" bug
+    return { 
+      fileProof: fileProof || dbOp.witness_proofs, 
+      fileOp: fileOp || dbOp 
+    };
+  }, [selectedOperationIndex, didHistory, rawLog, rawWitness]);
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors pt-16 flex overflow-hidden h-screen">
       {/* Sidebar - Product Selection */}
       <div className="w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col shrink-0">
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="relative">
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
+          <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
@@ -155,6 +340,13 @@ export default function WatcherDashboard() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
+          <button 
+            onClick={loadMonitoringData}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-500 transition-colors"
+            title="Refresh Monitoring Data"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
         </div>
         
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
@@ -165,21 +357,32 @@ export default function WatcherDashboard() {
               <button
                 key={dpp.id}
                 onClick={() => setSelectedDPPId(dpp.id)}
-                className={`w-full flex items-center justify-between p-3 rounded-lg transition-all text-left group ${
+                className={`w-full flex items-center justify-between p-3 rounded-lg transition-all text-left group border ${
                   selectedDPPId === dpp.id
-                    ? 'bg-blue-50 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800'
-                    : 'hover:bg-gray-50 dark:hover:bg-gray-700 border border-transparent'
+                    ? (dpp.alertCount > 0 
+                        ? 'bg-red-50 dark:bg-red-900/40 border-red-500 ring-1 ring-red-500 shadow-lg' 
+                        : 'bg-blue-50 dark:bg-blue-900/40 border-blue-200 dark:border-blue-800 shadow-sm')
+                    : (dpp.alertCount > 0 
+                        ? 'bg-red-50/30 dark:bg-red-900/10 border-red-200 dark:border-red-900/40' 
+                        : 'hover:bg-gray-50 dark:hover:bg-gray-700 border-transparent')
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <Package className={`w-5 h-5 ${selectedDPPId === dpp.id ? 'text-blue-600' : 'text-gray-400'}`} />
+                  {dpp.alertCount > 0 ? (
+                    <AlertTriangle className="w-5 h-5 text-red-500 animate-pulse" />
+                  ) : (
+                    <Package className={`w-5 h-5 ${selectedDPPId === dpp.id ? 'text-blue-600' : 'text-gray-400'}`} />
+                  )}
                   <div>
-                    <div className="font-medium text-gray-900 dark:text-white text-sm">{dpp.model}</div>
+                    <div className="font-medium text-gray-900 dark:text-white text-sm flex items-center gap-2">
+                      {dpp.model}
+                      {dpp.alertCount > 0 && <Flag className="w-3 h-3 text-red-600 fill-red-600" />}
+                    </div>
                     <div className="text-[10px] uppercase font-mono text-gray-500 dark:text-gray-400">{dpp.scid}</div>
                   </div>
                 </div>
                 {dpp.alertCount > 0 && (
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-100 text-[10px] font-bold text-red-600">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white shadow-sm animate-bounce">
                     {dpp.alertCount}
                   </span>
                 )}
@@ -203,22 +406,52 @@ export default function WatcherDashboard() {
                   <div>
                     <h1 className="text-2xl font-bold dark:text-white flex items-center gap-2">
                       Audit: {selectedDPP.model}
-                      <span className={`text-sm font-normal px-2 py-0.5 rounded ${
-                        selectedDPP.integrityScore >= 90 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                      <span className={`text-sm font-normal px-2 py-0.5 rounded shadow-sm border ${
+                        selectedDPP.integrityScore >= 90 
+                        ? 'bg-green-100 text-green-700 border-green-200' 
+                        : 'bg-red-100 text-red-700 border-red-200'
                       }`}>
                         Integrity: {selectedDPP.integrityScore}%
                       </span>
+                      <span className={`text-xs uppercase font-extrabold px-3 py-1 rounded-full border-2 ${
+                        selectedDPP.integrityScore < 90
+                        ? 'bg-red-600 text-white border-red-700'
+                        : 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                      }`}>
+                        {selectedDPP.integrityScore < 90 ? 'STATUS: REJECTED / TAMPERED' : 'STATUS: ACTIVE (CERTIFIED)'}
+                      </span>
                     </h1>
-                    <p className="text-gray-500 text-sm font-mono">{selectedDPP.did}</p>
+                    <div className="flex items-center gap-4 mt-1">
+                      <p className="text-gray-500 text-xs font-mono">{selectedDPP.did}</p>
+                      {alerts.filter(a => 
+                        extractSCID(a.did).toLowerCase() === extractSCID(selectedDPP.did).toLowerCase() && !a.event_id
+                      ).map((alert, idx) => (
+                        <div key={idx} className="flex items-center gap-1.5 px-2 py-0.5 bg-red-600 text-white text-[10px] font-bold rounded animate-pulse uppercase">
+                          <AlertTriangle className="w-3 h-3" />
+                          {alert.reason.replace(/_/g, ' ')}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
                 <div className="flex gap-4">
                   <div className="text-right">
                     <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">Status</div>
-                    <div className="flex items-center gap-2 font-medium text-green-600 dark:text-green-400">
-                      <CheckCircle className="w-4 h-4" />
-                      {selectedDPP.lifecycle_status}
+                    <div className={`flex items-center gap-2 font-bold ${
+                      selectedDPP.alertCount > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'
+                    }`}>
+                      {selectedDPP.alertCount > 0 ? (
+                        <>
+                          <AlertTriangle className="w-4 h-4" />
+                          REJECTED
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="w-4 h-4" />
+                          {selectedDPP.lifecycle_status}
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -268,14 +501,9 @@ export default function WatcherDashboard() {
                     </div>
                     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-2 min-h-[400px]">
                       <MerkleTreeVisualizer 
-                        selectedProof={
-                          selectedOperationIndex !== null && didHistory[selectedOperationIndex] 
-                            ? didHistory[selectedOperationIndex].witness_proofs 
-                            : undefined
-                        }
-                        localOperation={
-                          selectedOperationIndex !== null ? didHistory[selectedOperationIndex] : undefined
-                        }
+                        selectedProof={fileBasedVerificationData?.fileProof}
+                        localOperation={fileBasedVerificationData?.fileOp}
+                        onVerificationComplete={handleVerificationComplete}
                         alerts={alerts.filter(a => a.did === selectedDPP.did)}
                       />
                     </div>
@@ -283,10 +511,31 @@ export default function WatcherDashboard() {
 
                   {/* Journal Feed */}
                   <section>
-                    <h2 className="text-lg font-bold dark:text-white mb-4 flex items-center gap-2">
-                      <Activity className="w-5 h-5 text-emerald-500" />
-                      Historical Events
-                    </h2>
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-lg font-bold dark:text-white flex items-center gap-2">
+                        <Activity className="w-5 h-5 text-emerald-500" />
+                        Historical Events
+                      </h2>
+                      <div className="px-3 py-1 bg-gray-100 dark:bg-gray-800 rounded-lg text-[10px] font-mono text-gray-500">
+                        {didHistory.length} EVENTS TOTAL
+                      </div>
+                    </div>
+
+                    <div className="bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-xl p-4 mb-6">
+                      <div className="flex items-start gap-4">
+                        <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
+                          <ShieldCheck className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="text-sm font-bold text-blue-900 dark:text-blue-300">Automatic Integrity Audit</h3>
+                          <p className="text-xs text-blue-800/70 dark:text-blue-400/70 mt-1 leading-relaxed">
+                            The watcher service continuously verifies the hash-chain integrity and DLT anchors for all events in this product's lifecycle. 
+                            Select an individual event below to inspect its specific Merkle proof and DLT signature.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="space-y-4">
                       {didHistory.length === 0 && (
                         <div className="p-8 text-center text-gray-500 bg-white dark:bg-gray-800 rounded-xl border border-dashed border-gray-300">
@@ -294,31 +543,53 @@ export default function WatcherDashboard() {
                         </div>
                       )}
                       {didHistory.map((op, idx) => {
-                        const isFlagged = alerts.some(a => a.event_id === op.id);
+                        const selectedScid = extractSCID(selectedDPP.did);
+
+                        // Safe numeric ID extraction
+                        const numericIdMatch = String(op.id).match(/^([a-z-]+)?(\d+)/);
+                        const opNumericId = numericIdMatch ? numericIdMatch[2] : op.id;
+
+                        const isEventFlagged = alerts.some(a => 
+                          extractSCID(a.did).toLowerCase() === selectedScid.toLowerCase() &&
+                          (a.event_id !== null && String(a.event_id) === String(opNumericId))
+                        );
+                        const isGlobalFlagged = alerts.some(a => 
+                          extractSCID(a.did).toLowerCase() === selectedScid.toLowerCase() && !a.event_id
+                        );
+                        const isFlagged = isEventFlagged || isGlobalFlagged;
+                        const isAnchored = Boolean(op.witness_proofs);
                         return (
                           <div 
                             key={idx}
                             onClick={() => setSelectedOperationIndex(idx)}
                             className={`group relative bg-white dark:bg-gray-800 rounded-xl border p-4 transition-all cursor-pointer ${
                               selectedOperationIndex === idx 
-                                ? 'border-blue-500 ring-1 ring-blue-500' 
+                                ? 'border-blue-500 ring-1 ring-blue-500 shadow-md translate-x-1' 
                                 : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
-                            } ${isFlagged ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}
+                            } ${isFlagged ? 'bg-red-50/50 dark:bg-red-900/10 border-red-200 shadow-sm shadow-red-500/10' : ''}`}
                           >
                             <div className="flex items-center justify-between mb-3">
                               <div className="flex items-center gap-3">
                                 <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
-                                  op.attestation_type.includes('creation') ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
+                                  op.attestation_type.includes('creation') ? 'bg-purple-100 text-purple-700' : 
+                                  op.attestation_type.includes('transfer') ? 'bg-orange-100 text-orange-700' :
+                                  'bg-blue-100 text-blue-700'
                                 }`}>
                                   {op.attestation_type.replace(/_/g, ' ')}
                                 </div>
                                 <span className="text-xs text-gray-400">{new Date(op.timestamp).toLocaleString()}</span>
                               </div>
                               <div className="flex items-center gap-2">
+                                {isAnchored && !isFlagged && (
+                                  <div className="flex items-center gap-1 text-emerald-600 text-[10px] font-extrabold px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 rounded-full border border-emerald-200 dark:border-emerald-800/50">
+                                    <ShieldCheck className="w-3 h-3" />
+                                    VERIFIED
+                                  </div>
+                                )}
                                 {isFlagged && (
-                                  <div className="flex items-center gap-1 text-red-600 text-xs font-bold px-2 py-1 bg-red-100 rounded-full">
+                                  <div className="flex items-center gap-1 text-red-600 text-xs font-bold px-2 py-1 bg-red-100 dark:bg-red-900/20 rounded-full border border-red-300 animate-in fade-in zoom-in duration-300">
                                     <Flag className="w-3 h-3" />
-                                    FLAGGED
+                                    {isEventFlagged ? 'REJECTED' : 'INTEGRITY ALERT'}
                                   </div>
                                 )}
                                 <button 
@@ -337,12 +608,29 @@ export default function WatcherDashboard() {
 
                             <div className="grid grid-cols-2 gap-4">
                               <div className="space-y-1">
-                                <div className="text-[10px] uppercase text-gray-500">Witness</div>
-                                <div className="text-xs font-mono truncate text-gray-700 dark:text-gray-300">{op.witness_did}</div>
+                                <div className="text-[10px] uppercase text-gray-500 font-bold">Witness Node</div>
+                                <div className="text-xs font-mono truncate text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/50 px-2 py-1 rounded">{op.witness_did}</div>
                               </div>
                               <div className="space-y-1">
-                                <div className="text-[10px] uppercase text-gray-500">Hash/Secret</div>
-                                <div className="text-xs font-mono truncate text-gray-700 dark:text-gray-300">{op.data_hash || op.secret_hash}</div>
+                                <div className="text-[10px] uppercase text-gray-500 font-bold">Cryptographic Anchor</div>
+                                {(() => {
+                                  const txHash = op.tx_hash || op.witness_proofs?.txHash;
+                                  return txHash ? (
+                                    <a 
+                                      href={`https://sepolia.etherscan.io/tx/${txHash}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-xs font-mono truncate text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded hover:underline flex items-center gap-1"
+                                    >
+                                      <ExternalLink className="w-3 h-3" />
+                                      {txHash.substring(0, 18)}...
+                                    </a>
+                                  ) : (
+                                    <div className="text-xs font-mono truncate text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-900/50 px-2 py-1 rounded italic">
+                                      Local (Pending Anchor)
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             </div>
                           </div>

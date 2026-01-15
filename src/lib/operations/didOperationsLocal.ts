@@ -273,35 +273,21 @@ export async function getDIDOperationsHistory(dppId: string) {
 
     const attestations = await enhancedDB.getAttestationsByDID(dpp.did);
 
-    // Filter DID-related operations that are approved (not pending or rejected)
+    // Filter operations that are approved or have a signature (valid log entries)
     const didOperations = attestations.filter(att => {
-      // Support both backend types (create, ownership_transfer) and frontend types
-      const isDIDOperation = [
-        'ownership_change', 
-        'ownership_transfer', 
-        'key_rotation', 
-        'did_update', 
-        'did_creation',
-        'did_deactivation',
-        'create',
-        'deactivate',
-        'certification'
-      ].includes(att.attestation_type);
-
       // Explicitly exclude rejected operations
       if (att.approval_status === 'rejected') {
         return false;
       }
 
-      // Consider approved if:
+      // Consider approved/valid if:
       // 1. Explicitly marked as approved, OR
-      // 2. No approval_status field (old data - consider approved), OR
-      // 3. Signature doesn't start with 'pending-' and isn't a reject signature
-      const isApproved =
-        att.approval_status === 'approved' ||
-        (!att.approval_status && att.signature && !att.signature.startsWith('pending-') && !att.signature.startsWith('witness-reject-'));
+      // 2. HAS A SIGNATURE (Meaning it's a signed log entry, regardless of type), OR
+      // 3. No approval_status field (old data - consider approved)
+      const hasSignature = att.signature && !att.signature.startsWith('pending-') && !att.signature.startsWith('witness-reject-');
+      const isApproved = att.approval_status === 'approved' || (!att.approval_status && hasSignature);
 
-      return isDIDOperation && isApproved;
+      return isApproved || hasSignature;
     });
 
     // Deduplicate operations to prevent double-showing in Merkle Tree

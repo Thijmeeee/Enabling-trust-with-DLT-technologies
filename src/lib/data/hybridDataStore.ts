@@ -416,7 +416,15 @@ export async function getAttestationsByDID(did: string): Promise<WitnessAttestat
   if (useBackendApi && backendAvailable) {
     try {
       const allEvents = await getAllEventsFromBackend();
-      const events = allEvents.filter(e => e.did === did);
+      
+      // Use SCID-based matching for robustness against host/port variations (localhost vs localhost:3000)
+      const targetScid = extractScidFromDid(did)?.toLowerCase();
+      const events = allEvents.filter(e => extractScidFromDid(e.did)?.toLowerCase() === targetScid);
+      
+      if (events.length === 0 && targetScid) {
+        console.warn(`[HybridDataStore] No events found for SCID: ${targetScid} among ${allEvents.length} total events`);
+      }
+      
       const backendAttestations: WitnessAttestation[] = [];
 
       for (const event of events) {
@@ -441,6 +449,8 @@ export async function getAttestationsByDID(did: string): Promise<WitnessAttestat
             witness_status: event.witness_proofs?.txHash ? 'anchored' : 'pending',
             tx_hash: event.witness_proofs?.txHash,
             witness_proofs: event.witness_proofs,
+            version_id: event.version_id,
+            leaf_hash: event.leaf_hash,
           });
         } else {
           backendAttestations.push({
@@ -457,6 +467,8 @@ export async function getAttestationsByDID(did: string): Promise<WitnessAttestat
             witness_status: event.witness_proofs?.txHash ? 'anchored' : 'pending',
             tx_hash: event.witness_proofs?.txHash,
             witness_proofs: event.witness_proofs,
+            version_id: event.version_id,
+            leaf_hash: event.leaf_hash,
           });
         }
       }
@@ -690,9 +702,16 @@ function generateId(): string {
 }
 
 function extractScidFromDid(did: string): string | null {
-  // did:webvh:SCID:domain -> SCID
-  const parts = did.split(':');
-  return parts.length >= 3 ? parts[2] : null;
+  if (!did) return null;
+  try {
+    const decoded = decodeURIComponent(did);
+    const parts = decoded.split(':');
+    const lastPart = parts[parts.length - 1];
+    // Strip fragments and query params
+    return lastPart.split('?')[0].split('#')[0].trim();
+  } catch (e) {
+    return did.split(':').pop()?.split('?')[0].split('#')[0] || null;
+  }
 }
 
 function identityToDPP(identity: Identity): DPP {

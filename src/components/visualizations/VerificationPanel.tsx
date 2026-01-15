@@ -55,8 +55,8 @@ export default function VerificationPanel({
               <Pause className="w-4 h-4 fill-current" /> Pause
             </button>
           ) : isComplete ? (
-            <button onClick={onReset} className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center gap-2 font-bold uppercase text-xs tracking-wider transition-all shadow-md shadow-indigo-500/20 active:scale-95">
-              <RefreshCw className="w-4 h-4" /> Reset
+            <button onClick={onReset} className="px-5 py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg flex items-center gap-2 font-bold uppercase text-xs tracking-wider transition-all border border-indigo-200 active:scale-95">
+              <RefreshCw className="w-4 h-4" /> Verify Again
             </button>
           ) : (
             <button onClick={onPlay} className="px-8 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center gap-2 font-bold uppercase text-sm tracking-widest transition-all shadow-lg shadow-emerald-500/20 active:scale-95">
@@ -152,7 +152,7 @@ export default function VerificationPanel({
               <div className="text-left">
                 <div className={`text-[10px] font-bold uppercase ${isValid ? 'opacity-60' : 'text-red-500 opacity-100'}`}>Computed Root</div>
                 <div className={`font-mono text-[10px] truncate ${!isValid && 'text-red-600 dark:text-red-400 font-bold'}`}>
-                  {truncateHash(steps[steps.length-1]?.output, showFullHashes)}
+                  {truncateHash(steps.length > 0 ? steps[steps.length-1].output : merkleRoot, showFullHashes)}
                 </div>
               </div>
               <div className="text-right">

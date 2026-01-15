@@ -31,6 +31,7 @@ export const API_CONFIG = {
   // Watcher Service endpoints
   WATCHER: {
     AUDITS: '/audits',
+    ALERTS: '/watcher/alerts',
     STATUS: '/watcher/status',
   },
 

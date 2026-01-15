@@ -66,6 +66,16 @@ export interface Audit {
   checked_at: string;
 }
 
+export interface WatcherAlert {
+  id: number;
+  did: string;
+  event_id: number | null;
+  reason: string;
+  details: string;
+  reporter: string;
+  created_at: string;
+}
+
 // API Response types
 export interface CreateProductResponse {
   did: string;
@@ -246,6 +256,34 @@ export const watcherApi = {
       method: 'POST',
       body: JSON.stringify({ did }),
     });
+  },
+
+  /**
+   * Get all active alerts
+   */
+  async getAlerts(did?: string): Promise<WatcherAlert[]> {
+    const params = did ? `?did=${encodeURIComponent(did)}` : '';
+    return fetchApi<WatcherAlert[]>(`${API_CONFIG.WATCHER.ALERTS}${params}`);
+  },
+
+  /**
+   * Create a new alert
+   */
+  async createAlert(alert: Omit<WatcherAlert, 'id' | 'created_at'>): Promise<WatcherAlert> {
+    return fetchApi<WatcherAlert>(API_CONFIG.WATCHER.ALERTS, {
+      method: 'POST',
+      body: JSON.stringify(alert),
+    });
+  },
+
+  /**
+   * Delete all alerts for a DID (manual override)
+   */
+  async deleteAlerts(did: string): Promise<{ success: boolean; deletedCount: number }> {
+    return fetchApi<{ success: boolean; deletedCount: number }>(
+      `${API_CONFIG.WATCHER.ALERTS}?did=${encodeURIComponent(did)}`,
+      { method: 'DELETE' }
+    );
   },
 };
 
