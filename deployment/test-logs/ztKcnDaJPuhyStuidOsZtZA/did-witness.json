@@ -1,0 +1,17 @@
+[
+  {
+    "versionId": "1-ddb505148833",
+    "batchId": 1000,
+    "merkleRoot": "0xa15e783d683a59ec2da62c33fdcfc16a12e83059d9c7f7b684456995f20ac093",
+    "leafHash": "0x67de79c44234072702751169559f34de49f9aad58c3c88a74fef06116af01deb",
+    "merkleProof": [
+      "0xd199ae52c597766fda8d434bac2b4bc90263947f73606584f08647084127ff0c",
+      "0xe8206bcd6418eb82716e83850972dd8dd6f38093cd26fbfad4021afe25e7d86f"
+    ],
+    "leafIndex": 0,
+    "txHash": "0xdad074c6ec93198cfbe0186d21d513891748ba6f8f3e9d68418caa2cf965d097",
+    "blockNumber": 6000000,
+    "timestamp": "2026-01-14T11:46:54.832Z",
+    "chainId": "11155111"
+  }
+]

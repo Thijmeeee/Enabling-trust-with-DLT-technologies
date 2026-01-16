@@ -6,6 +6,7 @@ import {
   Globe
 } from 'lucide-react';
 import { ECOSYSTEM_MAP } from '../../lib/ecosystemMap';
+import { API_CONFIG, etherscanAddressUrl } from '../../lib/api/config';
 
 const ROLE_THEMES: Record<string, any> = {
   Manufacturer: { bg: 'bg-black', text: 'text-white', border: 'border-slate-800', isDark: true },
@@ -109,7 +110,14 @@ export default function EcosystemView() {
                 </div>
                 <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl">
                   <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Registry</span>
-                  <span className="text-sm font-bold text-slate-700 dark:text-slate-200">WitnessAnchor V1</span>
+                  <a 
+                    href={etherscanAddressUrl(API_CONFIG.BLOCKCHAIN.CONTRACT_ADDRESS)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors flex items-center gap-1"
+                  >
+                    WitnessAnchor V1
+                  </a>
                 </div>
               </div>
 

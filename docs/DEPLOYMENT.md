@@ -11,6 +11,9 @@ sudo apt update && sudo apt upgrade -y
 # Install Podman
 sudo apt install -y podman
 
+# Install Podman Compose
+pip3 install podman-compose
+
 # Install Node.js 20
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
@@ -80,16 +83,16 @@ Replace `<VM-IP>` with your VM's IP address:
 ## Logs
 
 ```bash
-# View logs
-tail -f /tmp/hardhat.log   # Blockchain
-tail -f /tmp/backend.log   # Backend API
-tail -f /tmp/frontend.log  # Frontend
+# View logs van alle services
+podman-compose -f deployment/compose.yaml logs -f
 
-# Check if services are running
-lsof -i :8080  # Frontend
-lsof -i :3000  # Backend
-lsof -i :8545  # Blockchain
-podman ps      # Database
+# Specifieke service logs
+podman logs -f deployment_identity_1
+podman logs -f deployment_witness_1
+podman logs -f deployment_blockchain_1
+
+# Check of containers draaien
+podman ps
 ```
 
 ## Firewall Configuration
@@ -97,7 +100,7 @@ podman ps      # Database
 Als je firewall hebt ingeschakeld:
 
 ```bash
-sudo ufw allow 8080/tcp  # Frontend
+sudo ufw allow 8080/tcp  # Frontend (Gateway)
 sudo ufw allow 3000/tcp  # Backend API
 sudo ufw allow 8545/tcp  # Blockchain (optioneel)
 ```
@@ -106,35 +109,26 @@ sudo ufw allow 8545/tcp  # Blockchain (optioneel)
 
 ### Services starten niet
 ```bash
-# Check logs
-cat /tmp/backend.log
-cat /tmp/hardhat.log
+# Check container status
+podman ps -a
 
-# Check if ports are in use
-lsof -i :3000
-lsof -i :8080
+# Bekijk waarom een container is gestopt
+podman logs [container-id]
+
+# Herbouw containers
+./deploy-vm.sh
 ```
 
-### Database connection errors
+### Database of Logs resetten
+Als je met een schone lei wilt beginnen:
 ```bash
-# Check if PostgreSQL is running
-podman ps
-
-# View PostgreSQL logs
-podman logs dpp-postgres
-
-# Restart PostgreSQL
-podman restart dpp-postgres
+./stop-vm.sh --remove-db
+./deploy-vm.sh --deploy-contract
 ```
 
-### Frontend not accessible
+### Poorten bezet
+Als een poort al in gebruik is op de host:
 ```bash
-# Check if build succeeded
-ls -la dist/
-
-# Rebuild
-npm run build
-
-# Check serve process
-ps aux | grep serve
+sudo lsof -i :8080
+sudo lsof -i :3000
 ```

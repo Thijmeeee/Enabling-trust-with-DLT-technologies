@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { 
-  Shield, 
   Eye, 
   Anchor, 
   ChevronDown, 
@@ -13,12 +12,8 @@ import {
   Loader2, 
   XCircle, 
   ExternalLink,
-  FileCheck,
   Network,
-  Lock,
-  RefreshCw,
   AlertCircle,
-  Award,
   Fingerprint,
   Link2
 } from 'lucide-react';
@@ -61,57 +56,8 @@ interface VerificationState {
 // ============================================
 
 /** Circular Progress Ring for Trust Score */
-function TrustScoreRing({ score, size = 120 }: { score: number; size?: number }) {
-  const strokeWidth = 8;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = radius * 2 * Math.PI;
-  const offset = circumference - (score / 100) * circumference;
-  
-  const getScoreColor = () => {
-    if (score >= 90) return { stroke: '#10B981', text: 'text-green-500', bg: 'bg-green-500' };
-    if (score >= 70) return { stroke: '#F59E0B', text: 'text-yellow-500', bg: 'bg-yellow-500' };
-    if (score >= 50) return { stroke: '#F97316', text: 'text-orange-500', bg: 'bg-orange-500' };
-    return { stroke: '#EF4444', text: 'text-red-500', bg: 'bg-red-500' };
-  };
+// TrustScoreRing removed as part of Authenticity Certificate removal
 
-  const colors = getScoreColor();
-
-  return (
-    <div className="relative" style={{ width: size, height: size }}>
-      <svg className="transform -rotate-90" width={size} height={size}>
-        {/* Background circle */}
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke="currentColor"
-          strokeWidth={strokeWidth}
-          fill="none"
-          className="text-gray-200 dark:text-gray-700"
-        />
-        {/* Progress circle */}
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke={colors.stroke}
-          strokeWidth={strokeWidth}
-          fill="none"
-          strokeLinecap="round"
-          style={{
-            strokeDasharray: circumference,
-            strokeDashoffset: offset,
-            transition: 'stroke-dashoffset 0.5s ease-in-out',
-          }}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className={`text-3xl font-black ${colors.text}`}>{score}%</span>
-        <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Trust</span>
-      </div>
-    </div>
-  );
-}
 
 /** Status Badge Component */
 function StatusBadge({ status, size = 'md' }: { status: VerificationStatus; size?: 'sm' | 'md' }) {
@@ -542,211 +488,11 @@ export default function TrustValidationTab({ did }: TrustValidationTabProps) {
     setExpandedSection(expandedSection === section ? null : section);
   };
 
-  // Track the last confirmed status to prevent UI flicker during verification
-  const [lastConfirmedStatus, setLastConfirmedStatus] = useState<'verified' | 'partial' | 'warning'>('warning');
-
-  // Derived data
   const uniqueWitnesses = Array.from(new Set(attestations.map(a => a.witness_did)));
   const activeAlerts = alerts.filter(a => !a.resolved);
-  const isAllVerified = verification.hashChain === 'valid' && 
-                        verification.witnesses === 'valid' && 
-                        verification.blockchain === 'valid';
-
-  const getOverallStatus = (): 'verified' | 'partial' | 'warning' => {
-    if (isAllVerified) return 'verified';
-    if (verification.trustScore >= 50) return 'partial';
-    return 'warning';
-  };
-
-  // Update last confirmed status only when verification is complete
-  useEffect(() => {
-    if (!isVerifying && verification.details.lastVerified) {
-      setLastConfirmedStatus(getOverallStatus());
-    }
-  }, [isVerifying, verification]);
-
-  // Use last confirmed status during verification to prevent flicker
-  const overallStatus = isVerifying ? lastConfirmedStatus : getOverallStatus();
-  const statusConfig = {
-    verified: { 
-      label: 'Fully Verified', 
-      bg: 'bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20',
-      border: 'border-green-200 dark:border-green-700',
-      icon: Award,
-      iconColor: 'text-green-600 dark:text-green-400'
-    },
-    partial: { 
-      label: 'Partially Verified', 
-      bg: 'bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20',
-      border: 'border-yellow-200 dark:border-yellow-700',
-      icon: AlertCircle,
-      iconColor: 'text-yellow-600 dark:text-yellow-400'
-    },
-    warning: { 
-      label: 'Verification Required', 
-      bg: 'bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20',
-      border: 'border-red-200 dark:border-red-700',
-      icon: AlertTriangle,
-      iconColor: 'text-red-600 dark:text-red-400'
-    },
-  };
-
-  const config = statusConfig[overallStatus];
-  const StatusIcon = config.icon;
 
   return (
     <div className="space-y-6">
-      {/* ============================================ */}
-      {/* PART A: Authenticity Certificate */}
-      {/* ============================================ */}
-      <div className={`rounded-2xl border-2 ${config.border} ${config.bg} overflow-hidden shadow-lg`}>
-        {/* Certificate Header */}
-        <div className="p-6 md:p-8">
-          <div className="flex flex-col md:flex-row items-center gap-6 md:gap-8">
-            {/* Trust Score Ring */}
-            <div className="flex-shrink-0">
-              <TrustScoreRing score={verification.trustScore} size={140} />
-            </div>
-
-            {/* Certificate Info */}
-            <div className="flex-1 text-center md:text-left">
-              <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
-                <StatusIcon className={`w-6 h-6 ${config.iconColor}`} />
-                <span className={`text-sm font-bold uppercase tracking-wider ${config.iconColor}`}>
-                  {config.label}
-                </span>
-              </div>
-              <h2 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white mb-2">
-                Authenticity Certificate
-              </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400 max-w-md">
-                This Digital Product Passport has been cryptographically verified using decentralized 
-                trust infrastructure and blockchain anchoring.
-              </p>
-
-              {/* DID Badge */}
-              <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 bg-white/50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                <Fingerprint className="w-4 h-4 text-gray-500" />
-                <span className="text-xs font-mono text-gray-600 dark:text-gray-400 truncate max-w-[250px]">
-                  {did}
-                </span>
-              </div>
-            </div>
-
-            {/* Re-verify Button */}
-            <div className="flex-shrink-0">
-              <button
-                onClick={() => runVerification()}
-                disabled={isVerifying}
-                className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-sm hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <RefreshCw className={`w-4 h-4 text-gray-600 dark:text-gray-300 ${isVerifying ? 'animate-spin' : ''}`} />
-                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  {isVerifying ? 'Verifying...' : 'Re-verify'}
-                </span>
-              </button>
-              {verification.details.lastVerified && (
-                <p className="text-[10px] text-gray-500 dark:text-gray-400 text-center mt-2">
-                  Last: {verification.details.lastVerified.toLocaleTimeString()}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Compliance Checklist */}
-        <div className="border-t border-gray-200/50 dark:border-gray-700/50 bg-white/30 dark:bg-gray-800/30 p-6">
-          <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-4">
-            Compliance Checklist
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Identity Provenance */}
-            <div className="flex items-center gap-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700">
-              {verification.hashChain === 'valid' ? (
-                <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
-              ) : verification.hashChain === 'checking' ? (
-                <Loader2 className="w-5 h-5 text-blue-500 animate-spin flex-shrink-0" />
-              ) : (
-                <Clock className="w-5 h-5 text-gray-300 flex-shrink-0" />
-              )}
-              <div>
-                <p className="text-sm font-semibold text-gray-900 dark:text-white">Identity Provenance</p>
-                <p className="text-[10px] text-gray-500 dark:text-gray-400">Hash chain verified</p>
-              </div>
-            </div>
-
-            {/* Independent Attestation */}
-            <div className="flex items-center gap-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700">
-              {verification.witnesses === 'valid' ? (
-                <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
-              ) : verification.witnesses === 'checking' ? (
-                <Loader2 className="w-5 h-5 text-blue-500 animate-spin flex-shrink-0" />
-              ) : (
-                <Clock className="w-5 h-5 text-gray-300 flex-shrink-0" />
-              )}
-              <div>
-                <p className="text-sm font-semibold text-gray-900 dark:text-white">Independent Attestation</p>
-                <p className="text-[10px] text-gray-500 dark:text-gray-400">{verification.details.witnessCount} witness(es)</p>
-              </div>
-            </div>
-
-            {/* Blockchain Immutability */}
-            <div className="flex items-center gap-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700">
-              {verification.blockchain === 'valid' ? (
-                <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
-              ) : verification.blockchain === 'checking' ? (
-                <Loader2 className="w-5 h-5 text-blue-500 animate-spin flex-shrink-0" />
-              ) : (
-                <Clock className="w-5 h-5 text-gray-300 flex-shrink-0" />
-              )}
-              <div>
-                <p className="text-sm font-semibold text-gray-900 dark:text-white">{t('Blockchain Immutability')}</p>
-                <p className="text-[10px] text-gray-500 dark:text-gray-400">
-                  {verification.details.blockNumber ? `Block #${verification.details.blockNumber}` : 'Pending anchor'}
-                </p>
-              </div>
-            </div>
-
-            {/* Regulatory Readiness */}
-            <div className="flex items-center gap-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700">
-              {verification.regulatory === 'valid' ? (
-                <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
-              ) : verification.regulatory === 'checking' ? (
-                <Loader2 className="w-5 h-5 text-blue-500 animate-spin flex-shrink-0" />
-              ) : (
-                <Clock className="w-5 h-5 text-gray-300 flex-shrink-0" />
-              )}
-              <div>
-                <p className="text-sm font-semibold text-gray-900 dark:text-white">{t('Regulatory Readiness')}</p>
-                <p className="text-[10px] text-gray-500 dark:text-gray-400">EU DPP 2024/1781</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Watcher Alert Summary */}
-        <div className="border-t border-gray-200/50 dark:border-gray-700/50 px-6 py-4 bg-white/20 dark:bg-gray-800/20">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Eye className="w-5 h-5 text-orange-500" />
-              <div>
-                <p className="text-sm font-semibold text-gray-900 dark:text-white">{t('Watcher Network Status')}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {activeAlerts.length === 0 
-                    ? '✅ No anomalies detected by monitoring network' 
-                    : `⚠️ ${activeAlerts.length} active alert(s) require attention`}
-                </p>
-              </div>
-            </div>
-            {activeAlerts.length > 0 && (
-              <span className="px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 text-xs font-semibold rounded-full">
-                {activeAlerts.length} Alert{activeAlerts.length > 1 ? 's' : ''}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-
       {/* ============================================ */}
       {/* PART B: Technical Audit Trail */}
       {/* ============================================ */}

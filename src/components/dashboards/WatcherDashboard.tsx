@@ -652,7 +652,22 @@ export default function WatcherDashboard() {
                         <span className="text-[10px] text-gray-500 font-mono">raw_resource_01</span>
                       </div>
                       <div className="p-4 bg-gray-900 min-h-[200px] max-h-[400px] overflow-auto">
-                        <pre className="text-emerald-400 text-xs font-mono">{rawLog || 'Fetching log...'}</pre>
+                        <pre className="text-emerald-400 text-xs font-mono">
+                          {rawLog ? (
+                            rawLog.split('\n')
+                              .filter(l => l.trim())
+                              .map(line => {
+                                try {
+                                  return JSON.stringify(JSON.parse(line), null, 2);
+                                } catch {
+                                  return line;
+                                }
+                              })
+                              .join('\n\n---\n\n')
+                          ) : (
+                            'Fetching log...'
+                          )}
+                        </pre>
                       </div>
                     </div>
 
@@ -665,7 +680,19 @@ export default function WatcherDashboard() {
                         <span className="text-[10px] text-gray-500 font-mono">raw_resource_02</span>
                       </div>
                       <div className="p-4 bg-gray-900 min-h-[200px] max-h-[400px] overflow-auto">
-                        <pre className="text-blue-400 text-xs font-mono">{rawWitness || 'Fetching proofs...'}</pre>
+                        <pre className="text-blue-400 text-xs font-mono">
+                          {rawWitness ? (
+                            (() => {
+                              try {
+                                return JSON.stringify(JSON.parse(rawWitness), null, 2);
+                              } catch {
+                                return rawWitness;
+                              }
+                            })()
+                          ) : (
+                            'Fetching proofs...'
+                          )}
+                        </pre>
                       </div>
                     </div>
                   </div>

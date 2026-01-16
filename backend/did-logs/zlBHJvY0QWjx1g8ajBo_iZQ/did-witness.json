@@ -1,0 +1,16 @@
+[
+  {
+    "versionId": "1",
+    "batchId": 15,
+    "merkleRoot": "0xfee3f776afd992b761ec1eded23faa7cff767db8bd358be739d695530c675f7b",
+    "leafHash": "0x8c668eb17ee8bc8f961d9225490cba7a0b51df54b095443e08a524e48f742bf6",
+    "merkleProof": [
+      "0x7f39d5f980cd3a6cebf42de87c9c024330ac55fd013100a2565120adf3ac17d5",
+      "0x9a9a3bf3d400633ea62e9f1116306e13d44ad0f01071318f073f1e75e5072ba8"
+    ],
+    "leafIndex": 0,
+    "txHash": "0x0ad804f573ffb204f3db89b3fdb37fde811207ae77e2c05789a81dc34a2aa4fe",
+    "blockNumber": 10042331,
+    "timestamp": "2026-01-14T13:51:04.257Z"
+  }
+]

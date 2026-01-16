@@ -250,6 +250,20 @@ function AppContent() {
           )}
         </button>
 
+        {/* Manufacturer Wallet Button */}
+        {(currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B') && (
+          <button
+            onClick={() => setView('manufacturer-wallet')}
+            className={`flex items-center justify-center w-10 h-10 border rounded-lg shadow-sm transition-colors ${view === 'manufacturer-wallet'
+              ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-200 dark:border-blue-700 text-blue-600 dark:text-blue-400'
+              : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300'
+              }`}
+            title="Open Manufacturer Wallet"
+          >
+            <Wallet className="w-5 h-5" />
+          </button>
+        )}
+
         {/* Emergency Reset Button */}
         <button
           onClick={() => {
@@ -264,20 +278,6 @@ function AppContent() {
         >
           <Trash2 className="w-5 h-5 text-red-600 dark:text-red-400" />
         </button>
-
-        {/* Manufacturer Wallet Button */}
-        {(currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B') && (
-          <button
-            onClick={() => setView('manufacturer-wallet')}
-            className={`flex items-center justify-center w-10 h-10 border rounded-lg shadow-sm transition-colors ${view === 'manufacturer-wallet'
-              ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-200 dark:border-blue-700 text-blue-600 dark:text-blue-400'
-              : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300'
-              }`}
-            title="Open Manufacturer Wallet"
-          >
-            <Wallet className="w-5 h-5" />
-          </button>
-        )}
       </div>
 
       {/* Introduction Page */}
