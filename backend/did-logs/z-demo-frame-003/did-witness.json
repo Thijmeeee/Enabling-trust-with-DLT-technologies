@@ -1,32 +1,18 @@
 [
   {
+    "txHash": "0x71bafca0d164dcd0d013a7f0573c15b7f52d150facfcc6848613531c9b9421c1",
+    "batchId": 37,
+    "leafHash": "0x",
+    "leafIndex": 7,
+    "timestamp": "2026-01-18T10:13:38.089Z",
     "versionId": "1",
-    "batchId": 100,
-    "merkleRoot": "0xa51e644af92b27efc89962c0cef87bc789cd1c97937392c1689feb57036b446b",
-    "leafHash": "0x9586e797c3ebca43db02ea2f1b60530011385f7a55ad5635a0e0b8a3f111bdde",
+    "merkleRoot": "0x4c047f059300771168b00ecfe372bc498e34868ac3a639136875c51d34cfdf0d",
+    "blockNumber": 10069952,
     "merkleProof": [
-      "0x17e132cbb0265257bd3632b941dd60bc707166ab1cd191ead9c6f66aac5c6f78",
-      "0x8eb00e284a7c3b80dd5f21c7a387ac733af0a2618845423845216f75f2930116"
-    ],
-    "leafIndex": 0,
-    "txHash": "0x3040c895f3628a437138bfa1f1631156b86a2b80a677a32e28e48c7e13abb794",
-    "blockNumber": 5432100,
-    "timestamp": "2026-01-15T16:41:39.767Z",
-    "chainId": "11155111"
-  },
-  {
-    "versionId": "2",
-    "batchId": 101,
-    "merkleRoot": "0xa51e644af92b27efc89962c0cef87bc789cd1c97937392c1689feb57036b446b",
-    "leafHash": "0x17e132cbb0265257bd3632b941dd60bc707166ab1cd191ead9c6f66aac5c6f78",
-    "merkleProof": [
-      "0x9586e797c3ebca43db02ea2f1b60530011385f7a55ad5635a0e0b8a3f111bdde",
-      "0x8eb00e284a7c3b80dd5f21c7a387ac733af0a2618845423845216f75f2930116"
-    ],
-    "leafIndex": 1,
-    "txHash": "0xf604a14751d5ac9bb479ba16ff587b8276a910257e0b1695f43acd879124adca",
-    "blockNumber": 5432101,
-    "timestamp": "2026-01-16T16:41:39.767Z",
-    "chainId": "11155111"
+      "0x3333333333333333333333333333333333333333333333333333333333333333",
+      "0x2dba5dbc339e7316aea2683faf839c1b7b1ee2313db792112588118df066aa35",
+      "0x02d449a31fbb267c8f352e9968a79e3e5fc95c1bbeaa502fd6454ebde5a4bedc",
+      "0x2222222222222222222222222222222222222222222222222222222222222222"
+    ]
   }
 ]

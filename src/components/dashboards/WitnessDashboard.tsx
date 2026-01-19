@@ -5,7 +5,7 @@ import {
   Package, User, ArrowRight, Key, RefreshCw, FileText, Edit, Anchor, 
   ExternalLink, Terminal, Zap, Database, History, LayoutDashboard, Globe
 } from 'lucide-react';
-import { hybridDataStore as enhancedDB } from '../../lib/data/hybridDataStore';
+import enhancedDB from '../../lib/data/hybridDataStore';
 import { useRole } from '../../lib/utils/roleContext';
 import { getDIDOperationsHistory } from '../../lib/operations/didOperationsLocal';
 import { backendAPI, type BackendBatch } from '../../lib/api/backendAPI';

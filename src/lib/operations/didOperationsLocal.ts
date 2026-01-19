@@ -1,4 +1,4 @@
-import { hybridDataStore as enhancedDB } from '../data/hybridDataStore';
+import enhancedDB from '../data/hybridDataStore';
 import { localDB } from '../data/localData';
 import { hashOperation } from '../utils/merkleTree';
 

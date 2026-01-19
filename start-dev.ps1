@@ -215,8 +215,8 @@ Write-Host "[4/6] Witness Service (Blockchain Anchoring)" -ForegroundColor Yello
 Write-Host "      Starting in new window..." -ForegroundColor Gray
 
 $backendPath = Join-Path $ProjectRoot "backend"
-# Explicitly pass env variables to ensure child process picks up .env settings (RPC, Contract, Key)
-$proc = Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$backendPath'; `$env:DB_HOST='localhost'; `$env:RPC_URL='$($env:RPC_URL)'; `$env:CONTRACT_ADDRESS='$($env:CONTRACT_ADDRESS)'; `$env:RELAYER_PRIVATE_KEY='$($env:RELAYER_PRIVATE_KEY)'; `$env:BATCH_THRESHOLD='$($env:BATCH_THRESHOLD)'; Write-Host 'Witness Service' -ForegroundColor Cyan; npm run dev:witness" -WindowStyle Normal -PassThru
+# Explicitly pass env variables to ensure child process picks up .env settings (RPC, Contract, Key, Batching)
+$proc = Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$backendPath'; `$env:DB_HOST='localhost'; `$env:RPC_URL='$($env:RPC_URL)'; `$env:CONTRACT_ADDRESS='$($env:CONTRACT_ADDRESS)'; `$env:RELAYER_PRIVATE_KEY='$($env:RELAYER_PRIVATE_KEY)'; `$env:BATCH_THRESHOLD='$($env:BATCH_THRESHOLD)'; `$env:BATCH_MAX_WAIT_MS='$($env:BATCH_MAX_WAIT_MS)'; Write-Host 'Witness Service' -ForegroundColor Cyan; npm run dev:witness" -WindowStyle Normal -PassThru
 Add-Content -Path $PidFile -Value "witness:$($proc.Id)"
 Write-Host "      > Started (batching enabled)" -ForegroundColor Green
 

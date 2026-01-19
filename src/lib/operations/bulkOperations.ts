@@ -2,7 +2,7 @@
  * Bulk Operations and Test Data Generator
  */
 
-import { hybridDataStore as enhancedDB } from '../data/hybridDataStore';
+import enhancedDB from '../data/hybridDataStore';
 import { PRODUCT_SCHEMAS } from '../schemas/productSchema';
 import { 
   generateWitnessAttestations, 

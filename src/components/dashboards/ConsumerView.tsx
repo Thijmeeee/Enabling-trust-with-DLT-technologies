@@ -13,7 +13,7 @@ import {
   Package,
   Download
 } from 'lucide-react';
-import { hybridDataStore as enhancedDB } from '../../lib/data/hybridDataStore';
+import enhancedDB from '../../lib/data/hybridDataStore';
 import type { DPP } from '../../lib/data/localData';
 
 interface ConsumerViewProps {

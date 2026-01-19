@@ -4,7 +4,7 @@ import { truncateHash } from '../../lib/utils/proofUtils';
 
 interface ProofPathRendererProps {
   proofPath: ProofPathStructure;
-  verificationProgress: number; 
+  verificationProgress: number;
   verifiedLevels: Set<number>;
   showFullHashes: boolean;
   onLevelClick?: (level: number) => void;
@@ -59,8 +59,8 @@ export default function ProofPathRenderer({
     // 1. It's an internal node and its level is in verifiedLevels
     // 2. It's the path leaf and verification hasn't started or level 0 is done
     // 3. It's a sibling that was used in a verified level
-    const isVerified = node.type === 'internal' 
-      ? verifiedLevels.has(node.level) 
+    const isVerified = node.type === 'internal'
+      ? verifiedLevels.has(node.level)
       : (node.type === 'path' ? verifiedLevels.has(0) : verifiedLevels.has(node.level));
 
     // Determine if this specific node is currently the active computation step
@@ -68,7 +68,7 @@ export default function ProofPathRenderer({
     const isInternalActive = node.type === 'internal' && verifiedLevels.size === node.level;
     const isLeafActive = node.type === 'path' && verifiedLevels.size === 0;
     const isSiblingActive = node.type === 'sibling' && verifiedLevels.size === node.level;
-    
+
     const isActive = isInternalActive || isLeafActive || isSiblingActive;
 
     // Determine type-specific background colors and borders
@@ -123,7 +123,9 @@ export default function ProofPathRenderer({
     return (
       <div className="flex flex-col items-center">
         {/* Node Box */}
-        <div className={`
+        <div
+          id={node.type === 'path' ? 'merkle-target-node' : undefined}
+          className={`
           relative z-10 flex flex-col items-center p-2 rounded-xl border-2 transition-all duration-700 min-w-[160px]
           ${bgColorClass}
           ${isActive ? 'scale-105 z-20' : 'scale-100'}
@@ -134,12 +136,12 @@ export default function ProofPathRenderer({
               {label}
             </span>
           </div>
-          
+
           <div className={`
             w-full rounded-lg p-2 border transition-all duration-500 text-center
-            ${isVerified || isActive 
-                ? 'bg-white/80 dark:bg-black/40 border-black/5 dark:border-white/10 shadow-sm' 
-                : 'bg-gray-100/50 dark:bg-gray-900/50 border-transparent'}
+            ${isVerified || isActive
+              ? 'bg-white/80 dark:bg-black/40 border-black/5 dark:border-white/10 shadow-sm'
+              : 'bg-gray-100/50 dark:bg-gray-900/50 border-transparent'}
           `}>
             <div className="text-[8px] opacity-40 font-black mb-0.5 text-gray-500 dark:text-gray-400 uppercase tracking-widest">sha256 hash</div>
             <div className={`
@@ -155,34 +157,32 @@ export default function ProofPathRenderer({
         {node.type === 'internal' && (
           <div className="flex mt-16 relative min-w-full">
             {/* Connection Lines - Uniform Theme and Step Feedback */}
-            <svg 
+            <svg
               className="absolute -top-16 left-0 w-full h-16 pointer-events-none overflow-visible"
               preserveAspectRatio="none"
             >
-              <line 
-                x1="50%" y1="0" x2="25%" y2="100%" 
-                className={`transition-all duration-700 stroke-[2px] ${
-                  isVerified 
-                    ? 'stroke-emerald-500 dark:stroke-emerald-400 opacity-100' 
-                    : isActive 
-                      ? 'stroke-indigo-500 dark:stroke-indigo-400 opacity-100' 
+              <line
+                x1="50%" y1="0" x2="25%" y2="100%"
+                className={`transition-all duration-700 stroke-[2px] ${isVerified
+                    ? 'stroke-emerald-500 dark:stroke-emerald-400 opacity-100'
+                    : isActive
+                      ? 'stroke-indigo-500 dark:stroke-indigo-400 opacity-100'
                       : 'stroke-gray-300 dark:stroke-gray-700 opacity-40'
-                }`}
+                  }`}
                 strokeLinecap="round"
               />
-              <line 
-                x1="50%" y1="0" x2="75%" y2="100%" 
-                className={`transition-all duration-700 stroke-[2px] ${
-                  isVerified 
-                    ? 'stroke-emerald-500 dark:stroke-emerald-400 opacity-100' 
-                    : isActive 
-                      ? 'stroke-indigo-500 dark:stroke-indigo-400 opacity-100' 
+              <line
+                x1="50%" y1="0" x2="75%" y2="100%"
+                className={`transition-all duration-700 stroke-[2px] ${isVerified
+                    ? 'stroke-emerald-500 dark:stroke-emerald-400 opacity-100'
+                    : isActive
+                      ? 'stroke-indigo-500 dark:stroke-indigo-400 opacity-100'
                       : 'stroke-gray-300 dark:stroke-gray-700 opacity-40'
-                }`}
+                  }`}
                 strokeLinecap="round"
               />
             </svg>
-            
+
             <div className="w-1/2 flex justify-center px-2">
               {renderTreeNode(node.left, depth + 1)}
             </div>
@@ -197,9 +197,9 @@ export default function ProofPathRenderer({
 
   return (
     <div className="flex flex-col items-center py-4 min-w-max">
-       <div className="p-8">
-          {renderTreeNode(tree)}
-       </div>
+      <div className="p-8">
+        {renderTreeNode(tree)}
+      </div>
     </div>
   );
 }

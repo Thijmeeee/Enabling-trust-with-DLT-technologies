@@ -20,11 +20,10 @@ async function syncAllWitnessFiles() {
     try {
         // 1. Get all identities
         const { rows: identities } = await pool.query(
-            'SELECT did, scid FROM identities WHERE status = $1',
-            ['active']
+            'SELECT did, scid FROM identities'
         );
 
-        log.info(`Found ${identities.length} active identities to process.`);
+        log.info(`Found ${identities.length} identities to process.`);
 
         let processedCount = 0;
         let proofCount = 0;
@@ -49,8 +48,8 @@ async function syncAllWitnessFiles() {
             // 3. Extract and cast proofs
             const proofs: AnchoringProof[] = events.map(e => e.witness_proofs as AnchoringProof);
 
-            // 4. Atomic write to filesystem
-            await WitnessFileManager.addProofs(scid, proofs);
+            // 4. Atomic write to filesystem (using overwrite=true to clear stale data)
+            await WitnessFileManager.addProofs(scid, proofs, true);
             
             log.info(`Synced ${proofs.length} proofs for identity ${scid}`);
             processedCount++;

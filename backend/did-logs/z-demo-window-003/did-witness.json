@@ -1,32 +1,26 @@
 [
   {
+    "txHash": "0x71bafca0d164dcd0d013a7f0573c15b7f52d150facfcc6848613531c9b9421c1",
+    "batchId": 37,
+    "leafHash": "0x3333333333333333333333333333333333333333333333333333333333333333",
+    "leafIndex": 8,
+    "timestamp": "2026-01-18T10:13:38.092Z",
     "versionId": "1",
-    "batchId": 100,
-    "merkleRoot": "0xb88d2b5aed595c154f31b6c8f4c7138e024cb8f2085bbe3b778c8b277d90bc36",
-    "leafHash": "0x5f6ff6bc1a4db2d04a4b4d1f49a92159d10225d1e8e703a586ecf2aa23cad731",
+    "merkleRoot": "0x4c047f059300771168b00ecfe372bc498e34868ac3a639136875c51d34cfdf0d",
+    "blockNumber": 10069952,
     "merkleProof": [
-      "0xd94118b1bbe003cde2f54987b2c1a267569f556968e8774aa8faa91f734ef1f1",
-      "0x8eb00e284a7c3b80dd5f21c7a387ac733af0a2618845423845216f75f2930116"
-    ],
-    "leafIndex": 0,
-    "txHash": "0x36a4f7338bd35006dff49eb2970841b6c8cc64a903f93e98d7b8a9d29d52e4f3",
-    "blockNumber": 5432100,
-    "timestamp": "2026-01-15T16:41:39.734Z",
-    "chainId": "11155111"
+      "0x4f57ea3dc57b2f71362b8a56307d3daa9f708b60f22c1aa6e9e0ebccb58b910e"
+    ]
   },
   {
-    "versionId": "2",
-    "batchId": 101,
-    "merkleRoot": "0xb88d2b5aed595c154f31b6c8f4c7138e024cb8f2085bbe3b778c8b277d90bc36",
-    "leafHash": "0xd94118b1bbe003cde2f54987b2c1a267569f556968e8774aa8faa91f734ef1f1",
-    "merkleProof": [
-      "0x5f6ff6bc1a4db2d04a4b4d1f49a92159d10225d1e8e703a586ecf2aa23cad731",
-      "0x8eb00e284a7c3b80dd5f21c7a387ac733af0a2618845423845216f75f2930116"
-    ],
-    "leafIndex": 1,
-    "txHash": "0xfb03725672fb74550d344d4dc4e3bf00c02b6b32c428bb565e8f592a1ff55af4",
-    "blockNumber": 5432101,
-    "timestamp": "2026-01-16T16:41:39.734Z",
-    "chainId": "11155111"
+    "txHash": "0xeb6174f7875c4be6dff7831ca95538816867d225401636074d382f5ab5270bd9",
+    "batchId": 38,
+    "leafHash": "0x2dec29bd4472eb00d4026f583e0f93083b376b07a8688d6e150a46a395065841",
+    "leafIndex": 0,
+    "timestamp": "2026-01-18T13:44:16.207Z",
+    "versionId": "3",
+    "merkleRoot": "0x2dec29bd4472eb00d4026f583e0f93083b376b07a8688d6e150a46a395065841",
+    "blockNumber": 10071004,
+    "merkleProof": []
   }
 ]

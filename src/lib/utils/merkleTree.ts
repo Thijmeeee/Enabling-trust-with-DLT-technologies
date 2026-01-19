@@ -93,8 +93,18 @@ export function hashOperation(operation: DIDOperation): string {
  * This is used to verify that the witness leaf matches the actual data.
  */
 export function hashWitnessEntry(entry: any): string {
-    // The witness uses the raw JSON of the entry in the DID log
-    const hashBytes = sha256(new TextEncoder().encode(JSON.stringify(entry)));
+    // Deep clone to avoid modifying the UI object
+    const cleanEntry = JSON.parse(JSON.stringify(entry));
+    
+    // The witness uses the raw JSON of the entry in the DID log, 
+    // BUT without the MerkleProof2019 which is added AFTER the leaf hash is calculated.
+    if (cleanEntry.proof && Array.isArray(cleanEntry.proof)) {
+        cleanEntry.proof = cleanEntry.proof.filter((p: any) => 
+            p.type !== 'MerkleProof2019' && p.proofPurpose !== 'witness'
+        );
+    }
+    
+    const hashBytes = sha256(new TextEncoder().encode(JSON.stringify(cleanEntry)));
     return '0x' + bytesToHex(hashBytes);
 }
 

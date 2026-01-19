@@ -1,7 +1,4 @@
-import { localDB } from '../data/localData';
-import { enhancedDB } from '../data/enhancedDataStore';
-import { hybridDataStore } from '../data/hybridDataStore';
-import { verifyProtocolFiles } from '../operations/didResolverLocal';
+import hybridDataStore from '../data/hybridDataStore';
 import type { DPP } from '../data/localData';
 
 export async function verifyDPPIntegrity(dpp: DPP): Promise<{
@@ -9,6 +6,11 @@ export async function verifyDPPIntegrity(dpp: DPP): Promise<{
   errors: string[];
 }> {
   const errors: string[] = [];
+
+  // 1. Check lifecycle status first - if tampered, it's immediately invalid
+  if (dpp.lifecycle_status === 'tampered') {
+    errors.push('CRITICAL: Product integrity has been marked as TAMPERED by Watcher service');
+  }
 
   // Check DID format
   if (!dpp.did.startsWith('did:')) {
@@ -73,70 +75,67 @@ export async function calculateTrustScore(dppId: string): Promise<{
   let hierarchyScore = 0;
   let attestationScore = 0;
 
-  // Get DPP by ID - use hybridDataStore which checks both stores
-  const allDpps = await hybridDataStore.getAllDPPs();
-  let dppData = allDpps.find(d => d.id === dppId);
+  // Get DPP by ID from hybrid store
+  const dppData = await hybridDataStore.getDPPById(dppId);
   
-  // Also try to find by DID if not found by ID
   if (!dppData) {
-    dppData = allDpps.find(d => d.did === dppId);
-  }
-
-  if (!dppData) {
-    console.log('calculateTrustScore: DPP not found for ID:', dppId);
     return { score: 0, breakdown: {} };
   }
 
-  console.log('calculateTrustScore: Found DPP:', dppData.did, dppData.model);
+  // 0. TAMPER CHECK - If officially tampered, score is 0
+  if (dppData.lifecycle_status === 'tampered' || dppData.lifecycle_status === 'REJECTED') {
+    return {
+      score: 0,
+      breakdown: {
+        'TAMPERING_DETECTED': 100
+      }
+    };
+  }
 
-  // NEW: Comprehensive Verification from Protocol Files (DIRECT FROM FILESYSTEM/HTTPS)
-  const protocolResults = await verifyProtocolFiles(dppData.did);
+  // 1. DID Document Resolution - check if document exists and has valid verification methods
+  const didDoc = await hybridDataStore.getDIDDocumentByDID(dppData.did);
 
-  // 1. DID Document Resolution - derived from did.jsonl integrity
-  if (protocolResults.hashChainValid && protocolResults.logEntries.length > 0) {
-    didResolutionScore = 25;
-  } else if (protocolResults.logEntries.length > 0) {
+  if (didDoc) {
+    // Base score for having a DID document
     didResolutionScore = 15;
+    if (didDoc.verification_method && Array.isArray(didDoc.verification_method) && didDoc.verification_method.length > 0) {
+      didResolutionScore = 25;
+    }
   } else if (dppData.did && dppData.did.startsWith('did:webvh:')) {
+    // If DPP has a valid DID format, give partial credit
     didResolutionScore = 10;
   }
 
-  // 2. Blockchain Anchoring - derived from proofs in did-witness.json
-  if (protocolResults.witnessValid && protocolResults.proofs.length > 0) {
+  // 2. Blockchain Anchoring - check for anchoring events
+  const anchors = await hybridDataStore.getAnchoringEventsByDID(dppData.did);
+
+  if (anchors && anchors.length > 0) {
     anchoringScore = 25;
-  } else {
-    // Fallback to DB check for older or alternative anchoring methods
-    const anchors = await hybridDataStore.getAnchoringEventsByDID(dppData.did);
-    if (anchors && anchors.length > 0) {
-      anchoringScore = 25;
-    }
   }
 
-  // 3. Witness Attestations - derived from witness file first
-  if (protocolResults.witnessCount > 0) {
-    attestationScore = Math.min(25, 15 + protocolResults.witnessCount * 2);
-  } else {
-    // Fallback to database for attestations not yet in protocol files
-    const attestations = await hybridDataStore.getAttestationsByDID(dppData.did);
+  // 3. Witness Attestations - check for attestations (DID events)
+  const attestations = await hybridDataStore.getAttestationsByDID(dppData.did);
 
-    if (attestations && attestations.length > 0) {
-      const approvedAttestations = attestations.filter(a => 
-        a.approval_status === 'approved' || 
-        (a.signature && !a.signature.startsWith('pending-'))
-      );
-      
-      if (approvedAttestations.length > 0) {
-        attestationScore = Math.min(25, 15 + approvedAttestations.length * 2);
-      } else {
-        attestationScore = 5;
-      }
+  if (attestations && attestations.length > 0) {
+    // Filter for approved attestations
+    const approvedAttestations = attestations.filter(a => 
+      a.approval_status === 'approved' || 
+      (a.signature && !a.signature.startsWith('pending-'))
+    );
+    
+    if (approvedAttestations.length > 0) {
+      // Base 15 points for having attestations, up to 25 for multiple
+      attestationScore = Math.min(25, 15 + approvedAttestations.length * 2);
+    } else if (attestations.length > 0) {
+      // Pending attestations give partial credit
+      attestationScore = 5;
     }
   }
 
   // 4. Credentials - check for verified credentials
-  let allCredentials = await enhancedDB.getCredentialsByDPPId(dppId);
+  let allCredentials = await hybridDataStore.getCredentialsByDPPId(dppId);
   if (!allCredentials || allCredentials.length === 0) {
-    allCredentials = await localDB.getCredentialsByDPP(dppId);
+    allCredentials = await hybridDataStore.getCredentialsByDPPId(dppId);
   }
   const validCredentials = allCredentials.filter((c: any) => c.verification_status === 'valid');
 

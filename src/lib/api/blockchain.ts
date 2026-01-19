@@ -96,15 +96,29 @@ async function checkReachability(): Promise<boolean> {
   try {
     const p = getProvider();
     // Use a tiny timeout for the reachability check to fail fast for CORS
+    // Wrap in try/catch to ensure we don't leak "Uncaught" errors to console
     const result = await Promise.race([
-      p.getBlockNumber(),
+      p.getBlockNumber().catch(err => {
+        // Specifically catch CORS/Network errors here so they don't reach the global handler
+        if (err.message.includes('CORS') || err.message.includes('network') || err.code === 'NETWORK_ERROR') {
+          return null; // Signals failure but not an "uncaught error"
+        }
+        throw err;
+      }),
       new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000))
     ]);
+
+    if (result === null) {
+      throw new Error('CORS_BLOCKED');
+    }
+
     isBlockchainReachable = true;
     lastReachabilityCheck = now;
     return true;
-  } catch (e) {
-    console.warn('Blockchain RPC is unreachable or blocked by CORS:', e);
+  } catch (e: any) {
+    if (e.message !== 'CORS_BLOCKED') {
+      console.warn('Blockchain RPC is unreachable or blocked by CORS:', e.message);
+    }
     isBlockchainReachable = false;
     lastReachabilityCheck = now;
     return false;

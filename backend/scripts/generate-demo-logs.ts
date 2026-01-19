@@ -6,10 +6,16 @@
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import * as crypto from 'crypto';
 import { MerkleTree } from 'merkletreejs';
 
-const STORAGE_ROOT = './did-logs';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const STORAGE_ROOT = process.env.STORAGE_ROOT && process.env.STORAGE_ROOT !== './did-logs'
+    ? process.env.STORAGE_ROOT
+    : path.resolve(__dirname, '../did-logs');
 
 const DEMO_IDENTITIES = [
     { scid: 'z-demo-window-001', did: 'did:webvh:localhost:3000:z-demo-window-001', type: 'window', model: 'Triple Glass Premium Window', manufacturer: 'EcoGlass BV' },
@@ -84,6 +90,7 @@ async function generateDemoLogs() {
 
         // 2. Setup Version 2 (for demonstrating history/witnesses)
         const v2Timestamp = new Date(Date.now() + 86400000).toISOString();
+        // v1Hash MUST be calculated on the object WITHOUT the MerkleProof2019
         const v1Hash = crypto.createHash('sha256').update(JSON.stringify(v1Entry)).digest('hex');
         
         const v2Entry: any = {
@@ -109,8 +116,7 @@ async function generateDemoLogs() {
         };
 
         // 3. GENERATE REAL MERKLE PROOFS
-        // In a real system, the Witness aggregates many DIDs. 
-        // Here we simulate a batch containing this DID and some fake siblings.
+        // Note: leaves are calculated from objects BEFORE adding MerkleProof2019
         const v1Leaf = crypto.createHash('sha256').update(JSON.stringify(v1Entry)).digest();
         const v2Leaf = crypto.createHash('sha256').update(JSON.stringify(v2Entry)).digest();
         const sibling1 = sha256('fake-event-1');

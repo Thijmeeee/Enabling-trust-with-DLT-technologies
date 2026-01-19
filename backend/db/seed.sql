@@ -58,7 +58,7 @@ VALUES (
     'did:webvh:localhost:3000:z-demo-glass-001',
     'z-demo-glass-001',
     'z7QFeDemoKey004ByVyhQM7aLgxQWJzXg4nPo8hgcPqgNz8',
-    'did:webvh:glass-solutions.com:organizations:manufacturer',
+    'did:webvh:frame-masters.com:organizations:manufacturer',
     'active',
     NOW() - INTERVAL '10 days',
     NOW()
@@ -70,7 +70,7 @@ VALUES (
     'did:webvh:localhost:3000:z-demo-glass-002',
     'z-demo-glass-002',
     'z7QFeDemoKey006SampleKeyForGlass002',
-    'did:webvh:glass-solutions.com:organizations:manufacturer',
+    'did:webvh:frame-masters.com:organizations:manufacturer',
     'active',
     NOW() - INTERVAL '8 days',
     NOW()
@@ -82,7 +82,7 @@ VALUES (
     'did:webvh:localhost:3000:z-demo-glass-003',
     'z-demo-glass-003',
     'z7QFeDemoKey007SampleKeyForGlass003',
-    'did:webvh:glass-solutions.com:organizations:manufacturer',
+    'did:webvh:frame-masters.com:organizations:manufacturer',
     'active',
     NOW() - INTERVAL '6 days',
     NOW()
@@ -98,7 +98,7 @@ VALUES (
     'did:webvh:localhost:3000:z-demo-frame-001',
     'z-demo-frame-001',
     'z7QFeDemoKey005THR8VNsBxYAAWHut2Geadd9jSwuBV8xR',
-    'did:webvh:glass-solutions.com:organizations:manufacturer',
+    'did:webvh:frame-masters.com:organizations:manufacturer',
     'active',
     NOW() - INTERVAL '12 days',
     NOW()

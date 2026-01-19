@@ -7,9 +7,9 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { 
-  GitBranch, 
-  Shield, 
+import {
+  GitBranch,
+  Shield,
   ZoomIn,
   ZoomOut,
   Maximize,
@@ -22,7 +22,7 @@ import {
   Hash,
   AlertCircle
 } from 'lucide-react';
-import { 
+import {
   buildProofPath,
   verifyProofPath,
   hashWitnessEntry,
@@ -36,16 +36,22 @@ import VerificationPanel from './VerificationPanel';
 
 interface Props {
   selectedProof?: AnchoringProof;
-  localOperation?: any; 
+  localOperation?: any;
   onVerificationComplete?: (result: VerificationResult) => void;
+  onReset?: () => void;
   alerts?: any[];
+  scid?: string;
+  history?: any[];
 }
 
-export default function MerkleTreeVisualizer({ 
+export default function MerkleTreeVisualizer({
   selectedProof,
   localOperation,
   onVerificationComplete,
-  alerts = []
+  onReset,
+  alerts = [],
+  scid,
+  history
 }: Props) {
   // Check if current event has active alerts
   const hasActiveAlert = alerts.some(a => a.status === 'active' || !a.status);
@@ -58,7 +64,7 @@ export default function MerkleTreeVisualizer({
   const [isVerifying, setIsVerifying] = useState(false);
   const [verifiedLevels, setVerifiedLevels] = useState<Set<number>>(new Set());
   const [showFullHashes, setShowFullHashes] = useState(false);
-  const [zoomLevel, setZoomLevel] = useState(0.7);
+  const [zoomLevel, setZoomLevel] = useState(1.0);
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
 
   // Dragging state for panning
@@ -67,14 +73,11 @@ export default function MerkleTreeVisualizer({
 
   // Ref for the container
   const containerRef = useRef<HTMLDivElement>(null);
-  
-  // Track proof data to avoid resetting unnecessarily during refreshes
-  const lastProofKey = useRef<string>('');
 
   // Handle mouse events for panning
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!containerRef.current) return;
-    
+
     setIsDragging(true);
     dragStart.current = {
       x: e.pageX - containerRef.current.offsetLeft,
@@ -86,14 +89,14 @@ export default function MerkleTreeVisualizer({
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!isDragging || !containerRef.current) return;
-    
+
     e.preventDefault();
     const x = e.pageX - containerRef.current.offsetLeft;
     const y = e.pageY - containerRef.current.offsetTop;
-    
+
     const walkX = (x - dragStart.current.x) * 1.5; // Drag speed mult
     const walkY = (y - dragStart.current.y) * 1.5;
-    
+
     containerRef.current.scrollLeft = dragStart.current.scrollLeft - walkX;
     containerRef.current.scrollTop = dragStart.current.scrollTop - walkY;
   };
@@ -130,15 +133,13 @@ export default function MerkleTreeVisualizer({
       setVerificationSteps([]);
       setCurrentStep(0);
       setVerifiedLevels(new Set());
-      lastProofKey.current = '';
       return;
     }
 
     try {
-      const currentKey = `${selectedProof.versionId}-${selectedProof.merkleRoot}-${selectedProof.leafHash}`;
       const path = buildProofPath(selectedProof);
       const verification = verifyProofPath(selectedProof);
-      
+
       // Secondary check: Does the local operation hash match the witness leaf?
       if (localOperation) {
         const localHash = hashWitnessEntry(localOperation);
@@ -149,41 +150,110 @@ export default function MerkleTreeVisualizer({
 
       setProofPath(path);
       setVerificationSteps(verification.steps);
+      setCurrentStep(0);
+      setVerifiedLevels(new Set());
 
-      // Only reset progress if the proof has ACTUAL changes (new version or root)
-      // This prevents resetting every 10s during the background poll
-      if (lastProofKey.current !== currentKey) {
-        setCurrentStep(0);
-        setVerifiedLevels(new Set());
-        lastProofKey.current = currentKey;
-      }
+      // Auto-zoom and scroll to target (Leaf Node)
+      setZoomLevel(1.2); // Zoom in closer to focus on specific node
+
+      setTimeout(() => {
+        if (!containerRef.current) return;
+
+        const targetNode = document.getElementById('merkle-target-node');
+        const container = containerRef.current;
+
+        if (targetNode) {
+          // Calculate center position
+          // We need to account for the zoom scale transformation
+          // The container scrolls the *content*, but the content is scaled.
+          // Getting offsetTop/Left of the element should work relative to the nearest positioned ancestor.
+          // However, since it's inside a scaled div, the calculations can be tricky.
+
+          // Simplest approach: Scroll to center the element in the container
+          // The targetNode's offsetParent should be the scaled container div.
+
+          try {
+            const rect = targetNode.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+
+            // Calculate the position of the node relative to the container's content
+            // We use scrollLeft/Top updates to center it.
+
+            // Current scroll position
+            const currentScrollLeft = container.scrollLeft;
+            const currentScrollTop = container.scrollTop;
+
+            // Distance from viewport edge to node edge
+            const relativeX = rect.left - containerRect.left;
+            const relativeY = rect.top - containerRect.top;
+
+            // Desired position: Center of container
+            const desiredX = (containerRect.width / 2) - (rect.width / 2);
+            const desiredY = (containerRect.height / 2) - (rect.height / 2);
+
+            // Adjustment needed
+            const deltaX = relativeX - desiredX;
+            const deltaY = relativeY - desiredY;
+
+            container.scrollTo({
+              top: currentScrollTop + deltaY,
+              left: currentScrollLeft + deltaX,
+              behavior: 'smooth'
+            });
+          } catch (e) {
+            console.warn('Auto-scroll failed calculation', e);
+          }
+        } else {
+          // Fallback if ID not found immediately
+          const scrollHeight = container.scrollHeight;
+          const clientHeight = container.clientHeight;
+          const scrollWidth = container.scrollWidth;
+          const clientWidth = container.clientWidth;
+
+          container.scrollTo({
+            top: scrollHeight - clientHeight - 50,
+            left: (scrollWidth - clientWidth) / 2,
+            behavior: 'smooth'
+          });
+        }
+      }, 300); // Increased delay slightly to ensure DOM render and transition
+
     } catch (error) {
       console.error('Error building proof path:', error);
       setProofPath(null);
     }
-  }, [selectedProof, localOperation]);
+  }, [selectedProof]);
 
   // Verification Logic
   useEffect(() => {
     let timer: any;
+
+    // Case 1: Active verification of steps
     if (isVerifying && proofPath && currentStep < verificationSteps.length) {
       timer = setTimeout(() => {
         setVerifiedLevels(prev => new Set([...prev, currentStep]));
         setCurrentStep(prev => prev + 1);
       }, 1000);
-    } else if (currentStep >= verificationSteps.length && isVerifying) {
-      setIsVerifying(false);
-      
-      const lastStep = verificationSteps.length > 0 
-        ? verificationSteps[verificationSteps.length - 1] 
-        : null;
+    }
+    // Case 2: Verification complete or Single leaf case
+    else if (isVerifying && proofPath && currentStep >= verificationSteps.length) {
+      // For single leaves (no steps), add a 1s artificial delay for feedback
+      const delay = verificationSteps.length === 0 ? 1000 : 0;
 
-      onVerificationComplete?.({
-        steps: verificationSteps,
-        computedRoot: lastStep ? lastStep.output : (proofPath?.leafHash || ''),
-        expectedRoot: proofPath?.merkleRoot || '',
-        isValid: proofPath?.isValid || false
-      });
+      timer = setTimeout(() => {
+        setIsVerifying(false);
+
+        const computedRoot = verificationSteps.length > 0
+          ? verificationSteps[verificationSteps.length - 1].output
+          : (proofPath?.leafHash || '');
+
+        onVerificationComplete?.({
+          steps: verificationSteps,
+          computedRoot: computedRoot,
+          expectedRoot: proofPath?.merkleRoot || '',
+          isValid: proofPath?.isValid || false
+        });
+      }, delay);
     }
     return () => clearTimeout(timer);
   }, [isVerifying, currentStep, verificationSteps, proofPath, onVerificationComplete]);
@@ -195,13 +265,7 @@ export default function MerkleTreeVisualizer({
     setCurrentStep(0);
     setVerifiedLevels(new Set());
     setIsVerifying(false);
-    // Force a re-run of the result reporting if needed, or just let users re-verify
-  };
-
-  const handleVerifyAgain = () => {
-    handleReset();
-    // Small delay to ensure state update before playing
-    setTimeout(() => setIsVerifying(true), 50);
+    onReset?.(); // Trigger file refresh in parent
   };
 
   const copyToClipboard = (text: string) => {
@@ -225,15 +289,13 @@ export default function MerkleTreeVisualizer({
   }
 
   return (
-    <div className={`flex flex-col gap-4 relative transition-all duration-700 ${
-      hasActiveAlert ? 'ring-4 ring-red-500/20 rounded-2xl p-2 bg-red-50/10 dark:bg-red-900/5' : ''
-    }`}>
-      {/* Visualizer Header */}
-      <div className={`flex items-center justify-between p-3 rounded-lg border shadow-sm transition-colors duration-300 ${
-        hasActiveAlert 
-          ? 'bg-red-50 dark:bg-red-900/40 border-red-200 dark:border-red-800' 
-          : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+    <div className={`flex flex-col gap-4 relative transition-all duration-700 ${hasActiveAlert ? 'ring-4 ring-red-500/20 rounded-2xl p-2 bg-red-50/10 dark:bg-red-900/5' : ''
       }`}>
+      {/* Visualizer Header */}
+      <div className={`flex items-center justify-between p-3 rounded-lg border shadow-sm transition-colors duration-300 ${hasActiveAlert
+        ? 'bg-red-50 dark:bg-red-900/40 border-red-200 dark:border-red-800'
+        : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+        }`}>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <Shield className={`w-5 h-5 ${hasActiveAlert ? 'text-red-500' : 'text-indigo-500'}`} />
@@ -241,7 +303,7 @@ export default function MerkleTreeVisualizer({
               {hasActiveAlert ? 'COMPROMISED ASSET AUDIT' : 'Merkle Proof Visualizer'}
             </span>
           </div>
-          
+
           {hasActiveAlert && (
             <div className="flex items-center gap-2 px-3 py-1 bg-red-600 text-white text-[10px] font-black rounded-full">
               <AlertCircle className="w-3 h-3" />
@@ -255,11 +317,11 @@ export default function MerkleTreeVisualizer({
             <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Verification Protocol v1.0</span>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-2">
           {/* Zoom Controls */}
           <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-md p-0.5 mr-2">
-            <button 
+            <button
               onClick={() => setZoomLevel(prev => Math.max(0.2, prev - 0.1))}
               className="p-1.5 text-gray-500 hover:text-indigo-600 transition-colors"
               title="Zoom Out (Ctrl + Scroll)"
@@ -269,14 +331,14 @@ export default function MerkleTreeVisualizer({
             <span className="text-[10px] font-bold w-10 text-center text-gray-600 dark:text-gray-300">
               {Math.round(zoomLevel * 100)}%
             </span>
-            <button 
+            <button
               onClick={() => setZoomLevel(prev => Math.min(2.5, prev + 0.1))}
               className="p-1.5 text-gray-500 hover:text-indigo-600 transition-colors"
               title="Zoom In (Ctrl + Scroll)"
             >
               <ZoomIn className="w-4 h-4" />
             </button>
-            <button 
+            <button
               onClick={() => setZoomLevel(0.7)}
               className="p-1.5 text-gray-500 hover:text-indigo-600 border-l border-gray-200 dark:border-gray-600 ml-0.5"
               title="Reset Zoom"
@@ -285,14 +347,14 @@ export default function MerkleTreeVisualizer({
             </button>
           </div>
 
-          <button 
+          <button
             onClick={() => setShowFullHashes(!showFullHashes)}
             className={`p-1.5 rounded-md transition-colors ${showFullHashes ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
             title="Toggle Full Hashes"
           >
             <Hash className="w-4 h-4" />
           </button>
-          <button 
+          <button
             onClick={handleReset}
             className="p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
             title="Reset Verification"
@@ -306,7 +368,7 @@ export default function MerkleTreeVisualizer({
       <div className="flex flex-col lg:flex-row gap-6 items-start">
         {/* Left Column: Zoomable Merkle Tree */}
         <div className="flex-1 min-w-0 w-full">
-          <div 
+          <div
             ref={containerRef}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
@@ -321,9 +383,9 @@ export default function MerkleTreeVisualizer({
             `}
           >
             {proofPath ? (
-              <div 
+              <div
                 className="transition-transform duration-300 ease-out p-12 flex justify-center"
-                style={{ 
+                style={{
                   transform: `scale(${zoomLevel})`,
                   minWidth: 'fit-content',
                   width: '100%',
@@ -331,7 +393,7 @@ export default function MerkleTreeVisualizer({
                 }}
               >
                 <div className="min-w-[500px]">
-                  <ProofPathRenderer 
+                  <ProofPathRenderer
                     proofPath={proofPath}
                     verificationProgress={currentStep - 1}
                     verifiedLevels={verifiedLevels}
@@ -352,7 +414,7 @@ export default function MerkleTreeVisualizer({
         {/* Right Column: Static Verification Engine (Does not zoom) */}
         {proofPath && (
           <div className="w-full lg:w-[400px] shrink-0 sticky top-4">
-            <VerificationPanel 
+            <VerificationPanel
               steps={verificationSteps}
               currentStep={currentStep}
               totalLevels={verificationSteps.length}
@@ -360,12 +422,13 @@ export default function MerkleTreeVisualizer({
               isValid={proofPath.isValid}
               isLeafValid={isLeafValid}
               merkleRoot={proofPath.merkleRoot}
+              computedRoot={proofPath.leafHash} // Fallback if no steps
               onPlay={handlePlay}
               onPause={handlePause}
-              onReset={handleVerifyAgain}
+              onReset={handleReset}
               showFullHashes={showFullHashes}
             />
-            
+
             {/* Legend inside the sidebar for better space usage */}
             <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
               <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Map Legend</h4>
@@ -391,48 +454,48 @@ export default function MerkleTreeVisualizer({
       {/* Protocol Metadata Footer */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="md:col-span-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-4 border border-indigo-100 dark:border-indigo-900/40">
-           <div className="flex gap-4">
-             <div className="p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm self-start">
-                <Lock className="w-6 h-6 text-indigo-600" />
-             </div>
-             <div>
-                <h4 className="text-xs font-bold text-indigo-900 dark:text-indigo-300 uppercase tracking-widest mb-1">Blockchain Root Anchor</h4>
-                <div className="font-mono text-[10px] sm:text-xs text-indigo-800 dark:text-indigo-200 break-all mb-2">
-                  {proofPath?.merkleRoot || '0x0000000000000000000000000000000000000000000000000000000000000000'}
-                </div>
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => copyToClipboard(proofPath?.merkleRoot || '')}
+          <div className="flex gap-4">
+            <div className="p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm self-start">
+              <Lock className="w-6 h-6 text-indigo-600" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-indigo-900 dark:text-indigo-300 uppercase tracking-widest mb-1">Blockchain Root Anchor</h4>
+              <div className="font-mono text-[10px] sm:text-xs text-indigo-800 dark:text-indigo-200 break-all mb-2">
+                {proofPath?.merkleRoot || '0x0000000000000000000000000000000000000000000000000000000000000000'}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => copyToClipboard(proofPath?.merkleRoot || '')}
+                  className="text-[10px] flex items-center gap-1.5 px-2 py-1 bg-white dark:bg-gray-800 rounded border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 transition-colors"
+                >
+                  {copiedHash === proofPath?.merkleRoot ? 'Copied!' : 'Copy Root Hash'}
+                  <Copy className="w-3 h-3" />
+                </button>
+                {selectedProof?.txHash && (
+                  <a
+                    href={`https://sepolia.etherscan.io/tx/${selectedProof.txHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="text-[10px] flex items-center gap-1.5 px-2 py-1 bg-white dark:bg-gray-800 rounded border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 transition-colors"
                   >
-                    {copiedHash === proofPath?.merkleRoot ? 'Copied!' : 'Copy Root Hash'}
-                    <Copy className="w-3 h-3" />
-                  </button>
-                  {selectedProof?.txHash && (
-                      <a 
-                        href={`https://sepolia.etherscan.io/tx/${selectedProof.txHash}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[10px] flex items-center gap-1.5 px-2 py-1 bg-white dark:bg-gray-800 rounded border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 transition-colors"
-                      >
-                         <ExternalLink className="w-3 h-3" />
-                         Verify on Etherscan
-                      </a>
-                  )}
-                </div>
-             </div>
-           </div>
+                    <ExternalLink className="w-3 h-3" />
+                    Verify on Etherscan
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
-        
+
         <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 flex flex-col justify-center">
-           <div className="text-[10px] text-gray-500 uppercase font-bold mb-1">Hashing Protocol</div>
-           <div className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-             <Info className="w-4 h-4 text-blue-500" />
-             SHA-256 (RFC 6234)
-           </div>
-           <div className="mt-3 text-[10px] text-gray-500 leading-tight">
-             This witness branch proves the inclusion of your DID event in batch #{selectedProof?.batchId || 'N/A'}.
-           </div>
+          <div className="text-[10px] text-gray-500 uppercase font-bold mb-1">Hashing Protocol</div>
+          <div className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <Info className="w-4 h-4 text-blue-500" />
+            SHA-256 (RFC 6234)
+          </div>
+          <div className="mt-3 text-[10px] text-gray-500 leading-tight">
+            This witness branch proves the inclusion of your DID event in batch #{selectedProof?.batchId || 'N/A'}.
+          </div>
         </div>
       </div>
     </div>

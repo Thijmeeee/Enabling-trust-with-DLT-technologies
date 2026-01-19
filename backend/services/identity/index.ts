@@ -14,8 +14,14 @@ import express from 'express';
 import { Pool } from 'pg';
 import * as fs from 'fs/promises';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import * as crypto from 'crypto';
 import 'dotenv/config';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+import { MerkleTree } from 'merkletreejs';
+import { sha256 } from '@noble/hashes/sha256';
 import { witnessFileManager } from '../../utils/witnessFileManager.js';
 
 // Import didwebvh-ts library functions
@@ -60,7 +66,9 @@ const pool = new Pool({
 
 // Configuration
 const DOMAIN = process.env.DOMAIN || 'localhost:3000';
-const STORAGE_ROOT = process.env.STORAGE_ROOT || './did-logs';
+const STORAGE_ROOT = process.env.STORAGE_ROOT && process.env.STORAGE_ROOT !== './did-logs'
+    ? process.env.STORAGE_ROOT
+    : path.resolve(__dirname, '../../did-logs');
 
 // ============================================
 // Helper Functions
@@ -130,21 +138,21 @@ function extractScidFromDid(did: string): string {
  */
 app.get('/.well-known/did/:scid/:filename', (req, res) => {
     const { scid, filename } = req.params;
-    
+
     // Safety check for filename
     if (filename !== 'did.jsonl' && filename !== 'did-witness.json') {
         return res.status(404).json({ error: 'File not found' });
     }
 
-    const filePath = path.join(process.cwd(), STORAGE_ROOT, scid, filename);
-    
+    const filePath = path.join(STORAGE_ROOT, scid, filename);
+
     // For did.jsonl, some clients expect application/json-seq or text/plain
     // For did-witness.json it MUST be application/json
     const contentType = filename.endsWith('.json') ? 'application/json' : 'text/plain';
-    
+
     res.setHeader('Content-Type', contentType);
     res.setHeader('Access-Control-Allow-Origin', '*'); // Redundant but good for compliance
-    
+
     res.sendFile(filePath, (err) => {
         if (err) {
             console.log(`[Identity] Resource not found: ${scid}/${filename}`);
@@ -408,7 +416,7 @@ app.get('/api/did/:did/resolve', async (req, res) => {
                     }
                 });
             }
-            
+
             console.log('[Identity] Library resolution returned no document, trying local fallback');
         } catch (libraryError) {
             console.log('[Identity] Library resolution threw error, trying local fallback');
@@ -419,7 +427,7 @@ app.get('/api/did/:did/resolve', async (req, res) => {
         const log = await loadDIDLog(scid);
 
         if (!log || log.length === 0) {
-            return res.status(404).json({ 
+            return res.status(404).json({
                 didDocument: null,
                 didDocumentMetadata: { error: 'notFound' },
                 didResolutionMetadata: { error: 'NOT_FOUND' }
@@ -436,7 +444,7 @@ app.get('/api/did/:did/resolve', async (req, res) => {
                 ...entry,
                 // Ensure id exists at top level for basic resolution compatibility, 
                 // but keep the full verifiable entry structure requested
-                id: entry.state?.id || did 
+                id: entry.state?.id || did
             },
             didDocumentMetadata: {
                 versionId: entry.versionId,
@@ -719,50 +727,84 @@ app.get('/api/did/:did/verify', async (req, res) => {
         console.log('[Identity] Verifying DID:', did);
 
         const scid = extractScidFromDid(did);
-        const log = await loadDIDLog(scid);
+        const logPath = `${STORAGE_ROOT}/${scid}/did.jsonl`;
+        const witnessPath = `${STORAGE_ROOT}/${scid}/did-witness.json`;
 
-        if (!log || log.length === 0) {
-            return res.status(404).json({
-                valid: false,
-                error: 'DID not found',
-                details: 'No log entries found'
-            });
+        let logContent: string;
+        try {
+            logContent = await fs.readFile(logPath, 'utf-8');
+        } catch {
+            return res.status(404).json({ valid: false, error: 'DID not found' });
         }
 
-        // Check hash chain
+        const lines = logContent.split(/\r?\n/).filter(l => l.trim().length > 0);
+        if (lines.length === 0) {
+            return res.status(404).json({ valid: false, error: 'DID log is empty' });
+        }
+
+        const entries = lines.map(l => JSON.parse(l));
         const errors: string[] = [];
         const warnings: string[] = [];
 
-        for (let i = 1; i < log.length; i++) {
-            const currentEntry = log[i];
-            const previousEntry = log[i - 1];
+        // 1. Check Hash Chain Linkages
+        for (let i = 1; i < lines.length; i++) {
+            const current = entries[i];
+            const prevRaw = lines[i - 1].trim(); // Trim to handle potential trailing \r
+            const prevObj = JSON.parse(JSON.stringify(entries[i - 1]));
 
-            if (currentEntry.parameters?.prevVersionHash) {
-                const expectedHash = crypto.createHash('sha256')
-                    .update(JSON.stringify(previousEntry))
-                    .digest('hex');
+            // Strip MerkleProof2019 before verifying the chain hash
+            if (prevObj.proof && Array.isArray(prevObj.proof)) {
+                prevObj.proof = prevObj.proof.filter((p: any) => p.type !== 'MerkleProof2019' && p.proofPurpose !== 'witness');
+            }
 
-                if (currentEntry.parameters.prevVersionHash !== expectedHash) {
-                    errors.push(`Entry ${i}: hash chain broken`);
+            if (current.parameters?.prevVersionHash) {
+                // Try raw line hash (most accurate for did:webvh)
+                const computedRaw = crypto.createHash('sha256').update(prevRaw).digest('hex');
+
+                if (current.parameters.prevVersionHash !== computedRaw) {
+                    // Try re-stringified object as fallback (stripping witness proof)
+                    const computedObj = crypto.createHash('sha256').update(JSON.stringify(prevObj)).digest('hex');
+
+                    if (current.parameters.prevVersionHash !== computedObj) {
+                        errors.push(`Version ${current.versionId}: Hash chain broken (prevVersionHash mismatch)`);
+                    }
                 }
-            } else if (i > 0) {
-                warnings.push(`Entry ${i}: missing prevVersionHash`);
             }
         }
 
-        // Check for proofs
-        let hasSignatures = true;
-        for (let i = 0; i < log.length; i++) {
-            if (!log[i].proof || !log[i].proof[0]?.proofValue) {
-                hasSignatures = false;
-                warnings.push(`Entry ${i}: missing signature`);
+        // 2. Check witness file if it exists
+        let witnessStatus = 'none';
+        try {
+            const witnessText = await fs.readFile(witnessPath, 'utf-8');
+            const witnessData = JSON.parse(witnessText);
+            const proofs = witnessData.anchoringProofs || [];
+
+            if (proofs.length > 0) {
+                witnessStatus = 'anchored';
+                for (const p of proofs) {
+                    // Basic self-consistency check for Merkle path
+                    const leaf = Buffer.from(p.leafHash.replace('0x', ''), 'hex');
+                    const root = Buffer.from(p.merkleRoot.replace('0x', ''), 'hex');
+                    const proof = (p.merkleProof || []).map((s: string) => Buffer.from(s.replace('0x', ''), 'hex'));
+
+                    let valid = false;
+                    if (proof.length === 0) {
+                        valid = p.leafHash.toLowerCase() === p.merkleRoot.toLowerCase();
+                    } else {
+                        valid = MerkleTree.verify(proof, leaf, root, (d: any) => Buffer.from(sha256(d)), { sortPairs: true });
+                        if (!valid) valid = MerkleTree.verify([...proof].reverse(), leaf, root, (d: any) => Buffer.from(sha256(d)), { sortPairs: true });
+                    }
+
+                    if (!valid) {
+                        errors.push(`Cryptographic proof in did-witness.json is invalid for batch ${p.batchId}`);
+                    }
+                }
             }
+        } catch (e: any) {
+            if (e.code !== 'ENOENT') warnings.push(`Could not verify witness file: ${e.message}`);
         }
 
-        // Check deactivation status
-        const lastEntry = log[log.length - 1];
-        const isDeactivated = lastEntry.parameters?.deactivated === true;
-
+        const lastEntry = entries[entries.length - 1];
         const valid = errors.length === 0;
 
         return res.json({
@@ -771,22 +813,17 @@ app.get('/api/did/:did/verify', async (req, res) => {
             versionId: lastEntry.versionId,
             checks: {
                 hashChain: errors.length === 0,
-                signatures: hasSignatures,
-                witnesses: log.some(e => e.proof?.some((p: any) => p.type === 'MerkleProof2019'))
+                signatures: entries.every(e => e.proof?.[0]?.proofValue),
+                witnesses: witnessStatus === 'anchored'
             },
-            deactivated: isDeactivated,
-            entries: log.length,
-            details: valid ? 'DID verified successfully' : 'Verification failed',
+            details: valid ? 'Verified successfully' : `Tampering or inconsistency detected: ${errors[0]}`,
             errors,
             warnings
         });
 
     } catch (err: any) {
         console.error('[Identity] Error verifying DID:', err);
-        res.status(500).json({
-            valid: false,
-            error: err.message
-        });
+        res.status(500).json({ valid: false, error: 'Internal verification error', details: err.message });
     }
 });
 
@@ -1189,13 +1226,13 @@ app.get('/api/events', async (req, res) => {
         query += ' ORDER BY created_at DESC';
 
         const result = await pool.query(query, params);
-        
+
         // Ensure timestamp is a number string or number
         const rows = result.rows.map(row => ({
             ...row,
             timestamp: typeof row.timestamp === 'string' ? parseInt(row.timestamp) : row.timestamp
         }));
-        
+
         return res.json(rows);
     } catch (err: any) {
         res.status(500).json({ error: err.message });
@@ -1248,6 +1285,7 @@ app.get('/api/watcher/alerts', async (req, res) => {
         query += ' ORDER BY created_at DESC';
 
         const result = await pool.query(query, params);
+        console.log(`[Identity] GET alerts for ${did || 'all'}: found ${result.rows.length}`);
         return res.json(result.rows);
     } catch (err: any) {
         res.status(500).json({ error: err.message });
@@ -1257,41 +1295,95 @@ app.get('/api/watcher/alerts', async (req, res) => {
 // Create Watcher Alert
 app.post('/api/watcher/alerts', async (req, res) => {
     const { did, event_id, reason, details, reporter } = req.body;
-    
+
     if (!did || !reason) {
         return res.status(400).json({ error: 'Missing required fields: did, reason' });
     }
 
+    // Robust parsing of event_id (ensure it is either an integer or null)
+    let cleanEventId = null;
+    if (event_id !== undefined && event_id !== null) {
+        // Handle cases where event_id might be a string like "event-123" or "123"
+        const idStr = String(event_id);
+        const match = idStr.match(/(\d+)$/);
+        const parsed = parseInt(match ? match[1] : idStr);
+        if (!isNaN(parsed)) {
+            cleanEventId = parsed;
+        }
+    }
+
     try {
+        // 1. Create the alert
         const result = await pool.query(
             `INSERT INTO watcher_alerts (did, event_id, reason, details, reporter, created_at) 
              VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING *`,
-            [did, event_id, reason, details, reporter || 'Watcher Node']
+            [did, cleanEventId, reason, details, reporter || 'Watcher Node']
         );
-        
-        console.log(`🚨 Watcher Alert created for ${did}: ${reason}`);
-        
+
+        // 2. Update the identity status to 'tampered'
+        await pool.query(
+            "UPDATE identities SET status = 'tampered', updated_at = NOW() WHERE did = $1",
+            [did]
+        );
+
+        console.log(`🚨 Watcher Alert created for ${did}: ${reason} (eventId: ${cleanEventId})`);
+        console.log(`⚠️ Identity status set to 'tampered' for ${did}`);
+
         return res.json(result.rows[0]);
     } catch (err: any) {
+        console.error('[Identity] Error creating alert:', err);
         res.status(500).json({ error: err.message });
     }
 });
 
-// Delete Watcher Alerts for a DID (Manual Override Removal)
-app.delete('/api/watcher/alerts', async (req, res) => {
-    const { did } = req.query;
-    if (!did) {
-        return res.status(400).json({ error: 'Missing required field: did' });
-    }
+/**
+ * Delete alerts for a DID (used when manual verification passes)
+ */
+app.delete('/api/watcher/alerts/:did', async (req, res) => {
+    const { did } = req.params;
+    const { event_id } = req.query;
 
     try {
-        const result = await pool.query(
-            'DELETE FROM watcher_alerts WHERE did = $1 OR did LIKE $2',
-            [did, `%${did}%`]
-        );
-        console.log(`🧹 Manual Override: Deleted ${result.rowCount} alerts for ${did}`);
-        return res.json({ success: true, deletedCount: result.rowCount });
+        if (event_id) {
+            // Granular deletion
+            let cleanEventId = null;
+            const idStr = String(event_id);
+            const match = idStr.match(/(\d+)$/);
+            const parsed = parseInt(match ? match[1] : idStr);
+            if (!isNaN(parsed)) {
+                cleanEventId = parsed;
+            }
+
+            if (cleanEventId !== null) {
+                await pool.query('DELETE FROM watcher_alerts WHERE did = $1 AND event_id = $2', [did, cleanEventId]);
+                console.log(`✅ Cleared specific alert for ${did} event ${cleanEventId}`);
+            } else {
+                // Fallback if event_id provided but not parseable - maybe generic string match?
+                // For now, if we can't parse it, we might want to be careful not to delete everything.
+                console.warn(`[Identity] Invalid event_id provided for granular delete: ${event_id}`);
+                return res.status(400).json({ error: 'Invalid event_id format' });
+            }
+        } else {
+            // Delete ALL alerts for this DID
+            await pool.query('DELETE FROM watcher_alerts WHERE did = $1', [did]);
+            console.log(`✅ Cleared ALL alerts for: ${did}`);
+        }
+
+        // Check if any alerts remain for this DID
+        const { rows: remaining } = await pool.query('SELECT count(*) as count FROM watcher_alerts WHERE did = $1', [did]);
+        const count = parseInt(remaining[0].count);
+
+        if (count === 0) {
+            // Restore identity status to active ONLY if no alerts remain
+            await pool.query("UPDATE identities SET status = 'active' WHERE did = $1", [did]);
+            console.log(`✅ Restored status to active for ${did}`);
+        } else {
+            console.log(`ℹ️ Status remains 'tampered' for ${did} -> ${count} alerts remaining`);
+        }
+
+        return res.json({ success: true, message: `Alerts updated for ${did}` });
     } catch (err: any) {
+        console.error('Error deleting alerts:', err);
         res.status(500).json({ error: err.message });
     }
 });

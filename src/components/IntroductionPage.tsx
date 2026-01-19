@@ -8,6 +8,10 @@ import {
   ArrowRight,
   ArrowLeft,
   X,
+  Building2,
+  Factory,
+  Workflow,
+  Scale
 } from 'lucide-react';
 import EcosystemView from './visualizations/EcosystemView';
 
@@ -21,6 +25,7 @@ export default function IntroductionPage({ onContinue }: IntroductionPageProps) 
   const steps = [
     { component: <WelcomeStep /> },
     { component: <PlayersStep /> },
+    { component: <StoryStep /> },
     { component: <TrustStep /> },
     { component: <ValueStep /> }
   ];
@@ -59,7 +64,7 @@ export default function IntroductionPage({ onContinue }: IntroductionPageProps) 
       </div>
 
       {/* Navigation Footer */}
-      <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm sticky bottom-0 transition-colors">
+      <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm sticky bottom-0 transition-colors z-50">
         <div className="max-w-5xl mx-auto grid grid-cols-3 items-center">
           <div className="flex justify-start">
             <button
@@ -137,6 +142,85 @@ function PlayersStep() {
   return (
     <div className="w-full">
       <EcosystemView />
+    </div>
+  );
+}
+
+function StoryStep() {
+  return (
+    <div className="max-w-6xl mx-auto px-4">
+      <div className="text-center mb-12">
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">The Trust Story</h2>
+        <p className="text-xl text-gray-600 dark:text-gray-300">How a smart window moves through the trust network.</p>
+      </div>
+
+      <div className="relative py-8">
+        {/* Horizontal Line for Desktop - Positioned behind the icons */}
+        <div className="hidden md:block absolute top-[64px] left-[10%] right-[10%] h-0.5 bg-gray-200 dark:bg-gray-700 z-0" />
+
+        <div className="grid md:grid-cols-4 gap-8 relative z-10">
+          {/* Step 1: Production */}
+          <div className="flex flex-col items-center">
+            <div className="w-16 h-16 bg-white dark:bg-gray-800 rounded-2xl border-2 border-blue-500 flex items-center justify-center mb-6 shadow-lg group hover:scale-110 transition-transform relative z-10">
+              <Factory className="w-8 h-8 text-blue-500" />
+            </div>
+            <h4 className="font-bold text-gray-900 dark:text-white text-center text-lg mb-1">CrystalGlass</h4>
+            <p className="text-[10px] px-2 py-0.5 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 font-bold mb-3 uppercase tracking-wider rounded-full border border-blue-100 dark:border-blue-800">Material Producer</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 text-center leading-relaxed">
+              Produces the tempered glass and registers the first digital identity.
+            </p>
+          </div>
+
+          {/* Step 2: Assembly */}
+          <div className="flex flex-col items-center">
+            <div className="w-16 h-16 bg-white dark:bg-gray-800 rounded-2xl border-2 border-indigo-500 flex items-center justify-center mb-6 shadow-lg group hover:scale-110 transition-transform relative z-10">
+              <Workflow className="w-8 h-8 text-indigo-500" />
+            </div>
+            <h4 className="font-bold text-gray-900 dark:text-white text-center text-lg mb-1">EcoFrame</h4>
+            <p className="text-[10px] px-2 py-0.5 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 font-bold mb-3 uppercase tracking-wider rounded-full border border-indigo-100 dark:border-indigo-800">Manufacturer</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 text-center leading-relaxed">
+              Builds the final window and links all components together.
+            </p>
+          </div>
+
+          {/* Step 3: Witnessing */}
+          <div className="flex flex-col items-center">
+            <div className="w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center mb-6 shadow-lg group hover:scale-110 transition-transform shadow-emerald-200 dark:shadow-none relative z-10">
+              <Shield className="w-8 h-8 text-white" />
+            </div>
+            <h4 className="font-bold text-gray-900 dark:text-white text-center text-lg mb-1">DLT Foundation</h4>
+            <p className="text-[10px] px-2 py-0.5 bg-emerald-50 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 font-bold mb-3 uppercase tracking-wider rounded-full border border-emerald-100 dark:border-emerald-800">Legal Witness</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 text-center leading-relaxed">
+              The <strong>Witness</strong>. Anchors data to blockchain for legal proof.
+            </p>
+          </div>
+
+          {/* Step 4: Monitoring */}
+          <div className="flex flex-col items-center">
+            <div className="w-16 h-16 bg-amber-500 rounded-2xl flex items-center justify-center mb-6 shadow-lg group hover:scale-110 transition-transform shadow-amber-200 dark:shadow-none relative z-10">
+              <Eye className="w-8 h-8 text-white" />
+            </div>
+            <h4 className="font-bold text-gray-900 dark:text-white text-center text-lg mb-1">TrustGuard</h4>
+            <p className="text-[10px] px-2 py-0.5 bg-amber-50 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 font-bold mb-3 uppercase tracking-wider rounded-full border border-amber-100 dark:border-amber-800">Security Watcher</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 text-center leading-relaxed">
+              The <strong>Watcher</strong>. Alerts everyone if the data is touched.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-12 bg-gray-100 dark:bg-gray-800/50 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 flex flex-col md:flex-row items-center gap-6">
+        <div className="p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+          <Scale className="w-8 h-8 text-slate-500 mx-auto" />
+        </div>
+        <div>
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Independence is Key</h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            The Witness (Foundation) and Watcher (Auditor) are <strong>independent legal entities</strong>.
+            They don't produce the goods, but they provide the "Proof of Trust" that ensures manufacturers like EcoFrame aren't marking their own homework.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

@@ -16,6 +16,7 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      // Proxy DID well-known files to identity service
       '/.well-known': {
         target: 'http://localhost:3000',
         changeOrigin: true,

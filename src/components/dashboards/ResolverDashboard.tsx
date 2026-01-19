@@ -13,15 +13,19 @@ import {
   Loader2,
   Info,
   Network,
-  Zap
+  Zap,
+  Moon,
+  Sun
 } from 'lucide-react';
 import { ResolverApi } from '../../lib/utils/resolverApi';
 import { DIDResolutionResult, LogEntry, DIDVerificationResult } from '../../types/didwebvh';
 import WitnessFileView from '../WitnessFileView';
+import { useTheme } from '../../lib/utils/ThemeContext';
 
 type TabType = 'document' | 'log' | 'verification' | 'witness';
 
 export default function ResolverDashboard() {
+  const { theme, toggleTheme } = useTheme();
   const [did, setDid] = useState('');
   const [activeTab, setActiveTab] = useState<TabType>('document');
   const [loading, setLoading] = useState(false);
@@ -38,11 +42,13 @@ export default function ResolverDashboard() {
   };
 
   // Default DIDs for quick access (demo ones)
+  const currentDomain = typeof window !== 'undefined' ? (window.location.port ? `${window.location.hostname}:${window.location.port}` : window.location.hostname) : 'localhost:3000';
+  
   const quickDIDs = [
-    { name: 'Premium Triple Window', did: 'did:webvh:localhost:3000:z-demo-window-001' },
-    { name: 'Standard Double Window', did: 'did:webvh:localhost:3000:z-demo-window-002' },
-    { name: 'Tempered Glass Unit', did: 'did:webvh:localhost:3000:z-demo-glass-001' },
-    { name: 'Aluminum Frame', did: 'did:webvh:localhost:3000:z-demo-frame-001' }
+    { name: 'Premium Triple Window', did: `did:webvh:${currentDomain}:z-demo-window-001` },
+    { name: 'Standard Double Window', did: `did:webvh:${currentDomain}:z-demo-window-002` },
+    { name: 'Tempered Glass Unit', did: `did:webvh:${currentDomain}:z-demo-glass-001` },
+    { name: 'Aluminum Frame', did: `did:webvh:${currentDomain}:z-demo-frame-001` }
   ];
 
   const handleResolve = async (targetDid?: string) => {
@@ -83,7 +89,7 @@ export default function ResolverDashboard() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6 pt-20 transition-colors">
       <div className="max-w-[1920px] mx-auto">
         {/* Header & Search */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 mb-6 transition-colors">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 mb-6 transition-colors relative">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
@@ -95,14 +101,14 @@ export default function ResolverDashboard() {
               </div>
             </div>
             
-            <div className="flex-1 max-w-6xl">
-              <div className="relative group">
+            <div className="flex-1 max-w-6xl flex items-stretch gap-3">
+              <div className="relative group flex-1">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                   <Search className="h-5 w-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
                 </div>
                 <input
                   type="text"
-                  className="block w-full pl-12 pr-32 py-4 border-2 border-slate-200 dark:border-slate-700 rounded-xl leading-5 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-lg shadow-sm"
+                  className="block w-full h-full pl-12 pr-32 py-4 border-2 border-slate-200 dark:border-slate-700 rounded-xl leading-5 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-lg shadow-sm"
                   placeholder="did:webvh:..."
                   value={did}
                   onChange={(e) => setDid(e.target.value)}
@@ -112,28 +118,41 @@ export default function ResolverDashboard() {
                   <button
                     onClick={() => handleResolve()}
                     disabled={loading}
-                    className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition-colors flex items-center gap-2 shadow-sm"
+                    className="px-6 py-2 h-full bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition-colors flex items-center gap-2 shadow-sm"
                   >
                     {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Resolve'}
                   </button>
                 </div>
               </div>
 
-              {/* Quick Access */}
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Examples:</span>
-                {quickDIDs.map((item) => (
-                  <button
-                    key={item.did}
-                    onClick={() => handleResolve(item.did)}
-                    className="text-xs px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-md border border-slate-200 dark:border-slate-700 transition-colors truncate max-w-[150px]"
-                    title={item.did}
-                  >
-                    {item.name}
-                  </button>
-                ))}
-              </div>
+              {/* Theme Toggle Button matched to search bar height */}
+              <button
+                onClick={toggleTheme}
+                className="flex-shrink-0 w-16 flex items-center justify-center bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 border-2 border-slate-200 dark:border-slate-700 rounded-xl shadow-sm transition-all text-slate-600 dark:text-slate-300"
+                title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+              >
+                {theme === 'light' ? (
+                  <Moon className="w-6 h-6" />
+                ) : (
+                  <Sun className="w-6 h-6 text-yellow-500" />
+                )}
+              </button>
             </div>
+          </div>
+
+          {/* Quick Access */}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Examples:</span>
+            {quickDIDs.map((item) => (
+              <button
+                key={item.did}
+                onClick={() => handleResolve(item.did)}
+                className="text-xs px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-md border border-slate-200 dark:border-slate-700 transition-colors truncate max-w-[150px]"
+                title={item.did}
+              >
+                {item.name}
+              </button>
+            ))}
           </div>
         </div>
 

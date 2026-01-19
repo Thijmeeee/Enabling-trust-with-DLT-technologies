@@ -2,7 +2,7 @@
  * Adapter layer to make enhanced datastore compatible with existing components
  */
 
-import { hybridDataStore as dataStore } from '../data/hybridDataStore';
+import dataStore from '../data/hybridDataStore';
 import { localDB } from '../data/localData';
 import { enhancedDB } from '../data/enhancedDataStore';
 import { exportHierarchyToJSON } from '../operations/bulkOperations';
@@ -17,24 +17,30 @@ export async function getDPPWithRelations(did: string) {
 
   console.log('Found DPP:', dpp);
 
-  // Get data using available methods
+  // Get data using available methods, with fallbacks for unavailable ones
   const didDocument = await dataStore.getDIDDocumentByDID(did);
   const attestations = await dataStore.getAttestationsByDID(did);
   const anchoringEvents = await dataStore.getAnchoringEventsByDID(did);
   
-  // Get credentials and specifications (check both stores)
-  let credentials = await localDB.getCredentialsByDPP(dpp.id);
-  if (credentials.length === 0) {
-    credentials = await enhancedDB.getCredentialsByDPPId(dpp.id);
-  }
-  
-  let specifications = await localDB.getSpecificationsByDPP(dpp.id);
-  if (specifications.length === 0) {
-    specifications = await enhancedDB.getSpecificationsByDPPId(dpp.id);
+  // These methods are on localDB, not hybridDataStore
+  const credentials = await localDB.getCredentialsByDPP(dpp.id);
+  const specifications = await localDB.getSpecificationsByDPP(dpp.id);
+  const alerts = await dataStore.getAlertsByDID(did);
+
+  // Overwrite lifecycle_status if there are any unresolved alerts for this DID
+  if (alerts && alerts.some(a => !a.resolved)) {
+    console.log('[Adapter] Detected unresolved alerts, marking DPP as tampered');
+    dpp.lifecycle_status = 'tampered';
+  } else if (dpp.lifecycle_status === 'tampered' && (!alerts || !alerts.some(a => !a.resolved))) {
+    // If it was tampered but alerts are gone/resolved, restore it
+    dpp.lifecycle_status = 'active';
   }
 
-  // Get relationships using hybridDataStore which checks both stores
-  const relationships = await dataStore.getRelationshipsByParent(did);
+  // Get relationships from both data stores (localDB for mock data, enhancedDB for runtime data)
+  let relationships = await localDB.getRelationshipsByParent(did);
+  if (relationships.length === 0) {
+    relationships = await enhancedDB.getRelationshipsByParent(did);
+  }
 
   console.log('Specifications found:', specifications);
   console.log('Relationships found:', relationships);
@@ -42,7 +48,10 @@ export async function getDPPWithRelations(did: string) {
   // Get parent if this is a component
   let parent = null;
   if (dpp.type === 'component') {
-    const parentRelations = await dataStore.getRelationshipsByChild(did);
+    let parentRelations = await localDB.getRelationshipsByChild(did);
+    if (parentRelations.length === 0) {
+      parentRelations = await enhancedDB.getRelationshipsByChild(did);
+    }
     if (parentRelations.length > 0) {
       const parentDpp = await dataStore.getDPPByDID(parentRelations[0].parent_did);
       if (parentDpp) {
@@ -94,15 +103,11 @@ export async function getAggregatedMetrics(dppId: string) {
 
   const attestations = await dataStore.getAttestationsByDID(dpp.did);
   const anchoringEvents = await dataStore.getAnchoringEventsByDID(dpp.did);
-  
-  // Get credentials from both stores
-  let credentials = await localDB.getCredentialsByDPP(dppId);
-  if (credentials.length === 0) {
-    credentials = await enhancedDB.getCredentialsByDPPId(dppId);
+  const credentials = await localDB.getCredentialsByDPP(dppId);
+  let relationships = await localDB.getRelationshipsByParent(dpp.did);
+  if (relationships.length === 0) {
+    relationships = await enhancedDB.getRelationshipsByParent(dpp.did);
   }
-  
-  // Get relationships using hybridDataStore
-  const relationships = await dataStore.getRelationshipsByParent(dpp.did);
 
   return {
     componentCount: relationships.length,

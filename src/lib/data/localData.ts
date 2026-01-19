@@ -91,6 +91,10 @@ export type WatcherAlert = {
   resolved: boolean;
   detected_at: string;
   created_at: string;
+  // Backend compatibility fields
+  reason?: string;
+  event_id?: number | null;
+  reporter?: string;
 };
 
 export type WitnessAttestation = {
@@ -161,7 +165,7 @@ class LocalDataStore {
   private saveTimer: any = null;
   private saveToStorage() {
     if (this.saveTimer) return;
-    
+
     // Debounce saves to prevent performance death during bulk inserts
     this.saveTimer = setTimeout(() => {
       try {
@@ -207,15 +211,15 @@ class LocalDataStore {
   async updateDPP(id: string, updates: Partial<DPP>): Promise<DPP | null> {
     const dpp = this.dpps.get(id);
     if (!dpp) return null;
-    
+
     // Deep merge metadata if it's being updated
-    const updated = { 
-      ...dpp, 
-      ...updates, 
+    const updated = {
+      ...dpp,
+      ...updates,
       metadata: updates.metadata ? { ...dpp.metadata, ...updates.metadata } : dpp.metadata,
-      updated_at: new Date().toISOString() 
+      updated_at: new Date().toISOString()
     };
-    
+
     this.dpps.set(id, updated);
     this.saveToStorage();
     return updated;
@@ -306,7 +310,7 @@ class LocalDataStore {
   }
 
   async getAlerts(): Promise<WatcherAlert[]> {
-    return Array.from(this.alerts.values()).sort((a, b) => 
+    return Array.from(this.alerts.values()).sort((a, b) =>
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
   }

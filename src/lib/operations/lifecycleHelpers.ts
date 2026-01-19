@@ -1,4 +1,4 @@
-import { hybridDataStore } from '../data/hybridDataStore';
+import hybridDataStore from '../data/hybridDataStore';
 
 
 /**

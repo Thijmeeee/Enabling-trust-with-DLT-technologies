@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Package, Grid, List as ListIcon } from 'lucide-react';
-import { hybridDataStore as enhancedDB } from '../../lib/data/hybridDataStore';
+import enhancedDB from '../../lib/data/hybridDataStore';
 import { FilterPanel, FilterState } from '../modals/FilterPanel';
 import { DPPCard } from '../dpp/DPPCard';
 import type { DPP } from '../../lib/data/localData';

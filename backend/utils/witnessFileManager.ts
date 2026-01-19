@@ -1,6 +1,10 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { createServiceLogger } from './logger.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const log = createServiceLogger('witness-file-manager');
 
@@ -23,7 +27,9 @@ export interface AnchoringProof {
 
 export type WitnessFile = AnchoringProof[];
 
-const STORAGE_ROOT = process.env.STORAGE_ROOT || './did-logs';
+const STORAGE_ROOT = process.env.STORAGE_ROOT && process.env.STORAGE_ROOT !== './did-logs'
+  ? process.env.STORAGE_ROOT
+  : path.resolve(__dirname, '../did-logs');
 
 export class WitnessFileManager {
   private static locks = new Map<string, Promise<void>>();
@@ -32,7 +38,7 @@ export class WitnessFileManager {
    * Resolves the absolute path to the did-witness.json file for a given SCID.
    */
   public static getFilePath(scid: string): string {
-    return path.join(process.cwd(), STORAGE_ROOT, scid, 'did-witness.json');
+    return path.join(STORAGE_ROOT, scid, 'did-witness.json');
   }
 
   /**
@@ -77,7 +83,7 @@ export class WitnessFileManager {
   /**
    * Adds multiple proofs to a witness file atomically.
    */
-  public static async addProofs(scid: string, proofs: AnchoringProof[]): Promise<void> {
+  public static async addProofs(scid: string, proofs: AnchoringProof[], overwrite: boolean = false): Promise<void> {
     const lock = this.locks.get(scid) || Promise.resolve();
     
     const operation = lock.then(async () => {
@@ -88,15 +94,21 @@ export class WitnessFileManager {
         // 1. Ensure initialized
         await this.initialize(scid);
 
-        // 2. Read existing data
-        const existingData = await this.read(scid);
+        let updatedData: AnchoringProof[];
 
-        // 3. Merge data (avoid duplicates based on versionId)
-        const versionMap = new Map<string, AnchoringProof>();
-        existingData.forEach(p => versionMap.set(p.versionId, p));
-        proofs.forEach(p => versionMap.set(p.versionId, p));
+        if (overwrite) {
+          updatedData = proofs;
+        } else {
+          // 2. Read existing data
+          const existingData = await this.read(scid);
 
-        const updatedData = Array.from(versionMap.values());
+          // 3. Merge data (avoid duplicates based on versionId)
+          const versionMap = new Map<string, AnchoringProof>();
+          existingData.forEach(p => versionMap.set(p.versionId, p));
+          proofs.forEach(p => versionMap.set(p.versionId, p));
+
+          updatedData = Array.from(versionMap.values());
+        }
 
         // 4. Atomic write: Write to temp file then rename
         await fs.writeFile(tempPath, JSON.stringify(updatedData, null, 2));
@@ -131,7 +143,7 @@ export class WitnessFileManager {
    * Internal helper to sync witness proofs back into the did.jsonl file
    */
   private static async syncToLogFile(scid: string, proofs: AnchoringProof[]): Promise<void> {
-    const logPath = path.join(process.cwd(), STORAGE_ROOT, scid, 'did.jsonl');
+    const logPath = path.join(STORAGE_ROOT, scid, 'did.jsonl');
     
     try {
       await fs.access(logPath);
@@ -142,6 +154,7 @@ export class WitnessFileManager {
       let modified = false;
       for (const entry of entries) {
         const proof = proofs.find(p => p.versionId === entry.versionId);
+        
         if (proof) {
           if (!entry.proof) entry.proof = [];
           
@@ -164,6 +177,16 @@ export class WitnessFileManager {
             entry.proof.push(witnessEntry);
           }
           modified = true;
+        } else {
+          // REMOVE stale witness proofs if not found in the current proof set
+          if (entry.proof) {
+            const witnessIdx = entry.proof.findIndex((p: any) => p.proofPurpose === 'witness');
+            if (witnessIdx !== -1) {
+              entry.proof.splice(witnessIdx, 1);
+              modified = true;
+              log.debug(`Removed stale witness proof from ${scid} version ${entry.versionId}`);
+            }
+          }
         }
       }
 

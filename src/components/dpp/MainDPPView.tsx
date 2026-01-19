@@ -384,7 +384,78 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
   useEffect(() => {
     console.log('MainDPPView mounted with DID:', did);
     loadData();
+    
+    // Add interval to sync status with background audits/alerts
+    const statusInterval = setInterval(() => {
+      refreshStatus();
+    }, 5000);
+    
+    return () => clearInterval(statusInterval);
   }, [did]);
+
+  async function refreshStatus() {
+    if (!did) return;
+    try {
+      const { default: hybridDataStore } = await import('../../lib/data/hybridDataStore');
+      const alerts = await hybridDataStore.getAllAlerts();
+      const dppAlerts = alerts.filter(a => 
+        a.did.toLowerCase().includes(did.toLowerCase()) || 
+        did.toLowerCase().includes(a.did.toLowerCase())
+      );
+      
+      // Load manual overrides from localStorage
+      let manualOverrides: Record<string, boolean> = {};
+      try {
+        const saved = localStorage.getItem('dpp_manual_audit_results');
+        if (saved) manualOverrides = JSON.parse(saved);
+      } catch (e) { /* ignore */ }
+
+      // Logic to suppress alerts if manually verified as OK
+      const activeAlerts = dppAlerts.filter(alert => {
+        if (!alert.event_id) {
+          // If global alert, check if there's any manual PASS for this SCID
+          const scid = did.split(':').pop()?.toLowerCase() || '';
+          const hasAnyManualPass = Object.keys(manualOverrides).some(k => 
+            k.toLowerCase().includes(scid) && manualOverrides[k] === true
+          );
+          if (hasAnyManualPass) return false;
+          return true;
+        }
+        
+        // If event-specific alert, check for specific manual result
+        const scid = did.split(':').pop()?.toLowerCase() || '';
+        if (manualOverrides[`${scid}-event-${alert.event_id}`] === true) return false;
+        return !alert.resolved;
+      });
+
+      // Also check if there are manual FAILURES even without DB alerts
+      const scid = did.split(':').pop()?.toLowerCase() || '';
+      const hasManualFailures = Object.keys(manualOverrides).some(k => 
+        k.toLowerCase().includes(scid) && manualOverrides[k] === false
+      );
+      
+      const isTampered = activeAlerts.length > 0 || hasManualFailures;
+      
+      setData(prev => {
+        if (!prev || !prev.dpp) return prev;
+        const currentStatus = prev.dpp.lifecycle_status;
+        const newStatus = isTampered ? 'tampered' : 'active';
+        
+        if (currentStatus !== newStatus) {
+          return {
+            ...prev,
+            dpp: {
+              ...prev.dpp,
+              lifecycle_status: newStatus
+            }
+          };
+        }
+        return prev;
+      });
+    } catch (err) {
+      // Quiet fail for background refresh
+    }
+  }
 
   async function loadData() {
     console.log('MainDPPView loading data for:', did);
@@ -402,7 +473,7 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
 
       // Build combined recent events (creation, anchorings, attestations, verification)
       try {
-        const { hybridDataStore } = await import('../../lib/data/hybridDataStore');
+        const { default: hybridDataStore } = await import('../../lib/data/hybridDataStore');
         const allEvents: any[] = [];
         // Creation
         if (dppData?.dpp) {
@@ -483,7 +554,7 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
 
   async function loadPendingApprovals(didValue: string) {
     try {
-      const { hybridDataStore } = await import('../../lib/data/hybridDataStore');
+      const { default: hybridDataStore } = await import('../../lib/data/hybridDataStore');
       const attestations = await hybridDataStore.getAttestationsByDID(didValue);
 
       console.log('MainDPPView: All attestations for DID:', attestations);
@@ -589,7 +660,15 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                     }`}>
                     {dpp.type === 'main' ? 'Main Product' : 'Component'}
                   </span>
-                  <span className="text-sm text-gray-700 dark:text-gray-300 font-medium capitalize px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-full transition-colors">{dpp.lifecycle_status}</span>
+                  <span className={`text-sm font-medium capitalize px-3 py-1 rounded-full border transition-colors ${
+                    dpp.lifecycle_status === 'active' 
+                      ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300' 
+                      : dpp.lifecycle_status === 'tampered'
+                        ? 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300'
+                        : 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-700 dark:text-gray-300'
+                  }`}>
+                    {dpp.lifecycle_status}
+                  </span>
                   {viewMode === 'technical' && (
                     <span className="text-sm text-gray-700 dark:text-gray-300 font-medium px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-full transition-colors">Version {dpp.version}</span>
                   )}
@@ -857,6 +936,17 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
 
                   {/* Product Details - Enhanced */}
                   <div className="flex-1 p-8">
+                    {dpp.lifecycle_status === 'tampered' && (
+                      <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-xl p-4 flex items-center gap-4">
+                        <div className="p-2 bg-red-100 dark:bg-red-800 rounded-lg">
+                          <AlertCircle className="w-6 h-6 text-red-600 dark:text-red-300" />
+                        </div>
+                        <div>
+                          <h3 className="text-red-800 dark:text-red-300 font-bold uppercase tracking-tight">Product Integrity Compromised</h3>
+                          <p className="text-red-600 dark:text-red-400 text-sm">The background trustless auditor has detected cryptographic mismatches in this product's lifecycle logs.</p>
+                        </div>
+                      </div>
+                    )}
                     <div className="flex items-start justify-between mb-4">
                       <div>
                         <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">{dpp.model}</h2>
@@ -864,7 +954,15 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                           <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-sm font-semibold rounded-full">
                             {dpp.type}
                           </span>
-                          <span className="px-3 py-1 bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 text-sm font-semibold rounded-full capitalize">
+                          <span className={`px-3 py-1 text-sm font-semibold rounded-full border capitalize flex items-center gap-1.5 ${
+                            dpp.lifecycle_status === 'active'
+                              ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/50 dark:text-green-300'
+                              : dpp.lifecycle_status === 'tampered'
+                                ? 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/50 dark:text-red-300'
+                                : 'bg-gray-100 text-gray-700 border-gray-200'
+                          }`}>
+                            {dpp.lifecycle_status === 'tampered' && <AlertCircle className="w-4 h-4" />}
+                            {dpp.lifecycle_status === 'active' && <CheckCircle className="w-4 h-4" />}
                             {dpp.lifecycle_status}
                           </span>
                         </div>

@@ -213,10 +213,18 @@ export function DPPCard({ dpp, onClick, viewMode }: DPPCardProps) {
         <div className="flex items-center gap-2">
           {dpp.lifecycle_status === 'active' ? (
             <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
+          ) : dpp.lifecycle_status === 'tampered' ? (
+            <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
           ) : (
             <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
           )}
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">
+          <span className={`text-sm font-medium capitalize ${
+            dpp.lifecycle_status === 'active' 
+              ? 'text-gray-700 dark:text-gray-300' 
+              : dpp.lifecycle_status === 'tampered'
+                ? 'text-red-700 dark:text-red-400'
+                : 'text-yellow-700 dark:text-yellow-400'
+          }`}>
             {dpp.lifecycle_status}
           </span>
         </div>

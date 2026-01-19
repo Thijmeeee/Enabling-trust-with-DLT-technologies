@@ -65,28 +65,33 @@ async function processBatch() {
             return;
         }
 
-        // B. Check threshold
+        // B. Check threshold and timeout
         const threshold = parseInt(process.env.BATCH_THRESHOLD || '1');
-        const maxWaitMs = parseInt(process.env.BATCH_MAX_WAIT_MS || '60000'); // Default 1 minute
+        const maxWaitMs = parseInt(process.env.BATCH_MAX_WAIT_MS || '30000'); // Default 30 seconds
 
         // Find oldest unanchored event to check wait time
         const { rows: oldest } = await pool.query('SELECT MIN(timestamp) as oldest_ts FROM events WHERE witness_proofs IS NULL');
-        const oldestTs = oldest[0]?.oldest_ts ? Number(oldest[0].oldest_ts) : Date.now();
+        
+        // Handle PG BIGINT coming back as string
+        const oldestTsStr = oldest[0]?.oldest_ts;
+        const oldestTs = oldestTsStr ? Number(oldestTsStr) : Date.now();
         const waitTime = Date.now() - oldestTs;
 
         if (events.length < threshold && waitTime < maxWaitMs) {
-            log.info('Threshold not met, skipping batch', {
+            log.info('Threshold not met and timeout not reached, skipping batch', {
                 currentCount: events.length,
                 threshold,
-                waitTimeMs: waitTime,
-                maxWaitMs
+                waitTimeSec: Math.floor(waitTime / 1000),
+                maxWaitSec: Math.floor(maxWaitMs / 1000),
+                remainingSec: Math.max(0, Math.floor((maxWaitMs - waitTime) / 1000))
             });
             return;
         }
 
-        log.info('Batch threshold met or timeout reached, processing...', {
+        log.info('Batch triggered!', {
             eventCount: events.length,
-            reason: events.length >= threshold ? 'threshold' : 'timeout'
+            reason: events.length >= threshold ? 'threshold' : 'timeout',
+            waitTimeSec: Math.floor(waitTime / 1000)
         });
 
         // B. Build Merkle Tree
