@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AlertTriangle, CheckCircle, Info, X, ChevronDown, ChevronUp, Package, Shield } from 'lucide-react';
-import { localDB } from '../../lib/data/localData';
-import { enhancedDB } from '../../lib/data/enhancedDataStore';
+import { hybridDataStore } from '../../lib/data/hybridDataStore';
+
 import type { WatcherAlert } from '../../lib/data/localData';
 
 interface GroupedAlerts {
@@ -26,7 +26,7 @@ export default function WatcherMonitor({ onClose }: { onClose: () => void }) {
   async function loadAlerts() {
     setLoading(true);
 
-    let alerts = await localDB.getAlerts();
+    let alerts = await hybridDataStore.getAllAlerts();
 
     if (filter === 'unresolved') {
       alerts = alerts.filter(a => !a.resolved);
@@ -47,16 +47,16 @@ export default function WatcherMonitor({ onClose }: { onClose: () => void }) {
       }
       
       // Determine if this is a component alert by checking the alert details or DPP data
-      const isComponent = alert.details?.isComponent || false;
-      const parentDppId = alert.details?.parentDppId || alert.dpp_id;
-      const componentName = alert.details?.componentName || 'Unknown Component';
+      const isComponent = Boolean(alert.details?.isComponent) || false;
+      const parentDppId = (alert.details?.parentDppId as string) || (alert.dpp_id as string);
+      const componentName = (alert.details?.componentName as string) || 'Unknown Component';
       
       // Use parent DPP ID as group key
-      const groupKey = parentDppId;
+      const groupKey = parentDppId || 'system';
       
       // Create group if it doesn't exist
       if (!groups.has(groupKey)) {
-        const groupName = alert.details?.groupModel || alert.details?.productModel || 'Unknown Product';
+        const groupName = (alert.details?.groupModel as string) || (alert.details?.productModel as string) || 'Unknown Product';
         groups.set(groupKey, {
           dppId: groupKey,
           dppName: groupName,
@@ -85,7 +85,7 @@ export default function WatcherMonitor({ onClose }: { onClose: () => void }) {
   };
 
   async function resolveAlert(alertId: string) {
-    await localDB.updateAlert(alertId, { resolved: true });
+    await hybridDataStore.updateAlert(alertId, { resolved: true });
     loadAlerts();
   }
 
@@ -324,3 +324,4 @@ export default function WatcherMonitor({ onClose }: { onClose: () => void }) {
     </div>
   );
 }
+

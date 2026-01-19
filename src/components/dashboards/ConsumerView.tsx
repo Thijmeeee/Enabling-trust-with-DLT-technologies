@@ -13,7 +13,7 @@ import {
   Package,
   Download
 } from 'lucide-react';
-import { enhancedDB } from '../../lib/data/enhancedDataStore';
+import enhancedDB from '../../lib/data/hybridDataStore';
 import type { DPP } from '../../lib/data/localData';
 
 interface ConsumerViewProps {
@@ -82,7 +82,7 @@ export default function ConsumerView({ did, onNavigate }: ConsumerViewProps) {
   }
 
   return (
-    <div className="min-h-screen bg-blue-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-blue-50 dark:bg-gray-900 pt-16 transition-colors">
       {/* Hero Section - Mobile First */}
       <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 text-white">
         <div className="max-w-lg mx-auto px-6 py-8">

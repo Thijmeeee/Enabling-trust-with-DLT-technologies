@@ -8,6 +8,7 @@ export default function DPPListItem({ dpp, onSelect }: { dpp: DPP; onSelect: () 
   
   const getStatusColor = () => {
     if (isActive) return 'bg-green-100 text-green-700 border-green-300';
+    if (dpp.lifecycle_status === 'tampered' || dpp.lifecycle_status === 'rejected') return 'bg-red-100 text-red-700 border-red-300';
     if (dpp.lifecycle_status === 'replaced') return 'bg-orange-100 text-orange-700 border-orange-300';
     if (dpp.lifecycle_status === 'disposed' || dpp.lifecycle_status === 'end_of_life') return 'bg-red-100 text-red-700 border-red-300';
     return 'bg-gray-100 text-gray-700 border-gray-300';
@@ -43,7 +44,7 @@ export default function DPPListItem({ dpp, onSelect }: { dpp: DPP; onSelect: () 
                 </span>
                 <span className={`px-3 py-1 text-xs font-semibold rounded-full border ${getStatusColor()}`}>
                   {isActive && '🟢 '}
-                  {dpp.lifecycle_status.toUpperCase()}
+                  {(dpp.lifecycle_status || 'active').toUpperCase()}
                 </span>
                 {hasAttestation && (
                   <span className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 text-xs font-semibold rounded-full border border-blue-300">
@@ -65,9 +66,9 @@ export default function DPPListItem({ dpp, onSelect }: { dpp: DPP; onSelect: () 
               <div className="flex items-center gap-4 text-xs text-gray-600">
                 <span className="font-medium">Version {dpp.version}</span>
                 <span>{new Date(dpp.created_at).toLocaleDateString()}</span>
-                {dpp.metadata?.batch && (
+                {Boolean(dpp.metadata?.batch) && (
                   <span className="px-2 py-1 bg-purple-50 text-purple-700 rounded font-medium">
-                    Batch: {dpp.metadata.batch}
+                    Batch: {String(dpp.metadata.batch)}
                   </span>
                 )}
               </div>

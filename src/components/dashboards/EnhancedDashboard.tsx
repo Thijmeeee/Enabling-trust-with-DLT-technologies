@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Package, RefreshCw, Grid, List as ListIcon } from 'lucide-react';
-import { enhancedDB } from '../../lib/data/enhancedDataStore';
+import { Package, Grid, List as ListIcon } from 'lucide-react';
+import enhancedDB from '../../lib/data/hybridDataStore';
 import { FilterPanel, FilterState } from '../modals/FilterPanel';
 import { DPPCard } from '../dpp/DPPCard';
-import { generateMixedTestData } from '../../lib/operations/bulkOperations';
 import type { DPP } from '../../lib/data/localData';
 
 type ViewMode = 'grid' | 'list';
@@ -74,27 +73,6 @@ export default function EnhancedDashboard({
     setLoading(false);
   }, [currentPage]);
 
-  const handleGenerateTestData = async () => {
-    if (!confirm('This will generate 90 test products. Continue?')) return;
-
-    setLoading(true);
-    try {
-      await generateMixedTestData();
-      await loadData();
-      alert('Test data generated successfully!');
-    } catch (error) {
-      alert('Error generating data: ' + error);
-    }
-    setLoading(false);
-  };
-
-  const handleClearAll = async () => {
-    if (!confirm('DELETE ALL data? This cannot be undone!')) return;
-
-    await enhancedDB.clearAll();
-    await loadData();
-  };
-
   const totalPages = Math.ceil(totalResults / itemsPerPage);
 
   return (
@@ -128,14 +106,6 @@ export default function EnhancedDashboard({
                   Create DPP
                 </button>
               )}
-
-              <button
-                onClick={handleGenerateTestData}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center gap-2"
-              >
-                <RefreshCw className="w-4 h-4" />
-                Test Data
-              </button>
             </div>
           </div>
 
@@ -210,12 +180,6 @@ export default function EnhancedDashboard({
           <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors">
             <Package className="w-16 h-16 mx-auto text-gray-400 dark:text-gray-600 mb-4" />
             <p className="text-gray-600 dark:text-gray-400 mb-4">No DPPs found</p>
-            <button
-              onClick={handleGenerateTestData}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-            >
-              Generate test data
-            </button>
           </div>
         ) : (
           <div className={viewMode === 'grid'
@@ -232,16 +196,6 @@ export default function EnhancedDashboard({
             ))}
           </div>
         )}
-      </div>
-
-      {/* Debug Actions */}
-      <div className="max-w-7xl mx-auto px-4 pb-6">
-        <button
-          onClick={handleClearAll}
-          className="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 underline"
-        >
-          Clear all data (debug)
-        </button>
       </div>
     </div>
   );

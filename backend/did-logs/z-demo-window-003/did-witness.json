@@ -1,0 +1,26 @@
+[
+  {
+    "txHash": "0x71bafca0d164dcd0d013a7f0573c15b7f52d150facfcc6848613531c9b9421c1",
+    "batchId": 37,
+    "leafHash": "0x3333333333333333333333333333333333333333333333333333333333333333",
+    "leafIndex": 8,
+    "timestamp": "2026-01-18T10:13:38.092Z",
+    "versionId": "1",
+    "merkleRoot": "0x4c047f059300771168b00ecfe372bc498e34868ac3a639136875c51d34cfdf0d",
+    "blockNumber": 10069952,
+    "merkleProof": [
+      "0x4f57ea3dc57b2f71362b8a56307d3daa9f708b60f22c1aa6e9e0ebccb58b910e"
+    ]
+  },
+  {
+    "txHash": "0xeb6174f7875c4be6dff7831ca95538816867d225401636074d382f5ab5270bd9",
+    "batchId": 38,
+    "leafHash": "0x2dec29bd4472eb00d4026f583e0f93083b376b07a8688d6e150a46a395065841",
+    "leafIndex": 0,
+    "timestamp": "2026-01-18T13:44:16.207Z",
+    "versionId": "3",
+    "merkleRoot": "0x2dec29bd4472eb00d4026f583e0f93083b376b07a8688d6e150a46a395065841",
+    "blockNumber": 10071004,
+    "merkleProof": []
+  }
+]

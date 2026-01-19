@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { X, Plus, CheckCircle, ArrowRight, ArrowLeft, Package } from 'lucide-react';
-import { enhancedDB } from '../../lib/data/enhancedDataStore';
+import { hybridDataStore } from '../../lib/data/hybridDataStore';
 import { generateWitnessAttestations } from '../../lib/operations/lifecycleHelpers';
+import { useRole, roleDIDs } from '../../lib/utils/roleContext';
 
 interface WindowData {
   model: string;
@@ -22,6 +23,7 @@ export default function CreateDPPForm({ onClose, onComplete }: {
   onClose: () => void;
   onComplete: () => void;
 }) {
+  const { currentRoleDID } = useRole();
   const [step, setStep] = useState<'window' | 'glass' | 'frame' | 'review' | 'creating'>('window');
   const [windowData, setWindowData] = useState<WindowData>({
     model: '',
@@ -56,16 +58,17 @@ export default function CreateDPPForm({ onClose, onComplete }: {
       const frameDid = `did:webvh:example.com:products:frame-${uniqueId}`;
 
       // Create glass component
-      const glassResult = await enhancedDB.insertDPP({
+      const glassResult = await hybridDataStore.insertDPP({
         did: glassDid,
         type: 'component',
         model: glassData.model,
         parent_did: windowDid,
         lifecycle_status: 'active',
-        owner: 'did:webvh:example.com:organizations:glass-supplier',
-        custodian: 'did:webvh:example.com:organizations:window-manufacturer',
+        owner: roleDIDs['Manufacturer A'], // Components can be owned by specific manufacturers
+        custodian: currentRoleDID,
         metadata: {
           description: glassData.description,
+          productType: 'glass',
           material: glassData.material,
           ...glassData.metadata,
           productionDate: new Date().toISOString(),
@@ -75,16 +78,17 @@ export default function CreateDPPForm({ onClose, onComplete }: {
       });
 
       // Create frame component
-      const frameResult = await enhancedDB.insertDPP({
+      const frameResult = await hybridDataStore.insertDPP({
         did: frameDid,
         type: 'component',
         model: frameData.model,
         parent_did: windowDid,
         lifecycle_status: 'active',
-        owner: 'did:webvh:example.com:organizations:frame-supplier',
-        custodian: 'did:webvh:example.com:organizations:window-manufacturer',
+        owner: roleDIDs['Manufacturer B'],
+        custodian: currentRoleDID,
         metadata: {
           description: frameData.description,
+          productType: 'frame',
           material: frameData.material,
           ...frameData.metadata,
           productionDate: new Date().toISOString(),
@@ -94,16 +98,17 @@ export default function CreateDPPForm({ onClose, onComplete }: {
       });
 
       // Create main window
-      const windowResult = await enhancedDB.insertDPP({
+      const windowResult = await hybridDataStore.insertDPP({
         did: windowDid,
         type: 'main',
         model: windowData.model,
         parent_did: null,
         lifecycle_status: 'active',
-        owner: 'did:webvh:example.com:organizations:window-manufacturer',
+        owner: currentRoleDID, // Correctly set current manufacturer as owner
         custodian: null,
         metadata: {
           description: windowData.description,
+          productType: 'window',
           dimensions: { ...windowData.dimensions, unit: 'mm' },
           weight: windowData.weight,
           productionDate: new Date().toISOString(),
@@ -113,7 +118,7 @@ export default function CreateDPPForm({ onClose, onComplete }: {
       });
 
       // Create relationships
-      await enhancedDB.insertRelationship({
+      await hybridDataStore.insertRelationship({
         parent_did: windowDid,
         child_did: glassDid,
         relationship_type: 'component',
@@ -121,7 +126,7 @@ export default function CreateDPPForm({ onClose, onComplete }: {
         metadata: { role: 'glazing', quantity: 1 },
       });
 
-      await enhancedDB.insertRelationship({
+      await hybridDataStore.insertRelationship({
         parent_did: windowDid,
         child_did: frameDid,
         relationship_type: 'component',
@@ -130,7 +135,7 @@ export default function CreateDPPForm({ onClose, onComplete }: {
       });
 
       // Create DID documents
-      await enhancedDB.insertDIDDocument({
+      await hybridDataStore.insertDIDDocument({
         dpp_id: windowResult.id,
         did: windowDid,
         controller: windowResult.owner,
@@ -140,7 +145,7 @@ export default function CreateDPPForm({ onClose, onComplete }: {
         document_metadata: { created: true },
       });
 
-      await enhancedDB.insertDIDDocument({
+      await hybridDataStore.insertDIDDocument({
         dpp_id: glassResult.id,
         did: glassDid,
         controller: glassResult.owner,
@@ -150,7 +155,7 @@ export default function CreateDPPForm({ onClose, onComplete }: {
         document_metadata: { created: true },
       });
 
-      await enhancedDB.insertDIDDocument({
+      await hybridDataStore.insertDIDDocument({
         dpp_id: frameResult.id,
         did: frameDid,
         controller: frameResult.owner,
@@ -547,3 +552,5 @@ export default function CreateDPPForm({ onClose, onComplete }: {
     </div>
   );
 }
+
+

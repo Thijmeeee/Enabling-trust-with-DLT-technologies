@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Shield, User, Factory, Recycle, Eye, FileCheck, Activity } from 'lucide-react';
 
-type UserRole = 'manufacturer' | 'operator' | 'recycler' | 'supervisor' | 'witness' | 'watcher';
+type UserRole = 'manufacturer' | 'recycler' | 'witness' | 'watcher';
 
 interface LoginPageProps {
   onLogin: (role: UserRole, username: string) => void;
@@ -20,13 +20,6 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       color: 'blue',
     },
     {
-      id: 'operator' as UserRole,
-      name: 'Operator',
-      description: 'Operate and maintain products',
-      icon: User,
-      color: 'green',
-    },
-    {
       id: 'recycler' as UserRole,
       name: 'Recycler',
       description: 'Process end-of-life products',
@@ -34,22 +27,15 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       color: 'purple',
     },
     {
-      id: 'supervisor' as UserRole,
-      name: 'Supervisor',
-      description: 'Monitor and audit all activities',
-      icon: Eye,
-      color: 'orange',
-    },
-    {
       id: 'witness' as UserRole,
-      name: 'Witness Node',
+      name: 'Witness',
       description: 'Validate and sign DID events',
       icon: FileCheck,
       color: 'emerald',
     },
     {
       id: 'watcher' as UserRole,
-      name: 'Watcher Node',
+      name: 'Watcher',
       description: 'Monitor integrity and detect anomalies',
       icon: Activity,
       color: 'rose',

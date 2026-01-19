@@ -3,15 +3,17 @@ import {
   Shield,
   Eye,
   Search,
-  Factory,
-  Wrench,
-  UserCheck,
   Recycle,
   FileCheck,
   ArrowRight,
   ArrowLeft,
-  X
+  X,
+  Building2,
+  Factory,
+  Workflow,
+  Scale
 } from 'lucide-react';
+import EcosystemView from './visualizations/EcosystemView';
 
 interface IntroductionPageProps {
   onContinue: () => void;
@@ -23,6 +25,7 @@ export default function IntroductionPage({ onContinue }: IntroductionPageProps) 
   const steps = [
     { component: <WelcomeStep /> },
     { component: <PlayersStep /> },
+    { component: <StoryStep /> },
     { component: <TrustStep /> },
     { component: <ValueStep /> }
   ];
@@ -44,16 +47,7 @@ export default function IntroductionPage({ onContinue }: IntroductionPageProps) 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800 flex flex-col transition-colors">
       {/* Header with Progress and Skip */}
-      <div className="px-6 py-8 flex justify-between items-center max-w-6xl mx-auto w-full">
-        <div className="flex gap-2">
-          {steps.map((_, idx) => (
-            <div
-              key={idx}
-              className={`h-2 w-12 rounded-full transition-all duration-300 ${idx <= currentStep ? 'bg-blue-600' : 'bg-gray-200'
-                }`}
-            />
-          ))}
-        </div>
+      <div className="px-6 py-8 flex justify-end items-center max-w-6xl mx-auto w-full">
         <button
           onClick={onContinue}
           className="text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 font-medium flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -63,33 +57,47 @@ export default function IntroductionPage({ onContinue }: IntroductionPageProps) 
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 pb-6">
-        <div className="max-w-5xl w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex-1 flex flex-col items-center justify-center px-4 pb-6">
+        <div className="max-w-[1600px] w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
           {steps[currentStep].component}
         </div>
       </div>
 
       {/* Navigation Footer */}
-      <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm sticky bottom-0 transition-colors">
-        <div className="max-w-5xl mx-auto flex justify-between items-center">
-          <button
-            onClick={handleBack}
-            disabled={currentStep === 0}
-            className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-colors ${currentStep === 0
-              ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-              : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
-              }`}
-          >
-            <ArrowLeft className="w-5 h-5" /> Back
-          </button>
+      <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm sticky bottom-0 transition-colors z-50">
+        <div className="max-w-5xl mx-auto grid grid-cols-3 items-center">
+          <div className="flex justify-start">
+            <button
+              onClick={handleBack}
+              disabled={currentStep === 0}
+              className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-colors ${currentStep === 0
+                ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
+                }`}
+            >
+              <ArrowLeft className="w-5 h-5" /> Back
+            </button>
+          </div>
 
-          <button
-            onClick={handleNext}
-            className="flex items-center gap-2 px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-105"
-          >
-            {currentStep === steps.length - 1 ? 'Get Started' : 'Next Step'}
-            <ArrowRight className="w-5 h-5" />
-          </button>
+          <div className="flex justify-center gap-3">
+            {steps.map((_, idx) => (
+              <div
+                key={idx}
+                className={`h-1.5 w-12 rounded-full transition-all duration-300 ${idx <= currentStep ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+                  }`}
+              />
+            ))}
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              onClick={handleNext}
+              className="flex items-center gap-2 px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-105"
+            >
+              {currentStep === steps.length - 1 ? 'Get Started' : 'Next Step'}
+              <ArrowRight className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -104,7 +112,7 @@ function WelcomeStep() {
       </div>
 
       <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">
-        Digital Product Passport
+        DPP Trust Anchor
       </h1>
 
       <p className="text-xl text-gray-600 dark:text-gray-300 mb-12 leading-relaxed">
@@ -120,7 +128,7 @@ function WelcomeStep() {
           In a circular economy, products like windows move through many hands—from
           manufacturers to installers to recyclers. The challenge is: <strong>How do you trust the data?</strong>
         </p>
-        <p className="text-gray-700 leading-relaxed text-lg">
+        <p className="text-gray-700 dark:text-gray-400 leading-relaxed text-lg font-medium bg-blue-50/50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30">
           This system gives every product a <strong>Digital Product Passport</strong> (technically known as a <strong>DID</strong>).
           Think of it as an unforgeable birth certificate that travels with the product
           forever, recording every significant event along the way.
@@ -132,58 +140,84 @@ function WelcomeStep() {
 
 function PlayersStep() {
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="text-center mb-10">
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Stakeholders</h2>
-        <p className="text-xl text-gray-600 dark:text-gray-300">Who is involved in the product lifecycle?</p>
+    <div className="w-full">
+      <EcosystemView />
+    </div>
+  );
+}
+
+function StoryStep() {
+  return (
+    <div className="max-w-6xl mx-auto px-4">
+      <div className="text-center mb-12">
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">The Trust Story</h2>
+        <p className="text-xl text-gray-600 dark:text-gray-300">How a smart window moves through the trust network.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="p-3 bg-blue-100 rounded-lg">
-              <Factory className="w-8 h-8 text-blue-600" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Manufacturer</h3>
-          </div>
-          <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-            Creates the product and issues its first digital passport. They are the starting point of the journey and define the initial specifications.
-          </p>
-        </div>
+      <div className="relative py-8">
+        {/* Horizontal Line for Desktop - Positioned behind the icons */}
+        <div className="hidden md:block absolute top-[64px] left-[10%] right-[10%] h-0.5 bg-gray-200 dark:bg-gray-700 z-0" />
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="p-3 bg-green-100 rounded-lg">
-              <Wrench className="w-8 h-8 text-green-600" />
+        <div className="grid md:grid-cols-4 gap-8 relative z-10">
+          {/* Step 1: Production */}
+          <div className="flex flex-col items-center">
+            <div className="w-16 h-16 bg-white dark:bg-gray-800 rounded-2xl border-2 border-blue-500 flex items-center justify-center mb-6 shadow-lg group hover:scale-110 transition-transform relative z-10">
+              <Factory className="w-8 h-8 text-blue-500" />
             </div>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Operator</h3>
+            <h4 className="font-bold text-gray-900 dark:text-white text-center text-lg mb-1">CrystalGlass</h4>
+            <p className="text-[10px] px-2 py-0.5 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 font-bold mb-3 uppercase tracking-wider rounded-full border border-blue-100 dark:border-blue-800">Material Producer</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 text-center leading-relaxed">
+              Produces the tempered glass and registers the first digital identity.
+            </p>
           </div>
-          <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-            Works with the materials day-to-day. They handle assembly, installation, and maintenance, updating the passport with new events.
-          </p>
-        </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="p-3 bg-purple-100 rounded-lg">
-              <UserCheck className="w-8 h-8 text-purple-600" />
+          {/* Step 2: Assembly */}
+          <div className="flex flex-col items-center">
+            <div className="w-16 h-16 bg-white dark:bg-gray-800 rounded-2xl border-2 border-indigo-500 flex items-center justify-center mb-6 shadow-lg group hover:scale-110 transition-transform relative z-10">
+              <Workflow className="w-8 h-8 text-indigo-500" />
             </div>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Supervisor</h3>
+            <h4 className="font-bold text-gray-900 dark:text-white text-center text-lg mb-1">EcoFrame</h4>
+            <p className="text-[10px] px-2 py-0.5 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 font-bold mb-3 uppercase tracking-wider rounded-full border border-indigo-100 dark:border-indigo-800">Manufacturer</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 text-center leading-relaxed">
+              Builds the final window and links all components together.
+            </p>
           </div>
-          <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-            Oversees the entire process. They ensure compliance with regulations and quality standards, acting as an auditor.
-          </p>
-        </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="p-3 bg-teal-100 rounded-lg">
-              <Recycle className="w-8 h-8 text-teal-600" />
+          {/* Step 3: Witnessing */}
+          <div className="flex flex-col items-center">
+            <div className="w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center mb-6 shadow-lg group hover:scale-110 transition-transform shadow-emerald-200 dark:shadow-none relative z-10">
+              <Shield className="w-8 h-8 text-white" />
             </div>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Recycler</h3>
+            <h4 className="font-bold text-gray-900 dark:text-white text-center text-lg mb-1">DLT Foundation</h4>
+            <p className="text-[10px] px-2 py-0.5 bg-emerald-50 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 font-bold mb-3 uppercase tracking-wider rounded-full border border-emerald-100 dark:border-emerald-800">Legal Witness</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 text-center leading-relaxed">
+              The <strong>Witness</strong>. Anchors data to blockchain for legal proof.
+            </p>
           </div>
-          <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-            Handles end-of-life processing. They use the passport to identify materials for efficient recycling, closing the loop.
+
+          {/* Step 4: Monitoring */}
+          <div className="flex flex-col items-center">
+            <div className="w-16 h-16 bg-amber-500 rounded-2xl flex items-center justify-center mb-6 shadow-lg group hover:scale-110 transition-transform shadow-amber-200 dark:shadow-none relative z-10">
+              <Eye className="w-8 h-8 text-white" />
+            </div>
+            <h4 className="font-bold text-gray-900 dark:text-white text-center text-lg mb-1">TrustGuard</h4>
+            <p className="text-[10px] px-2 py-0.5 bg-amber-50 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 font-bold mb-3 uppercase tracking-wider rounded-full border border-amber-100 dark:border-amber-800">Security Watcher</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 text-center leading-relaxed">
+              The <strong>Watcher</strong>. Alerts everyone if the data is touched.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-12 bg-gray-100 dark:bg-gray-800/50 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 flex flex-col md:flex-row items-center gap-6">
+        <div className="p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+          <Scale className="w-8 h-8 text-slate-500 mx-auto" />
+        </div>
+        <div>
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Independence is Key</h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            The Witness (Foundation) and Watcher (Auditor) are <strong>independent legal entities</strong>.
+            They don't produce the goods, but they provide the "Proof of Trust" that ensures manufacturers like EcoFrame aren't marking their own homework.
           </p>
         </div>
       </div>
@@ -201,7 +235,7 @@ function TrustStep() {
 
       <div className="grid md:grid-cols-3 gap-6">
         {/* Witnesses */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex flex-col">
           <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-6 text-center">
             <Shield className="w-12 h-12 text-white mx-auto mb-3" />
             <h3 className="text-xl font-bold text-white">Witnesses</h3>
@@ -211,14 +245,14 @@ function TrustStep() {
             <p className="text-gray-700 dark:text-gray-300 mb-4 flex-1">
               When an event happens (like production), a Witness reviews and digitally signs it.
             </p>
-            <div className="bg-emerald-50 rounded-lg p-3 text-sm text-emerald-800 border border-emerald-100">
+            <div className="bg-emerald-50 dark:bg-emerald-900/30 rounded-lg p-3 text-sm text-emerald-800 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-800/50">
               <strong>Analogy:</strong> Like a notary public stamping a document to prove it's official.
             </div>
           </div>
         </div>
 
         {/* Watchers */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex flex-col">
           <div className="bg-gradient-to-br from-amber-500 to-amber-600 p-6 text-center">
             <Eye className="w-12 h-12 text-white mx-auto mb-3" />
             <h3 className="text-xl font-bold text-white">Watchers</h3>
@@ -228,14 +262,14 @@ function TrustStep() {
             <p className="text-gray-700 dark:text-gray-300 mb-4 flex-1">
               They continuously monitor data for tampering and verify that components belong to the right products.
             </p>
-            <div className="bg-amber-50 rounded-lg p-3 text-sm text-amber-800 border border-amber-100">
+            <div className="bg-amber-50 dark:bg-amber-900/30 rounded-lg p-3 text-sm text-amber-800 dark:text-amber-300 border border-amber-100 dark:border-amber-800/50">
               <strong>Analogy:</strong> Security cameras and inspectors that raise an alarm if something looks wrong.
             </div>
           </div>
         </div>
 
         {/* Resolvers */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex flex-col">
           <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-6 text-center">
             <Search className="w-12 h-12 text-white mx-auto mb-3" />
             <h3 className="text-xl font-bold text-white">Resolvers</h3>
@@ -245,7 +279,7 @@ function TrustStep() {
             <p className="text-gray-700 dark:text-gray-300 mb-4 flex-1">
               Looks up the unique ID (DID) and retrieves the full, verified history of the product.
             </p>
-            <div className="bg-blue-50 rounded-lg p-3 text-sm text-blue-800 border border-blue-100">
+            <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-3 text-sm text-blue-800 dark:text-blue-300 border border-blue-100 dark:border-blue-800/50">
               <strong>Analogy:</strong> A search engine that finds the right file instantly when you scan a code.
             </div>
           </div>

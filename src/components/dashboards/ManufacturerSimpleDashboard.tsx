@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Plus, Package, CheckCircle, Clock, ChevronRight, Copy } from 'lucide-react';
-import { enhancedDB } from '../../lib/data/enhancedDataStore';
+import { hybridDataStore as enhancedDB } from '../../lib/data/hybridDataStore';
 import { useRole } from '../../lib/utils/roleContext';
 import type { DPP } from '../../lib/data/localData';
 
@@ -61,7 +61,7 @@ export default function ManufacturerSimpleDashboard({ onRegisterWindow, onNaviga
   };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors">
+    <div className="min-h-screen bg-white dark:bg-gray-900 pt-16 transition-colors">
       {/* Clean Header */}
       <div className="border-b border-gray-100 dark:border-gray-800 px-6 py-6">
         <div className="max-w-2xl mx-auto">
@@ -100,9 +100,6 @@ export default function ManufacturerSimpleDashboard({ onRegisterWindow, onNaviga
                 <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Registered Today</p>
                 <p className="text-4xl font-bold text-gray-900 dark:text-white">{todayCount}</p>
               </div>
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-gray-400 dark:text-gray-500">Keep up the good work! 👍</p>
             </div>
           </div>
         </div>
@@ -171,11 +168,6 @@ export default function ManufacturerSimpleDashboard({ onRegisterWindow, onNaviga
             </div>
           )}
         </div>
-
-        {/* Help Text */}
-        <p className="text-center text-gray-400 dark:text-gray-500 text-sm mt-8">
-          Need help? Contact your supervisor.
-        </p>
       </div>
     </div>
   );

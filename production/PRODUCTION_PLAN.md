@@ -849,7 +849,13 @@ Watcher Detection:
     npm init -y
     npm install --save-dev hardhat
     ```
-3.  **Run Node**:
+3.  **Create Config**:
+    *   Run `npm pkg set type="module"`
+    *   Create a file named `hardhat.config.js` with the following content:
+    ```javascript
+    export default { solidity: "0.8.20" };
+    ```
+4.  **Run Node**:
     ```bash
     npx hardhat node
     ```

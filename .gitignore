@@ -20,13 +20,20 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment files (contain secrets)
 .env
 .env.*
+.env.example
+.env.*.example
+.env.local
+.env.*.local
 
 # Project specific
 did-logs/
 backend/did-logs/
 key-store/
+
 backend/key-store/
 hardhat-node/
 .dev-pids

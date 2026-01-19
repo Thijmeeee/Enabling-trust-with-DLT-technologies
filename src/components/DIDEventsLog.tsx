@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Clock, FileText, Shield, Link2, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Search, Filter } from 'lucide-react';
-import { enhancedDB } from '../lib/data/enhancedDataStore';
+import { Clock, FileText, Shield, Link2, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Search, Filter, ExternalLink } from 'lucide-react';
+import { hybridDataStore } from '../lib/data/hybridDataStore';
+import { useUI } from '../lib/utils/UIContext';
 import type { AnchoringEvent, WitnessAttestation } from '../lib/data/localData';
+import { etherscanTxUrl } from '../lib/api/config';
 
 interface DIDEvent {
   id: string;
@@ -15,6 +17,7 @@ interface DIDEvent {
 }
 
 export default function DIDEventsLog({ did, openEventId }: { did: string; openEventId?: string | null }) {
+  const { viewMode, t } = useUI();
   const [events, setEvents] = useState<DIDEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedEvent, setExpandedEvent] = useState<string | null>(null);
@@ -44,7 +47,7 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
     const allEvents: DIDEvent[] = [];
 
     // Get DPP
-    const dpp = await enhancedDB.getDPPByDID(did);
+    const dpp = await hybridDataStore.getDPPByDID(did);
     console.log('DIDEventsLog: DPP found:', dpp);
     if (!dpp) {
       console.warn('DIDEventsLog: No DPP found for DID:', did);
@@ -58,7 +61,7 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
       timestamp: dpp.created_at,
       type: 'creation',
       did: dpp.did,
-      description: String('DPP Created'),
+      description: t('DPP Created'),
       details: {
         type: dpp.type,
         model: dpp.model,
@@ -69,7 +72,7 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
     });
 
     // Anchoring Events
-    const anchorings = await enhancedDB.getAnchoringEventsByDID(did);
+    const anchorings = await hybridDataStore.getAnchoringEventsByDID(did);
     console.log('DIDEventsLog: Anchoring events found:', anchorings.length);
     anchorings.forEach((anchor: AnchoringEvent) => {
       allEvents.push({
@@ -90,15 +93,23 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
     });
 
     // Attestations - separate DID events from lifecycle events
-    const attestations = await enhancedDB.getAttestationsByDID(did);
+    const attestations = await hybridDataStore.getAttestationsByDID(did);
     console.log('DIDEventsLog: Attestations found:', attestations.length, attestations);
     attestations.forEach((attestation: WitnessAttestation) => {
       // DID-related witness events (what witnesses actually monitor)
-      const didEventTypes = ['did_creation', 'key_rotation', 'ownership_change', 'did_update', 'did_lifecycle_update'];
+      const didEventTypes = [
+        'did_creation', 
+        'key_rotation', 
+        'ownership_change', 
+        'ownership_transfer', 
+        'did_update', 
+        'did_lifecycle_update',
+        'create'
+      ];
       const isDIDEvent = didEventTypes.includes(attestation.attestation_type);
 
       // Skip pending DID events - they should only appear after witness approval
-      if (isDIDEvent && attestation.approval_status === 'pending') {
+      if (isDIDEvent && attestation.approval_status === 'pending' && attestation.attestation_type !== 'create') {
         return;
       }
 
@@ -121,13 +132,19 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
       if (isDIDEvent) {
         // These are witness attestations of DID operations
         const eventNames: Record<string, string> = {
-          'did_creation': 'DID Created & Registered',
-          'key_rotation': 'Cryptographic Key Rotated',
-          'ownership_change': 'Ownership Transferred',
-          'did_update': 'DID Document Updated',
-          'did_lifecycle_update': 'DID Lifecycle Stage Change'
+          'did_creation': t('Product Identity Registered'),
+          'create': t('Product Identity Registered'),
+          'key_rotation': t('Security Key Rotated'),
+          'rotate_key': t('Security Key Rotated'),
+          'ownership_change': t('Ownership Transferred'),
+          'ownership_transfer': t('Ownership Transferred'),
+          'transfer_ownership': t('Ownership Transferred'),
+          'did_update': t('Identity Document Updated'),
+          'update': t('Identity Document Updated'),
+          'did_lifecycle_update': t('Lifecycle Status Changed')
         };
-        description = eventNames[attestation.attestation_type] || attestation.attestation_type;
+        description = eventNames[attestation.attestation_type.toLowerCase()] || 
+                      attestation.attestation_type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
         color = 'green'; // Witness events are green
       } else if (isLifecycleEvent) {
         // These are product lifecycle events (not DID events)
@@ -150,6 +167,7 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
           eventType: (attestation.attestation_data as any)?.eventType || attestation.attestation_type,
           data: attestation.attestation_data,
           signature: attestation.signature,
+          txHash: attestation.tx_hash,
           isDIDEvent: isDIDEvent,
           isLifecycleEvent: isLifecycleEvent,
         },
@@ -159,7 +177,7 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
     });
 
     // DID Document Verification Events
-    const didDoc = await enhancedDB.getDIDDocumentByDID(did);
+    const didDoc = await hybridDataStore.getDIDDocumentByDID(did);
     if (didDoc) {
       allEvents.push({
         id: `verification-${didDoc.id}`,
@@ -184,8 +202,23 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
     setLoading(false);
   }
 
+  // Cross-reference events with watcher alerts for real-time tampering status
+  const getEnrichedEvents = () => {
+    return events.map(event => {
+      // Logic for proactive audit results being injected into event details
+      // This is a pattern we see in other components
+      const details = event.details || {};
+      const data = details.data || {};
+      
+      // If we're using manual results from a global store or context, we'd check it here
+      // For now, we'll ensure 'tampered' flags from the audit logic are handled
+      return event;
+    });
+  };
+
   const getFilteredEvents = () => {
-    return events.filter(event => {
+    const enrichedEvents = getEnrichedEvents();
+    return enrichedEvents.filter(event => {
       const matchesSearch = searchTerm === '' ||
         event.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
         event.did.toLowerCase().includes(searchTerm.toLowerCase());
@@ -258,12 +291,18 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
             <div className="space-y-8">
               {filteredEvents.map((event, index) => {
                 const IconComponent = event.icon;
-                const colorClasses = {
-                  blue: 'bg-blue-500 border-blue-200',
-                  purple: 'bg-purple-500 border-purple-200',
-                  green: 'bg-green-500 border-green-200',
-                  emerald: 'bg-emerald-500 border-emerald-200',
-                }[event.color];
+                const isTampered = event.details?.data?.tampered || 
+                                 event.details?.isTampered || 
+                                 event.description.toLowerCase().includes('tamper');
+                
+                const colorClasses = isTampered 
+                  ? 'bg-red-500 border-red-200'
+                  : {
+                      blue: 'bg-blue-500 border-blue-200',
+                      purple: 'bg-purple-500 border-purple-200',
+                      green: 'bg-green-500 border-green-200',
+                      emerald: 'bg-emerald-500 border-emerald-200',
+                    }[event.color as 'blue'|'purple'|'green'|'emerald'];
 
                 const isLeft = index % 2 === 0;
 
@@ -272,16 +311,21 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
                     {/* Content card */}
                     <div className={`w-5/12 ${isLeft ? 'pr-8 text-right' : 'pl-8 text-left'}`}>
                       <div
-                        className="bg-white dark:bg-gray-800 rounded-lg shadow-md border-2 border-gray-200 dark:border-gray-700 p-4 hover:shadow-lg transition-all cursor-pointer"
+                        className={`bg-white dark:bg-gray-800 rounded-lg shadow-md border-2 p-4 hover:shadow-lg transition-all cursor-pointer ${
+                          isTampered ? 'border-red-500 dark:border-red-400' : 'border-gray-200 dark:border-gray-700'
+                        }`}
                         onClick={() => setExpandedEvent(expandedEvent === event.id ? null : event.id)}
                       >
                         <div className={`flex items-start gap-3 ${isLeft ? 'flex-row-reverse' : 'flex-row'}`}>
                           <div className={`flex-shrink-0 w-10 h-10 rounded-full ${colorClasses} flex items-center justify-center shadow-md border-4 border-white`}>
-                            <IconComponent className="w-5 h-5 text-white" />
+                            {isTampered ? <AlertCircle className="w-5 h-5 text-white" /> : <IconComponent className="w-5 h-5 text-white" />}
                           </div>
                           <div className="flex-grow min-w-0">
                             <div className="flex items-center justify-between">
-                              <h4 className="font-semibold text-gray-900 dark:text-white text-sm mb-1">{event.description.trim()}</h4>
+                              <h4 className={`font-semibold text-sm mb-1 ${isTampered ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'}`}>
+                                {event.description.trim()}
+                                {isTampered && <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 uppercase">Tampered</span>}
+                              </h4>
                               {expandedEvent === event.id ? (
                                 <ChevronUp className="w-4 h-4 text-gray-400" />
                               ) : (
@@ -306,12 +350,25 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
                             )}
                             {event.type === 'attestation' && (
                               <div>
-                                <p className="mb-1"><span className="font-medium">Witness Node:</span> {event.details.witness.split(':').pop()}</p>
-                                {event.details.isDIDEvent && (
-                                  <div className="mt-2 px-2 py-1 bg-green-50 border border-green-200 rounded text-green-800 font-medium">
-                                    ✓ DID Event - Monitored by Witnesses
-                                  </div>
-                                )}
+                                <p className="mb-1"><span className="font-medium">Witness:</span> {event.details.witness.split(':').pop()}</p>
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                  {event.details.isDIDEvent && (
+                                    <div className="px-2 py-1 bg-green-50 border border-green-200 rounded text-green-800 font-medium">
+                                      ✓ DID Event - Anchored
+                                    </div>
+                                  )}
+                                  {event.details.txHash && (
+                                    <a 
+                                      href={etherscanTxUrl(event.details.txHash) || '#'}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="px-2 py-1 bg-purple-50 border border-purple-200 rounded text-purple-700 font-medium flex items-center gap-1 hover:bg-purple-100 transition-colors"
+                                    >
+                                      Blockchain Proof <ExternalLink size={10} />
+                                    </a>
+                                  )}
+                                </div>
                               </div>
                             )}
                             {event.type === 'update' && event.details.isLifecycleEvent && (
@@ -343,12 +400,23 @@ export default function DIDEventsLog({ did, openEventId }: { did: string; openEv
                                 })
                                 .map(([key, value]) => (
                                   <div key={key} className="flex justify-between items-start gap-2">
-                                    <span className="text-gray-600 dark:text-gray-400 font-medium capitalize min-w-fit">
-                                      {key.replace(/([A-Z])/g, ' $1').trim()}:
+                                    <span className="text-gray-600 dark:text-gray-400 font-medium min-w-fit">
+                                      {t(key)}:
                                     </span>
-                                    <span className="text-gray-900 dark:text-white font-mono break-all text-right">
-                                      {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
-                                    </span>
+                                    {key === 'txHash' && typeof value === 'string' ? (
+                                      <a 
+                                        href={etherscanTxUrl(value) || '#'}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-purple-600 dark:text-purple-400 font-mono hover:underline flex items-center gap-1"
+                                      >
+                                        {value.substring(0, 16)}... <ExternalLink size={10} />
+                                      </a>
+                                    ) : (
+                                      <span className="text-gray-900 dark:text-white font-mono break-all text-right">
+                                        {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                                      </span>
+                                    )}
                                   </div>
                                 ))}
                             </div>

@@ -237,13 +237,17 @@ export async function generateMockData() {
   // Sample Alerts
   await localDB.insertAlert({
     watcher_id: integrityWatcher.id,
+    watcher_did: integrityWatcher.id,
     dpp_id: glassData.id,
     did: glassDPP.did,
     alert_type: 'info',
     severity: 'info',
+    description: 'The cryptographic integrity of this component has been successfully verified.',
     message: 'Component integrity verified',
     details: { verificationType: 'cryptographic', status: 'valid' },
+    status: 'resolved',
     resolved: true,
+    detected_at: new Date().toISOString(),
   });
 
   // Specifications

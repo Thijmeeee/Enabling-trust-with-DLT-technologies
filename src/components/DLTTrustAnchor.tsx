@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link2, Database, Hash, CheckCircle2, ExternalLink, Blocks } from 'lucide-react';
-import { localDB } from '../lib/data/localData';
+import { hybridDataStore } from '../lib/data/hybridDataStore';
+import { useUI } from '../lib/utils/UIContext';
 import type { AnchoringEvent } from '../lib/data/localData';
+import { etherscanTxUrl, etherscanBlockUrl } from '../lib/api';
 
 export default function DLTTrustAnchor({ did }: { did: string }) {
+  const { t } = useUI();
   const [anchorings, setAnchorings] = useState<AnchoringEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -13,16 +16,29 @@ export default function DLTTrustAnchor({ did }: { did: string }) {
 
   async function loadAnchorings() {
     setLoading(true);
-    const data = await localDB.getAnchoringEventsByDID(did);
+    const data = await hybridDataStore.getAnchoringEventsByDID(did);
     setAnchorings(data as AnchoringEvent[]);
     setLoading(false);
   }
 
   const renderBlockInfo = (blockNumber: number, merkleRoot: string | null) => {
+    const blockUrl = etherscanBlockUrl(blockNumber);
     return (
       <>
         <p className="font-mono text-xs text-gray-900">
-          Block: {String(blockNumber)}
+          Block:{' '}
+          {blockUrl ? (
+            <a 
+              href={blockUrl} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="text-blue-600 hover:text-blue-800 hover:underline"
+            >
+              {String(blockNumber)}
+            </a>
+          ) : (
+            String(blockNumber)
+          )}
         </p>
         <p className="font-mono text-xs text-purple-600 break-all">
           Root: {merkleRoot || 'N/A'}
@@ -96,6 +112,7 @@ export default function DLTTrustAnchor({ did }: { did: string }) {
         ) : (
           anchorings.map((anchor: AnchoringEvent, index: number) => {
             const compHashes = anchor.component_hashes as any[] | null | undefined;
+            const explorerUrl = etherscanTxUrl(anchor.transaction_hash);
             
             return (
               <div key={anchor.id} className="border-l-4 border-purple-500 bg-gradient-to-r from-purple-50 to-white p-4 rounded-r-lg hover:shadow-md transition-shadow">
@@ -111,10 +128,22 @@ export default function DLTTrustAnchor({ did }: { did: string }) {
                   </div>
                   <p className="text-xs text-gray-500">{new Date(anchor.timestamp).toLocaleString()}</p>
                 </div>
-                <button className="flex items-center gap-1 px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-full hover:bg-blue-200 transition-colors">
-                  <ExternalLink className="w-3 h-3" />
-                  View on Explorer
-                </button>
+                {explorerUrl ? (
+                  <a 
+                    href={explorerUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-full hover:bg-blue-200 transition-colors"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    View on Etherscan
+                  </a>
+                ) : (
+                  <span className="flex items-center gap-1 px-3 py-1 text-xs bg-gray-100 text-gray-500 rounded-full">
+                    <Database className="w-3 h-3" />
+                    Local Network
+                  </span>
+                )}
               </div>
 
               <div className="space-y-3">
@@ -122,15 +151,26 @@ export default function DLTTrustAnchor({ did }: { did: string }) {
                 <div className="bg-white rounded-lg p-3 border border-gray-200">
                   <div className="flex items-center gap-2 mb-1">
                     <Hash className="w-4 h-4 text-gray-500" />
-                    <p className="text-xs font-medium text-gray-600">Transaction Hash</p>
+                    <p className="text-xs font-medium text-gray-600">{t('transactionHash')}</p>
                   </div>
-                  <p className="font-mono text-xs break-all text-blue-600 hover:text-blue-800">
-                    {anchor.transaction_hash}
-                  </p>
+                  {explorerUrl ? (
+                    <a 
+                      href={explorerUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-mono text-xs break-all text-blue-600 hover:text-blue-800 hover:underline"
+                    >
+                      {anchor.transaction_hash}
+                    </a>
+                  ) : (
+                    <p className="font-mono text-xs break-all text-gray-600">
+                      {anchor.transaction_hash}
+                    </p>
+                  )}
                 </div>
 
                 <div className="bg-white rounded-lg p-3 border border-gray-200">
-                  <p className="text-xs font-medium text-gray-600 mb-1">Block & Merkle</p>
+                  <p className="text-xs font-medium text-gray-600 mb-1">{t('Block & Merkle')}</p>
                   {renderBlockInfo(anchor.block_number, anchor.merkle_root)}
                 </div>
 

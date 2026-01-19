@@ -1,15 +1,15 @@
 import { useState } from 'react';
-import { 
-  X, 
-  ArrowRight, 
-  ArrowLeft, 
-  CheckCircle, 
+import {
+  X,
+  ArrowRight,
+  ArrowLeft,
+  CheckCircle,
   Package,
   Layers,
   Square,
   Info
 } from 'lucide-react';
-import { enhancedDB } from '../../lib/data/enhancedDataStore';
+import { hybridDataStore as enhancedDB } from '../../lib/data/hybridDataStore';
 import { generateWitnessAttestations, generateAnchoringEvents } from '../../lib/operations/lifecycleHelpers';
 import { useRole } from '../../lib/utils/roleContext';
 
@@ -23,7 +23,7 @@ type Step = 'intro' | 'window' | 'glass' | 'frame' | 'review' | 'creating' | 'su
 export default function WindowRegistrationWizard({ onClose, onComplete }: WindowRegistrationWizardProps) {
   const { currentRoleDID } = useRole();
   const [step, setStep] = useState<Step>('intro');
-  
+
   // Form data
   const [windowName, setWindowName] = useState('');
   const [windowWidth, setWindowWidth] = useState(1200);
@@ -40,14 +40,14 @@ export default function WindowRegistrationWizard({ onClose, onComplete }: Window
 
   async function handleSubmit() {
     setStep('creating');
-    
+
     try {
       const timestamp = Date.now();
       const uniqueId = `${timestamp}-${Math.random().toString(36).substr(2, 9)}`;
-      
+
       // Determine manufacturer domain based on role
-      const manufacturerDomain = currentRoleDID.includes('glass-solutions') 
-        ? 'glass-solutions.com' 
+      const manufacturerDomain = currentRoleDID.includes('glass-solutions')
+        ? 'glass-solutions.com'
         : currentRoleDID.includes('frame-masters')
           ? 'frame-masters.com'
           : 'example.com';
@@ -175,11 +175,11 @@ export default function WindowRegistrationWizard({ onClose, onComplete }: Window
       await generateWitnessAttestations(windowResult.id, windowDid, 'main');
       await generateWitnessAttestations(glassResult.id, glassDid, 'component');
       await generateWitnessAttestations(frameResult.id, frameDid, 'component');
-      
+
       await generateAnchoringEvents(windowResult.id, windowDid, [glassDid, frameDid]);
 
       setStep('success');
-      
+
       // Auto-close after success
       setTimeout(() => {
         onComplete();
@@ -208,19 +208,18 @@ export default function WindowRegistrationWizard({ onClose, onComplete }: Window
               <X className="w-5 h-5" />
             </button>
           </div>
-          
+
           {/* Progress Steps */}
           {step !== 'intro' && step !== 'creating' && step !== 'success' && (
             <div className="flex items-center justify-between">
               {steps.map((s, index) => (
                 <div key={s.id} className="flex items-center">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                    currentStepIndex > index
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStepIndex > index
                       ? 'bg-green-500 text-white'
                       : currentStepIndex === index
                         ? 'bg-white text-blue-600'
                         : 'bg-blue-500/50 text-blue-200'
-                  }`}>
+                    }`}>
                     {currentStepIndex > index ? (
                       <CheckCircle className="w-5 h-5" />
                     ) : (
@@ -228,9 +227,8 @@ export default function WindowRegistrationWizard({ onClose, onComplete }: Window
                     )}
                   </div>
                   {index < steps.length - 1 && (
-                    <div className={`w-12 h-0.5 mx-1 ${
-                      currentStepIndex > index ? 'bg-green-500' : 'bg-blue-500/50'
-                    }`} />
+                    <div className={`w-12 h-0.5 mx-1 ${currentStepIndex > index ? 'bg-green-500' : 'bg-blue-500/50'
+                      }`} />
                   )}
                 </div>
               ))}
@@ -329,11 +327,10 @@ export default function WindowRegistrationWizard({ onClose, onComplete }: Window
                   <button
                     key={type}
                     onClick={() => setGlassType(type)}
-                    className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
-                      glassType === type
+                    className={`w-full p-4 rounded-xl border-2 text-left transition-all ${glassType === type
                         ? 'border-sky-500 bg-sky-50'
                         : 'border-gray-200 hover:border-gray-300'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-medium text-gray-900">{type}</span>
@@ -363,11 +360,10 @@ export default function WindowRegistrationWizard({ onClose, onComplete }: Window
                   <button
                     key={type}
                     onClick={() => setFrameType(type)}
-                    className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
-                      frameType === type
+                    className={`w-full p-4 rounded-xl border-2 text-left transition-all ${frameType === type
                         ? 'border-purple-500 bg-purple-50'
                         : 'border-gray-200 hover:border-gray-300'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-medium text-gray-900">{type}</span>

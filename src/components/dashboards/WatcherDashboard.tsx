@@ -1,1025 +1,1037 @@
-import { useState, useEffect } from 'react';
-import { Activity, AlertCircle, CheckCircle, TrendingUp, Shield, Eye, AlertTriangle, Info, ChevronDown, ChevronUp, Package, FileText, Hash } from 'lucide-react';
-import { enhancedDB } from '../../lib/data/enhancedDataStore';
-import { localDB } from '../../lib/data/localData';
+import { useState, useEffect, useMemo } from 'react';
+import {
+  Activity, CheckCircle, Shield, Eye,
+  Package, FileText, GitBranch,
+  Search, LayoutDashboard, Database, Flag,
+  ShieldCheck, AlertTriangle, RefreshCw,
+  ExternalLink
+} from 'lucide-react';
+import enhancedDB from '../../lib/data/hybridDataStore';
 import { getDIDOperationsHistory } from '../../lib/operations/didOperationsLocal';
+import { hashOperation } from '../../lib/utils/merkleTree';
 import { useRole } from '../../lib/utils/roleContext';
-import { WatcherAlert, DPP } from '../../lib/data/localData';
+import { DPP } from '../../lib/data/localData';
+import { api } from '../../lib/api';
+import MerkleTreeVisualizer from '../visualizations/MerkleTreeVisualizer';
+
+
+
+
+/**
+ * Robust helper to extract SCID from any DID format
+ */
+function extractSCID(did: string): string {
+  if (!did) return '';
+  try {
+    const decoded = decodeURIComponent(did);
+    const parts = decoded.split(':');
+    const lastPart = parts[parts.length - 1];
+    return lastPart.split('?')[0].split('#')[0].trim();
+  } catch (e) {
+    return (did || '').split(':').pop() || '';
+  }
+}
+
+/**
+ * Extract a consistent identifier for an operation/event
+ */
+function getEventId(op: any): string {
+  if (!op) return '';
+  let idStr = String(op.id || op.version_id || op.version || '');
+
+  // Fallback to URI parsing if no direct ID found
+  if (!idStr && op.uri) {
+    if (op.uri.includes('version=')) {
+      idStr = op.uri.split('version=')[1];
+    } else if (op.uri.includes('operation-')) {
+      idStr = op.uri.split('operation-')[1];
+    }
+  }
+
+  if (!idStr) return '';
+  const match = idStr.match(/(\d+)$/);
+  return match ? match[1] : idStr;
+}
 
 interface MonitoredDPP extends DPP {
+  scid: string;
   integrityScore: number;
   lastVerified: string;
   alertCount: number;
 }
 
-interface GroupedMonitoredDPPs {
-  dppId: string;
-  dppName: string;
-  dppType: 'main' | 'component';
-  dpp: MonitoredDPP;
-  components?: { name: string; dpp: MonitoredDPP }[];
-}
-
 export default function WatcherDashboard() {
   const { currentRoleDID } = useRole();
-  const [monitoredDPPs, setMonitoredDPPs] = useState<MonitoredDPP[]>([]);
-  const [alerts, setAlerts] = useState<WatcherAlert[]>([]);
-  const [filter, setFilter] = useState<'all' | 'selected' | 'critical' | 'warning' | 'info' | 'resolved'>('all');
-  const [expandedDPP, setExpandedDPP] = useState<string | null>(null);
-  const [expandedComponents, setExpandedComponents] = useState<Set<string>>(new Set());
-  const [selectedDPPForDetails, setSelectedDPPForDetails] = useState<MonitoredDPP | null>(null);
+  const [allDPPs, setAllDPPs] = useState<DPP[]>([]);
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Track manual verification results to override background alerts
+  // Load from localStorage to share state between dashboards
+  const [manualVerificationResults, setManualVerificationResults] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem('dpp_manual_audit_results');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  // Persist manual results to localStorage
+  useEffect(() => {
+    localStorage.setItem('dpp_manual_audit_results', JSON.stringify(manualVerificationResults));
+  }, [manualVerificationResults]);
+
+  const monitoredDPPs = useMemo(() => {
+    return allDPPs.map(dpp => {
+      const dppScid = extractSCID(dpp.did);
+
+      // Find ALL alerts that match this SCID
+      const dppAlerts = alerts.filter(a => {
+        const alertScid = extractSCID(a.did);
+        const match = alertScid.toLowerCase() === dppScid.toLowerCase();
+        return match;
+      });
+
+      // Deduplicate alerts
+      const uniqueAlerts = dppAlerts.filter((v, i, a) =>
+        a.findIndex(t => t.reason === v.reason && t.event_id === v.event_id) === i
+      );
+
+      // Filter manual verification results that match this specific DPP
+      // Only count '-event-' keys to avoid triple-counting (we also store by hash/index)
+      const manualFailuresForDPP = Object.keys(manualVerificationResults)
+        .filter(key => {
+          // Search for scid prefix precisely
+          const isScidMatch = key.toLowerCase().startsWith(dppScid.toLowerCase());
+          const isEventKey = key.includes('-event-');
+          const isFailure = manualVerificationResults[key] === false;
+          return isScidMatch && isEventKey && isFailure;
+        });
+
+      // Filter alerts that have been manually cleared (verified as OK)
+      const activeAlerts = uniqueAlerts.filter(alert => {
+        const scidKey = dppScid.toLowerCase();
+        const eventId = String(alert.event_id || '');
+
+        // 1. Skip if manually verified as OK (event-specific)
+        if (eventId && manualVerificationResults[`${scidKey}-event-${eventId}`] === true) return false;
+
+        // 2. Skip if already counted in manual failures (to avoid double counting)
+        if (eventId && manualVerificationResults[`${scidKey}-event-${eventId}`] === false) return false;
+
+        // 3. New: If any part of this DID has been manually audited as OK recently,
+        // and it's a generic/global alert, we suppress it if we have at least one manual PASS
+        const hasAnyManualPass = Object.keys(manualVerificationResults).some(k =>
+          k.toLowerCase().startsWith(scidKey) && manualVerificationResults[k] === true
+        );
+        if (!eventId && hasAnyManualPass) return false;
+
+        return true;
+      });
+
+      const totalAlertsCount = activeAlerts.length + manualFailuresForDPP.length;
+
+      // A product is "REJECTED" in the UI if we have active alerts or manual audit failures.
+      // This fulfills the requirement to flip status based on audit results.
+      const hasCriticalIssues = totalAlertsCount > 0;
+      let score = hasCriticalIssues ? 0 : 100;
+
+      if (hasCriticalIssues) {
+        const hasSevereAlert = activeAlerts.some(a => {
+          const searchBody = `${a.reason} ${a.details}`.toLowerCase();
+          return searchBody.includes('mismatch') ||
+            searchBody.includes('failed') ||
+            searchBody.includes('failure') ||
+            searchBody.includes('broken') ||
+            searchBody.includes('tamper') ||
+            searchBody.includes('corrupt') ||
+            searchBody.includes('invalid');
+        });
+
+        // If not severe, give a partial score, otherwise 0
+        score = (hasSevereAlert || manualFailuresForDPP.length > 0) ? 0 : Math.max(25, 100 - (25 * totalAlertsCount));
+      }
+
+      return {
+        ...dpp,
+        scid: dppScid,
+        integrityScore: score,
+        lastVerified: new Date().toISOString(),
+        alertCount: totalAlertsCount,
+      } as MonitoredDPP;
+    });
+  }, [allDPPs, alerts, manualVerificationResults]);
+
+  const [activeTab, setActiveTab] = useState<'audit' | 'resources'>('audit');
+  const [selectedDPPId, setSelectedDPPId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [lastRefresh, setLastRefresh] = useState(Date.now());
+
   const [didHistory, setDidHistory] = useState<any[]>([]);
-  const [attestations, setAttestations] = useState<any[]>([]);
-  const [showAlertModal, setShowAlertModal] = useState(false);
-  const [alertModalDPP, setAlertModalDPP] = useState<MonitoredDPP | null>(null);
-  const [alertForm, setAlertForm] = useState({
-    severity: 'warning' as 'critical' | 'warning' | 'info',
-    type: 'signature_mismatch' as string,
-    description: ''
+  const [selectedOperationIndex, setSelectedOperationIndex] = useState<number | null>(null);
+  const [rawLog, setRawLog] = useState<string | null>(null);
+  const [rawWitness, setRawWitness] = useState<string | null>(null);
+
+  const [showFlagModal, setShowFlagModal] = useState(false);
+  const [flagTargetEvent, setFlagTargetEvent] = useState<any | null>(null);
+  const [flagForm, setFlagForm] = useState({
+    reason: 'signature_mismatch',
+    details: ''
   });
-  const [stats, setStats] = useState({
-    monitored: 0,
-    criticalAlerts: 0,
-    warningAlerts: 0,
-    averageIntegrity: 0,
-  });
+
+  const selectedDPP = monitoredDPPs.find(d => d.id === selectedDPPId);
+
+  const handleReset = async () => {
+    setIsRefreshing(true);
+    const dppScid = selectedDPP?.scid?.toLowerCase() || (selectedDPP ? extractSCID(selectedDPP.did).toLowerCase() : '');
+
+    console.log('[WatcherDashboard] Resetting audit state for', dppScid);
+
+    // Clear local flags for this product
+    if (dppScid) {
+      setManualVerificationResults(prev => {
+        const next = { ...prev };
+        Object.keys(next).forEach(key => {
+          if (key.toLowerCase().includes(dppScid)) {
+            delete next[key];
+          }
+        });
+        return next;
+      });
+    }
+
+    // Force re-fetch of underlying files
+    setLastRefresh(Date.now());
+
+    // Clear selection so the visualizer detects "new" data
+    setSelectedOperationIndex(null);
+    setRawLog(null);
+    setRawWitness(null);
+
+    // Brief delay for the animation
+    setTimeout(() => {
+      setIsRefreshing(false);
+    }, 1000);
+  };
+
+  // Separate effect for auto-selection to prevent interval jumping
+  useEffect(() => {
+    if (!selectedDPPId && allDPPs.length > 0) {
+      setSelectedDPPId(allDPPs[0].id);
+    }
+  }, [allDPPs]); // Only run when allDPPs list changes, AND remove dependency on selectedDPPId to avoid it triggering itself
 
   useEffect(() => {
     loadMonitoringData();
-    const interval = setInterval(loadMonitoringData, 10000);
+    const interval = setInterval(() => {
+      loadMonitoringData();
+      setLastRefresh(Date.now());
+    }, 10000); // 10s for real-time feel
     return () => clearInterval(interval);
-  }, []);
+  }, []); // Truly only once on mount
+
+  useEffect(() => {
+    if (selectedDPP) {
+      loadDPPDetails(selectedDPP);
+    }
+  }, [selectedDPPId, lastRefresh]);
+
+  // Reset session state when switching DPPs to prevent state leakage
+  useEffect(() => {
+    setSelectedOperationIndex(null);
+    setDidHistory([]);
+    setRawLog(null);
+    setRawWitness(null);
+  }, [selectedDPPId]);
+
+  /**
+   * Proactive Integrity Check: Detect file-level tampering immediately 
+   * when products or logs are loaded/refreshed.
+   */
+  useEffect(() => {
+    // We only perform the deep proactive check for the currently selected product
+    // as it requires knowing the raw witness data which is only fetched for the selection.
+    if (didHistory.length > 0 && rawWitness && selectedDPP) {
+      try {
+        const witnessData = JSON.parse(rawWitness);
+        const proofs = Array.isArray(witnessData)
+          ? witnessData
+          : (witnessData.anchoringProofs || witnessData.witnessProofs || []);
+
+        const dppScid = extractSCID(selectedDPP.did).toLowerCase();
+
+        // SAFETY CHECK: Ensure the witness data actually matches the current product's SCID
+        // In some cases we can find the SCID in the log or witness metadata
+        if (rawLog && !rawLog.toLowerCase().includes(dppScid)) {
+          // Data mismatch (likely still loading new product), abort audit to prevent state leak
+          return;
+        }
+
+        let foundAnyFailure = false;
+
+        // Check ALL anchored operations for this DPP
+        didHistory.forEach((op) => {
+          const eventId = getEventId(op);
+          const vNum = op.version || op.version_id || (op.uri?.includes('version=') ? op.uri.split('version=')[1] : null);
+          const vId = vNum ? String(vNum) : '';
+
+          const proof = proofs.find((p: any) =>
+            String(p.versionId || p.version_id) === vId ||
+            String(p.eventId || p.event_id) === eventId
+          );
+
+          if (proof && proof.merkleRoot) {
+            // Bypass proactive check only for strictly empty/placeholder hashes
+            const leafHash = proof.leafHash || '0x';
+            const isPlaceholder = leafHash === '0x' ||
+              leafHash.length < 10 ||
+              leafHash.startsWith('0x0000');
+
+            if (isPlaceholder) {
+              // If it's a placeholder, just clear any previous false result
+              const key = `${dppScid}-event-${eventId}`;
+              setManualVerificationResults(prev => {
+                if (prev[key] === false) {
+                  const next = { ...prev };
+                  delete next[key];
+                  return next;
+                }
+                return prev;
+              });
+              return;
+            }
+
+            if (proof.leafHash) {
+              const key = `${dppScid}-event-${eventId}`;
+
+              // NEVER overwrite an existing manual result
+              if (manualVerificationResults[key] !== undefined) return;
+
+              // Basic sanity check: leafHash + proof must yield merkleRoot
+              // For single-leaf tree (which we have here), leafHash should equal merkleRoot
+              if (proof.merkleProof.length === 0) {
+                const matches = proof.leafHash.toLowerCase() === proof.merkleRoot.toLowerCase();
+                if (!matches) {
+                  foundAnyFailure = true;
+                  setManualVerificationResults(prev => ({
+                    ...prev,
+                    [key]: false,
+                    [`${dppScid}-version-${vId}`]: false
+                  }));
+                }
+                // Do NOT set true automatically - this hides actual alerts/flags
+              } else {
+                // Do NOT set true automatically
+              }
+            }
+          }
+        });
+
+        if (foundAnyFailure) {
+          console.warn(`[WatcherDashboard] Proactive audit detected TAMPERING for ${dppScid}`);
+        }
+      } catch (err) {
+        // Silently skip if JSON is invalid or incomplete
+      }
+    }
+  }, [didHistory, rawWitness, selectedDPPId]);
+
+  // Auto-select first anchored event once history is loaded
+  useEffect(() => {
+    if (didHistory.length > 0 && selectedOperationIndex === null) {
+      const anchoredIndex = didHistory.findIndex(op => op.witness_proofs);
+      setSelectedOperationIndex(anchoredIndex !== -1 ? anchoredIndex : 0);
+    }
+  }, [didHistory, selectedOperationIndex]);
 
   async function loadMonitoringData() {
-    const allDPPs = await enhancedDB.getAllDPPs();
-    const allAlerts = await localDB.getAlerts();
-    const watcherAlerts = allAlerts.filter(a => a.watcher_did === currentRoleDID);
+    try {
+      const allDPPsData = await enhancedDB.getAllDPPs();
+      if (allDPPsData) setAllDPPs(allDPPsData);
 
-    // Calculate integrity scores for each DPP with verification
-    const monitored: MonitoredDPP[] = await Promise.all(
-      allDPPs.map(async (dpp) => {
-        const dppAlerts = watcherAlerts.filter(a => a.dpp_id === dpp.id);
-
-        // Perform continuous verification (Watcher's core function)
-        await performContinuousVerification(dpp, dppAlerts);
-
-        const integrityScore = calculateIntegrityScore(dpp, dppAlerts);
-
-        return {
-          ...dpp,
-          integrityScore,
-          lastVerified: new Date().toISOString(),
-          alertCount: dppAlerts.filter(a => a.severity === 'critical' || a.severity === 'warning').length,
-        };
-      })
-    );
-
-    setMonitoredDPPs(monitored);
-    setAlerts(await localDB.getAlerts().then(alerts => alerts.filter(a => a.watcher_did === currentRoleDID)));
-
-    // Calculate stats
-    const updatedAlerts = await localDB.getAlerts().then(alerts => alerts.filter(a => a.watcher_did === currentRoleDID));
-    const criticalCount = updatedAlerts.filter(a => a.severity === 'critical' && a.status === 'active').length;
-    const warningCount = updatedAlerts.filter(a => a.severity === 'warning' && a.status === 'active').length;
-    const avgIntegrity = monitored.length > 0
-      ? monitored.reduce((sum, dpp) => sum + dpp.integrityScore, 0) / monitored.length
-      : 100;
-
-    setStats({
-      monitored: monitored.length,
-      criticalAlerts: criticalCount,
-      warningAlerts: warningCount,
-      averageIntegrity: avgIntegrity,
-    });
-  }
-
-  async function performContinuousVerification(dpp: DPP, existingAlerts: WatcherAlert[]) {
-    // Watchers continuously verify DID-log integrity
-    const history = await getDIDOperationsHistory(dpp.id);
-    if (!history.success) return;
-
-    const attestations = await enhancedDB.getAttestationsByDID(dpp.did);
-
-    // 1. Recompute hashes across all entries
-    const hashChainValid = verifyHashChainContinuous(history.operations, existingAlerts, dpp);
-
-    // 2. Validate controller signatures
-    const controllerProofsValid = verifyControllerProofs(attestations, existingAlerts, dpp);
-
-    // 3. Validate witness proofs
-    const witnessProofsValid = verifyWitnessProofs(attestations, existingAlerts, dpp);
-
-    // 4. Compare resulting state with expected (e.g., keys, owner)
-    const stateConsistent = verifyStateConsistency(dpp, history.operations, existingAlerts);
-
-    // Log any new inconsistencies as alerts
-    if (!hashChainValid || !controllerProofsValid || !witnessProofsValid || !stateConsistent) {
-      console.log(`Watcher detected inconsistencies in ${dpp.did}`);
+      try {
+        // Use enhancedDB.getAllAlerts which merges backend and local alerts
+        const allAlerts = await enhancedDB.getAllAlerts();
+        if (allAlerts) setAlerts(allAlerts);
+      } catch (alertErr) {
+        console.warn('Failed to load alerts, continuing with empty list:', alertErr);
+      }
+    } catch (err) {
+      console.error('Failed to load monitoring data:', err);
     }
   }
-
-  function verifyHashChainContinuous(operations: any[], existingAlerts: WatcherAlert[], dpp: DPP): boolean {
-    // Check if hash chain is intact
-    if (operations.length === 0) return true;
-
-    // In a real implementation: recompute hash for each entry and verify chain
-    // For now: check if entries are sequential
-    for (let i = 1; i < operations.length; i++) {
-      const current = operations[i];
-      const previous = operations[i - 1];
-
-      // Check if timestamps are sequential
-      if (new Date(current.timestamp) < new Date(previous.timestamp)) {
-        // Create alert if not already exists
-        const alertExists = existingAlerts.some(a =>
-          a.alert_type === 'hash_chain_broken' && a.status === 'active'
-        );
-
-        if (!alertExists) {
-          localDB.insertAlert({
-            watcher_id: currentRoleDID,
-            watcher_did: currentRoleDID,
-            dpp_id: dpp.id,
-            did: dpp.did,
-            alert_type: 'hash_chain_broken',
-            severity: 'critical',
-            description: 'Hash chain integrity compromised: timestamps out of order',
-            message: 'Hash chain integrity compromised',
-            details: { operation_index: i },
-            status: 'active',
-            resolved: false,
-            detected_at: new Date().toISOString(),
-          });
-        }
-
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  function verifyControllerProofs(attestations: any[], existingAlerts: WatcherAlert[], dpp: DPP): boolean {
-    // Validate all controller signatures
-    const criticalOps = attestations.filter(a =>
-      a.attestation_type === 'ownership_change' ||
-      a.attestation_type === 'key_rotation' ||
-      a.attestation_type === 'did_creation'
-    );
-
-    for (const attestation of criticalOps) {
-      if (!attestation.signature || attestation.signature.startsWith('pending-')) {
-        const alertExists = existingAlerts.some(a =>
-          a.alert_type === 'missing_controller_signature' && a.status === 'active'
-        );
-
-        if (!alertExists && attestation.approval_status === 'approved') {
-          localDB.insertAlert({
-            watcher_id: currentRoleDID,
-            watcher_did: currentRoleDID,
-            dpp_id: dpp.id,
-            did: dpp.did,
-            alert_type: 'missing_controller_signature',
-            severity: 'critical',
-            description: `Missing or invalid controller signature on ${attestation.attestation_type}`,
-            message: 'Missing controller signature',
-            details: { attestation_id: attestation.id },
-            status: 'active',
-            resolved: false,
-            detected_at: new Date().toISOString(),
-          });
-        }
-
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  function verifyWitnessProofs(attestations: any[], existingAlerts: WatcherAlert[], dpp: DPP): boolean {
-    // Validate witness attestations
-    const witnessRequired = attestations.filter(a =>
-      a.attestation_type === 'ownership_change' ||
-      a.attestation_type === 'key_rotation'
-    );
-
-    for (const attestation of witnessRequired) {
-      if (attestation.approval_status === 'rejected') {
-        const alertExists = existingAlerts.some(a =>
-          a.alert_type === 'rejected_by_witness' && a.status === 'active'
-        );
-
-        if (!alertExists) {
-          localDB.insertAlert({
-            watcher_id: currentRoleDID,
-            watcher_did: currentRoleDID,
-            dpp_id: dpp.id,
-            did: dpp.did,
-            alert_type: 'rejected_by_witness',
-            severity: 'warning',
-            description: `Operation ${attestation.attestation_type} was rejected by witness`,
-            message: 'Operation rejected by witness',
-            details: { attestation_id: attestation.id },
-            status: 'active',
-            resolved: false,
-            detected_at: new Date().toISOString(),
-          });
-        }
-      }
-
-      if (!attestation.witness_did && attestation.approval_status === 'approved') {
-        const alertExists = existingAlerts.some(a =>
-          a.alert_type === 'missing_witness_proof' && a.status === 'active'
-        );
-
-        if (!alertExists) {
-          localDB.insertAlert({
-            watcher_id: currentRoleDID,
-            watcher_did: currentRoleDID,
-            dpp_id: dpp.id,
-            did: dpp.did,
-            alert_type: 'missing_witness_proof',
-            severity: 'critical',
-            description: `Missing witness proof for ${attestation.attestation_type}`,
-            message: 'Missing witness proof',
-            details: { attestation_id: attestation.id },
-            status: 'active',
-            resolved: false,
-            detected_at: new Date().toISOString(),
-          });
-        }
-
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  function verifyStateConsistency(dpp: DPP, operations: any[], existingAlerts: WatcherAlert[]): boolean {
-    // Compare current state with expected state from history
-    const ownershipChanges = operations.filter(op =>
-      op.attestation_type === 'ownership_change' && op.approval_status === 'approved'
-    );
-
-    if (ownershipChanges.length > 0) {
-      const lastOwnershipChange = ownershipChanges[ownershipChanges.length - 1];
-      const expectedOwner = lastOwnershipChange.attestation_data?.newOwner;
-
-      if (expectedOwner && dpp.owner !== expectedOwner) {
-        const alertExists = existingAlerts.some(a =>
-          a.alert_type === 'state_mismatch' && a.status === 'active'
-        );
-
-        if (!alertExists) {
-          localDB.insertAlert({
-            watcher_id: currentRoleDID,
-            watcher_did: currentRoleDID,
-            dpp_id: dpp.id,
-            did: dpp.did,
-            alert_type: 'state_mismatch',
-            severity: 'critical',
-            description: `Owner mismatch: DID document shows ${dpp.owner} but history indicates ${expectedOwner}`,
-            message: 'State inconsistency detected',
-            details: { expected_owner: expectedOwner, actual_owner: dpp.owner },
-            status: 'active',
-            resolved: false,
-            detected_at: new Date().toISOString(),
-          });
-        }
-
-        return false;
-      }
-    }
-
-    return true;
-  }
-  function calculateIntegrityScore(dpp: DPP, alerts: WatcherAlert[]): number {
-    let score = 100;
-
-    // Reduce score based on active alerts
-    const activeAlerts = alerts.filter(a => a.status === 'active');
-    activeAlerts.forEach(alert => {
-      if (alert.severity === 'critical') score -= 20;
-      else if (alert.severity === 'warning') score -= 10;
-      else if (alert.severity === 'info') score -= 2;
-    });
-
-    // Check lifecycle status
-    if (dpp.lifecycle_status === 'disposed' || dpp.lifecycle_status === 'recycled' || dpp.lifecycle_status === 'end_of_life') {
-      score -= 5;
-    }
-
-    return Math.max(0, Math.min(100, score));
-  }
-
-  async function createAlert() {
-    if (!alertModalDPP || !alertForm.description.trim()) return;
-
-    // Check if there's already an active alert of this type for this DPP
-    const existingAlert = alerts.find(a =>
-      a.dpp_id === alertModalDPP.id &&
-      a.alert_type === alertForm.type &&
-      a.status === 'active'
-    );
-
-    if (existingAlert) {
-      alert('An active alert of this type already exists for this product.');
-      return;
-    }
-
-    await localDB.insertAlert({
-      watcher_id: currentRoleDID,
-      watcher_did: currentRoleDID,
-      dpp_id: alertModalDPP.id,
-      did: alertModalDPP.did,
-      alert_type: alertForm.type,
-      severity: alertForm.severity,
-      description: alertForm.description,
-      message: alertForm.description,
-      details: {},
-      status: 'active',
-      resolved: false,
-      detected_at: new Date().toISOString(),
-    });
-
-    // Reset and close modal
-    setShowAlertModal(false);
-    setAlertModalDPP(null);
-    setAlertForm({ severity: 'warning', type: 'signature_mismatch', description: '' });
-    await loadMonitoringData();
-  }
-
-  async function resolveAlert(alertId: string) {
-    // Update the alert in the database
-    await localDB.updateAlert(alertId, {
-      status: 'resolved',
-      resolved: true
-    });
-
-    // Reload data to get fresh stats
-    await loadMonitoringData();
-  }
-
-  const getFilteredAlerts = () => {
-    if (filter === 'selected' && selectedDPPForDetails) {
-      // Show alerts for selected product only
-      return alerts.filter(a => a.dpp_id === selectedDPPForDetails.id && a.status === 'active');
-    }
-    if (filter === 'all') return alerts.filter(a => a.status === 'active');
-    if (filter === 'resolved') return alerts.filter(a => a.status === 'resolved');
-    return alerts.filter(a => a.severity === filter && a.status === 'active');
-  };
-
-  const filteredAlerts = getFilteredAlerts();
-
-  const getSeverityIcon = (severity: string) => {
-    switch (severity) {
-      case 'critical':
-        return <AlertCircle className="w-5 h-5 text-red-600" />;
-      case 'warning':
-        return <AlertTriangle className="w-5 h-5 text-yellow-600" />;
-      case 'info':
-        return <Info className="w-5 h-5 text-blue-600" />;
-      default:
-        return <CheckCircle className="w-5 h-5 text-green-600" />;
-    }
-  };
-
-  const getIntegrityColor = (score: number) => {
-    if (score >= 90) return 'text-green-600';
-    if (score >= 70) return 'text-yellow-600';
-    return 'text-red-600';
-  };
-
-  // Group monitored DPPs hierarchically
-  const groupedMonitoredDPPs = (): GroupedMonitoredDPPs[] => {
-    const groups = new Map<string, GroupedMonitoredDPPs>();
-
-    // Build parent-child relationships
-    const dppMap = new Map(monitoredDPPs.map(dpp => [dpp.id, dpp]));
-    const didToDppMap = new Map(monitoredDPPs.map(dpp => [dpp.did, dpp]));
-    const parentMap = new Map<string, string>();
-
-    for (const dpp of monitoredDPPs) {
-      if (dpp.type === 'component') {
-        if (dpp.parent_did) {
-          const parentDpp = didToDppMap.get(dpp.parent_did);
-          if (parentDpp) {
-            parentMap.set(dpp.id, parentDpp.id);
-          }
-        } else if (dpp.metadata?.parent_dpp_id) {
-          parentMap.set(dpp.id, String(dpp.metadata.parent_dpp_id));
-        }
-      }
-    }
-
-    monitoredDPPs.forEach((dpp) => {
-      // Determine grouping
-      let groupDppId = dpp.id;
-      let groupDppModel = dpp.model;
-      let isComponent = false;
-
-      if (dpp.type === 'component' && parentMap.has(dpp.id)) {
-        const parentId = parentMap.get(dpp.id)!;
-        const parentDpp = dppMap.get(parentId);
-        if (parentDpp) {
-          groupDppId = parentDpp.id;
-          groupDppModel = parentDpp.model;
-          isComponent = true;
-        }
-      }
-
-      // Create group if doesn't exist
-      if (!groups.has(groupDppId)) {
-        const mainDpp = dppMap.get(groupDppId);
-        groups.set(groupDppId, {
-          dppId: groupDppId,
-          dppName: groupDppModel,
-          dppType: 'main',
-          dpp: mainDpp || dpp,
-          components: [],
-        });
-      }
-
-      const group = groups.get(groupDppId)!;
-
-      // Add to components or update main DPP
-      if (isComponent) {
-        group.components!.push({ name: dpp.model, dpp });
-      } else if (dpp.id === groupDppId) {
-        group.dpp = dpp;
-      }
-    });
-
-    // Filter to show only window groups (main products with components)
-    const validGroups = Array.from(groups.values()).filter(group => {
-      const isWindowGroup = group.dppName.toLowerCase().startsWith('window') &&
-        !group.dppName.toLowerCase().includes('frame') &&
-        !group.dppName.toLowerCase().includes('panel');
-      return isWindowGroup;
-    });
-
-    return validGroups;
-  };
 
   async function loadDPPDetails(dpp: MonitoredDPP) {
-    setSelectedDPPForDetails(dpp);
-    setFilter('selected'); // Auto-switch to selected product tab
+    // Note: We don't clear rawLog/rawWitness here to prevent flickering during auto-refresh
 
-    // Load DID history (operations) - pass DPP ID not DID
+    // Load DID history (operations)
     const historyResult = await getDIDOperationsHistory(dpp.id);
-    setDidHistory(historyResult.success ? historyResult.operations : []);
+    const ops = historyResult.success ? historyResult.operations : [];
+    setDidHistory(ops);
 
-    // Load attestations
-    const atts = await enhancedDB.getAttestationsByDID(dpp.did);
-    setAttestations(atts);
+    // Fetch raw files with cache-buster to ensure real-time updates
+    try {
+      const scid = extractSCID(dpp.did);
+      if (scid) {
+        const timestamp = Date.now();
+        // Use the relative path (proxied via Vite) for consistency
+        const logRes = await fetch(`/.well-known/did/${scid}/did.jsonl?t=${timestamp}`);
+        if (logRes.ok) setRawLog(await logRes.text());
+
+        const witnessRes = await fetch(`/.well-known/did/${scid}/did-witness.json?t=${timestamp}`);
+        if (witnessRes.ok) setRawWitness(await witnessRes.text());
+      }
+    } catch (err) {
+      console.error('Failed to fetch raw files:', err);
+    }
   }
 
+  async function handleFlagEvent() {
+    if (!flagTargetEvent || !selectedDPP) return;
+
+    // Use robust helper to extract integer ID from potentially string identifier
+    const eventId = getEventId(flagTargetEvent);
+    const numericEventId = parseInt(eventId);
+
+    // Clear manual verification result for this event to ensures the alert shows up in sidebar
+    // regardless of previous "valid" status.
+    if (numericEventId && selectedDPP) {
+      const dppScid = extractSCID(selectedDPP.did).toLowerCase();
+      const key = `${dppScid}-event-${numericEventId}`;
+      setManualVerificationResults(prev => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
+
+    await api.watcher.createAlert({
+      did: selectedDPP.did,
+      event_id: isNaN(numericEventId) ? null : numericEventId,
+      reason: flagForm.reason,
+      details: flagForm.details,
+      reporter: currentRoleDID
+    });
+
+    // Invalidate cache and reload
+    await enhancedDB.clearAllAlerts();
+    await loadMonitoringData();
+
+    setShowFlagModal(false);
+  }
+
+  async function handleResolveAlerts(specificEventId?: string | number) {
+    if (!selectedDPP) return;
+
+    try {
+      await api.watcher.deleteAlerts(selectedDPP.did, specificEventId);
+      // Invalidate cache and reload
+      await enhancedDB.clearAlertsByDID(selectedDPP.did);
+      await loadMonitoringData();
+
+      // Use alert instead of toast since library is missing
+      if (specificEventId) {
+        console.log('Event flag removed');
+      } else {
+        console.log('All flags resolved');
+      }
+    } catch (err) {
+      console.error('Failed to resolve alerts:', err);
+      alert('Failed to resolve alerts');
+    }
+  }
+
+
+  /**
+   * Automatically create a system alert if a manual verification fails
+   */
+  async function handleVerificationComplete(result: any) {
+    if (selectedDPP && selectedOperationIndex !== null) {
+      const dppScid = extractSCID(selectedDPP.did).toLowerCase();
+      const dbOp = didHistory[selectedOperationIndex];
+      const eventId = getEventId(dbOp);
+      const opHash = hashOperation(dbOp);
+      const vId = dbOp.version_id || dbOp.version || '';
+
+      console.log(`[WatcherDashboard] Manual audit: index=${selectedOperationIndex}, id=${eventId}, hash=${opHash.substring(0, 8)}, valid=${result.isValid}`);
+
+      setManualVerificationResults(prev => ({
+        ...prev,
+        // Canonical keys for this specific event card
+        [`${dppScid}-event-${eventId}`]: result.isValid,
+        [`${dppScid}-hash-${opHash}`]: result.isValid,
+        [`${dppScid}-index-${selectedOperationIndex}`]: result.isValid,
+        ...(vId ? { [`${dppScid}-version-${vId}`]: result.isValid } : {})
+      }));
+
+      if (!result.isValid) {
+        const isAlreadyAlerted = alerts.some(a =>
+          extractSCID(a.did).toLowerCase() === dppScid &&
+          String(a.event_id) === eventId
+        );
+
+        if (!isAlreadyAlerted) {
+          console.log('[WatcherDashboard] Propagating failure to backend...');
+          try {
+            const numericEventId = parseInt(eventId);
+            await api.watcher.createAlert({
+              did: selectedDPP.did,
+              event_id: isNaN(numericEventId) ? null : numericEventId,
+              reason: 'proof_mismatch',
+              details: `CRITICAL AUDIT FAILURE: Root mismatch for event ${eventId}. Computed ${result.computedRoot.substring(0, 10)} differs from DLT root ${result.expectedRoot.substring(0, 10)}.`,
+              reporter: 'Cryptographic-Audit-Engine'
+            });
+
+            // 3. Force state refresh
+            await enhancedDB.clearAllAlerts();
+            await loadMonitoringData();
+            setLastRefresh(Date.now()); // Trigger reload of DPP details
+          } catch (err) {
+            console.error('[WatcherDashboard] Failed to propagate rejection:', err);
+          }
+        }
+      }
+    }
+  }
+
+  const filteredDPPs = monitoredDPPs.filter(dpp =>
+    (dpp.model?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+    (dpp.did?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+    (dpp.scid?.toLowerCase() || '').includes(searchTerm.toLowerCase())
+  );
+
+  // Extract the actual proof and operation from the raw files (simulating trustless auditor)
+  const fileBasedVerificationData = useMemo(() => {
+    if (selectedOperationIndex === null || !didHistory[selectedOperationIndex]) return null;
+    const dbOp = didHistory[selectedOperationIndex];
+
+    let fileProof = undefined;
+    let fileOp = undefined;
+
+    // 1. Try to find the event in the raw .jsonl log
+    if (rawLog) {
+      const lines = rawLog.trim().split('\n');
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line);
+          if (entry.versionId === dbOp.version_id) {
+            fileOp = entry;
+            break;
+          }
+        } catch (e) { /* ignore parse errors */ }
+      }
+    }
+
+    // 2. Try to find the witness proof in the raw did-witness.json
+    if (rawWitness) {
+      try {
+        const witnessData = JSON.parse(rawWitness);
+        // Correctly handle if did-witness.json is a direct array or has a wrapper
+        const proofs = Array.isArray(witnessData)
+          ? witnessData
+          : (witnessData.anchoringProofs || witnessData.witnessProofs || []);
+
+        fileProof = proofs.find((p: any) =>
+          String(p.versionId) === String(dbOp.version_id) ||
+          String(p.version_id) === String(dbOp.version_id)
+        );
+      } catch (e) {
+        console.error('Error parsing raw witness:', e);
+      }
+    }
+
+    // Fallback to database data if the file hasn't loaded yet or entry wasn't found
+    // This prevents the "No Operation Selected" bug
+    return {
+      fileProof: fileProof || dbOp.witness_proofs,
+      fileOp: fileOp || dbOp
+    };
+  }, [selectedOperationIndex, didHistory, rawLog, rawWitness]);
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6 pt-20 transition-colors">
-      <div className="max-w-[1920px] mx-auto">
-        {/* Header */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 mb-6 transition-colors">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-3 bg-rose-100 dark:bg-rose-900/50 rounded-lg">
-                  <Activity className="w-8 h-8 text-rose-600 dark:text-rose-400" />
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Watcher Node Dashboard</h1>
-                  <p className="text-gray-600 dark:text-gray-400">Monitor integrity and detect anomalies</p>
-                </div>
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-sm text-gray-500 dark:text-gray-400">Your Watcher DID</div>
-              <div className="text-xs font-mono text-gray-900 dark:text-gray-200 mt-1">{currentRoleDID}</div>
-            </div>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors pt-16 flex overflow-hidden h-screen">
+      {/* Sidebar - Product Selection */}
+      <div className="w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col shrink-0">
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search DPPs..."
+              className="w-full pl-9 pr-4 py-2 bg-gray-100 dark:bg-gray-700 border-none rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
+          <button
+            onClick={handleReset}
+            className={`p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-500 transition-colors ${isRefreshing ? 'opacity-50' : ''}`}
+            disabled={isRefreshing}
+            title="Refresh Monitoring Data"
+          >
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+          </button>
         </div>
 
-        {/* Statistics */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 transition-colors">
-            <div className="flex items-center gap-3">
-              <Eye className="w-8 h-8 text-blue-600 dark:text-blue-400" />
-              <div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.monitored}</div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Monitored DPPs</div>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 transition-colors">
-            <div className="flex items-center gap-3">
-              <AlertCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
-              <div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.criticalAlerts}</div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Critical Alerts</div>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 transition-colors">
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="w-8 h-8 text-yellow-600 dark:text-yellow-400" />
-              <div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.warningAlerts}</div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Warnings</div>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 transition-colors">
-            <div className="flex items-center gap-3">
-              <TrendingUp className="w-8 h-8 text-green-600 dark:text-green-400" />
-              <div>
-                <div className={`text-2xl font-bold ${getIntegrityColor(stats.averageIntegrity)}`}>
-                  {stats.averageIntegrity.toFixed(1)}%
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          {filteredDPPs.length === 0 ? (
+            <div className="text-center py-8 text-gray-500 text-sm">No products found</div>
+          ) : (
+            filteredDPPs.map(dpp => (
+              <button
+                key={dpp.id}
+                onClick={() => setSelectedDPPId(dpp.id)}
+                className={`w-full flex items-center justify-between p-3 rounded-lg transition-all text-left group border ${selectedDPPId === dpp.id
+                  ? (dpp.integrityScore < 90 || dpp.alertCount > 0
+                    ? 'bg-red-50 dark:bg-red-900/40 border-red-500 ring-1 ring-red-500 shadow-lg'
+                    : 'bg-blue-50 dark:bg-blue-900/40 border-blue-200 dark:border-blue-800 shadow-sm')
+                  : (dpp.integrityScore < 90 || dpp.alertCount > 0
+                    ? 'bg-red-50/30 dark:bg-red-900/10 border-red-200 dark:border-red-900/40'
+                    : 'hover:bg-gray-50 dark:hover:bg-gray-700 border-transparent')
+                  }`}
+              >
+                <div className="flex items-center gap-3">
+                  {dpp.integrityScore < 90 || dpp.alertCount > 0 ? (
+                    <AlertTriangle className="w-5 h-5 text-red-500 animate-pulse" />
+                  ) : (
+                    <Package className={`w-5 h-5 ${selectedDPPId === dpp.id ? 'text-blue-600' : 'text-gray-400'}`} />
+                  )}
+                  <div>
+                    <div className="font-medium text-gray-900 dark:text-white text-sm flex items-center gap-2">
+                      {dpp.model}
+                      {(dpp.integrityScore < 90 || dpp.alertCount > 0) && (
+                        <Flag className="w-4 h-4 text-red-600 fill-red-600 animate-bounce" />
+                      )}
+                    </div>
+                    <div className="text-[10px] uppercase font-mono text-gray-500 dark:text-gray-400">{dpp.scid}</div>
+                  </div>
                 </div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Avg. Integrity</div>
-              </div>
-            </div>
-          </div>
+                {(dpp.integrityScore < 90 || dpp.alertCount > 0) && (
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white shadow-sm animate-bounce">
+                    {dpp.alertCount || '!'}
+                  </span>
+                )}
+              </button>
+            ))
+          )}
         </div>
+      </div>
 
-        <div className="grid grid-cols-3 gap-6">
-          {/* Monitored DPPs - Left Column */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors">
-            <div className="border-b border-gray-200 dark:border-gray-700 p-4">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                Monitored Products
-              </h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Click a product to view DID details</p>
-            </div>
-            <div className="p-4 max-h-[800px] overflow-y-auto">
-              {monitoredDPPs.length === 0 ? (
-                <div className="text-center py-8">
-                  <Eye className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-500 dark:text-gray-400">No products monitored yet</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {groupedMonitoredDPPs().map((group) => {
-                    const isExpanded = expandedDPP === group.dppId;
-                    const dpp = group.dpp;
-
-                    return (
-                      <div key={group.dppId} className="border border-gray-200 rounded-lg overflow-hidden">
-                        {/* Window/Main Product Header */}
-                        <div
-                          className={`bg-blue-100 dark:bg-gray-800 p-3 cursor-pointer hover:bg-blue-200 dark:hover:bg-gray-700 transition-colors ${selectedDPPForDetails?.id === dpp.id ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''
-                            }`}
-                          onClick={() => {
-                            setExpandedDPP(isExpanded ? null : group.dppId);
-                            loadDPPDetails(dpp);
-                          }}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3 flex-1">
-                              <Package className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                              <div className="flex-1">
-                                <h3 className="font-semibold text-blue-900 dark:text-white">{dpp.model}</h3>
-                                <p className="text-xs text-blue-600 dark:text-blue-400">
-                                  {dpp.type} • {group.components?.length || 0} component{(group.components?.length || 0) !== 1 ? 's' : ''}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <div className="text-right">
-                                <div className={`text-xl font-bold ${getIntegrityColor(dpp.integrityScore)}`}>
-                                  {dpp.integrityScore}%
-                                </div>
-                                <div className="text-xs text-gray-500">Integrity</div>
-                              </div>
-                              {isExpanded ? (
-                                <ChevronUp className="w-5 h-5 text-blue-600" />
-                              ) : (
-                                <ChevronDown className="w-5 h-5 text-blue-600" />
-                              )}
-                            </div>
-                          </div>
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {selectedDPP ? (
+          <>
+            {/* Context Header */}
+            <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-blue-100 dark:bg-blue-900/50 rounded-xl">
+                    <Shield className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <h1 className="text-2xl font-bold dark:text-white flex items-center gap-2">
+                      Audit: {selectedDPP.model}
+                      <span className={`text-sm font-normal px-2 py-0.5 rounded shadow-sm border ${selectedDPP.integrityScore >= 90
+                        ? 'bg-green-100 text-green-700 border-green-200'
+                        : 'bg-red-100 text-red-700 border-red-200'
+                        }`}>
+                        Integrity: {selectedDPP.integrityScore}%
+                      </span>
+                      <span className={`text-xs uppercase font-extrabold px-3 py-1 rounded-full border-2 ${selectedDPP.integrityScore < 90
+                        ? 'bg-red-600 text-white border-red-700'
+                        : 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                        }`}>
+                        {selectedDPP.integrityScore < 90 ? 'STATUS: REJECTED / TAMPERED' : 'STATUS: ACTIVE (CERTIFIED)'}
+                      </span>
+                    </h1>
+                    <div className="flex items-center gap-4 mt-1">
+                      <p className="text-gray-500 text-xs font-mono">{selectedDPP.did}</p>
+                      {alerts.filter(a =>
+                        extractSCID(a.did).toLowerCase() === extractSCID(selectedDPP.did).toLowerCase() && !a.event_id
+                      ).map((alert, idx) => (
+                        <div key={idx} className="flex items-center gap-1.5 px-2 py-0.5 bg-red-600 text-white text-[10px] font-bold rounded animate-pulse uppercase">
+                          <AlertTriangle className="w-3 h-3" />
+                          {alert.reason.replace(/_/g, ' ')}
                         </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
 
-                        {/* Window Content - Collapsible */}
-                        {isExpanded && (
-                          <>
-                            {/* Main Product Details */}
-                            <div className="bg-white p-3 border-b border-gray-200">
-                              {dpp.alertCount > 0 && (
-                                <div className="flex items-center gap-2 text-sm text-red-600 mb-3">
-                                  <AlertCircle className="w-4 h-4" />
-                                  {dpp.alertCount} active alert{dpp.alertCount !== 1 ? 's' : ''}
-                                </div>
-                              )}
+                <div className="flex gap-4">
+                  <div className="text-right">
+                    <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">Status</div>
+                    <div className={`flex items-center gap-2 font-bold ${selectedDPP.integrityScore < 90 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'
+                      }`}>
+                      {selectedDPP.integrityScore < 90 ? (
+                        <div className="flex flex-col items-end gap-1">
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="w-4 h-4" />
+                            REJECTED
+                          </div>
+                          <button
+                            onClick={() => handleResolveAlerts()}
+                            className="text-[10px] bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 py-1 rounded border border-emerald-300 transition-colors flex items-center gap-1"
+                          >
+                            <Shield className="w-3 h-3" />
+                            RESOLVE ALL
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <CheckCircle className="w-4 h-4" />
+                          ACTIVE
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-                              <div className="grid grid-cols-2 gap-2 text-sm mb-3">
-                                <div>
-                                  <span className="text-gray-600">Status:</span>
-                                  <span className="ml-2 text-gray-900">{dpp.lifecycle_status}</span>
+              {/* Tier 2 Tabs */}
+              <div className="flex gap-8">
+                <button
+                  onClick={() => setActiveTab('audit')}
+                  className={`pb-4 text-sm font-medium transition-colors relative ${activeTab === 'audit' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <LayoutDashboard className="w-4 h-4" />
+                    Audit Journal
+                  </div>
+                  {activeTab === 'audit' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />}
+                </button>
+                <button
+                  onClick={() => setActiveTab('resources')}
+                  className={`pb-4 text-sm font-medium transition-colors relative ${activeTab === 'resources' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Database className="w-4 h-4" />
+                    Protocol Resources
+                  </div>
+                  {activeTab === 'resources' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Scrollable Workspace */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-8">
+              {activeTab === 'audit' ? (
+                <>
+                  {/* Visual Verification Section */}
+                  <section>
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-lg font-bold dark:text-white flex items-center gap-2">
+                        <GitBranch className="w-5 h-5 text-indigo-500" />
+                        Merkle Integrity Path
+                      </h2>
+                      <div className="text-xs text-gray-500">Visual proof of anchor validity</div>
+                    </div>
+                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-2 min-h-[400px]">
+                      <MerkleTreeVisualizer
+                        scid={extractSCID(selectedDPP.did)}
+                        history={didHistory}
+                        selectedProof={fileBasedVerificationData?.fileProof}
+                        localOperation={fileBasedVerificationData?.fileOp}
+                        onVerificationComplete={handleVerificationComplete}
+                        onReset={handleReset}
+                        alerts={alerts.filter(a => extractSCID(a.did).toLowerCase() === extractSCID(selectedDPP.did).toLowerCase())}
+                      />
+                    </div>
+                  </section>
+
+                  {/* Journal Feed */}
+                  <section>
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-lg font-bold dark:text-white flex items-center gap-2">
+                        <Activity className="w-5 h-5 text-emerald-500" />
+                        Historical Events
+                      </h2>
+                      <div className="px-3 py-1 bg-gray-100 dark:bg-gray-800 rounded-lg text-[10px] font-mono text-gray-500">
+                        {didHistory.length} EVENTS TOTAL
+                      </div>
+                    </div>
+
+                    <div className="bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-xl p-4 mb-6">
+                      <div className="flex items-start gap-4">
+                        <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
+                          <ShieldCheck className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="text-sm font-bold text-blue-900 dark:text-blue-300">Automatic Integrity Audit</h3>
+                          <p className="text-xs text-blue-800/70 dark:text-blue-400/70 mt-1 leading-relaxed">
+                            The watcher service continuously verifies the hash-chain integrity and DLT anchors for all events in this product's lifecycle.
+                            Select an individual event below to inspect its specific Merkle proof and DLT signature.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      {didHistory.length === 0 && (
+                        <div className="p-8 text-center text-gray-500 bg-white dark:bg-gray-800 rounded-xl border border-dashed border-gray-300">
+                          No operations found for this DID
+                        </div>
+                      )}
+                      {didHistory.map((op, idx) => {
+                        const dppScid = extractSCID(selectedDPP.did).toLowerCase();
+                        const eventId = getEventId(op);
+                        const opHash = hashOperation(op);
+
+                        // Canonical version ID extraction
+                        let vNum = op.version || op.version_id || (op.uri?.includes('version=') ? op.uri.split('version=')[1] : null);
+                        if (!vNum && op.uri?.includes('operation-')) {
+                          vNum = op.uri.split('operation-')[1];
+                        }
+                        const vId = vNum ? String(vNum) : '';
+
+                        // Check backend alerts
+                        const isEventFlagged = alerts.some(a =>
+                          extractSCID(a.did).toLowerCase() === dppScid &&
+                          (a.event_id !== null && (String(a.event_id) === eventId || (vId && String(a.event_id) === vId)))
+                        );
+
+                        const isGlobalFlagged = alerts.some(a =>
+                          extractSCID(a.did).toLowerCase() === dppScid && !a.event_id
+                        );
+
+                        // Check local results: Match by Event ID, Hash, Index, or Version
+                        const manualResult =
+                          manualVerificationResults[`${dppScid}-event-${eventId}`] ??
+                          manualVerificationResults[`${dppScid}-hash-${opHash}`] ??
+                          manualVerificationResults[`${dppScid}-index-${idx}`] ??
+                          (vId ? manualVerificationResults[`${dppScid}-version-${vId}`] : undefined);
+
+                        const isManualFailure = manualResult === false;
+
+                        // RE-CHECK: If the visualizer says it's invalid, we MUST show it here 
+                        const isFlagged = isEventFlagged || isGlobalFlagged || isManualFailure;
+
+                        // IMPORTANT: An event is only "Verified" if it's anchored AND NO AUDIT HAS FAILED IT
+                        const isAnchored = Boolean(op.witness_proofs || op.signature);
+                        const showVerifiedBadge = isAnchored && !isFlagged;
+
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => setSelectedOperationIndex(idx)}
+                            className={`group relative bg-white dark:bg-gray-800 rounded-xl border p-4 transition-all cursor-pointer ${isFlagged
+                              ? 'border-red-500 ring-2 ring-red-500/50 shadow-lg'
+                              : selectedOperationIndex === idx
+                                ? 'border-blue-500 ring-2 ring-blue-500 shadow-lg translate-x-1'
+                                : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                              }`}
+                          >
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-3">
+                                <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${op.attestation_type.includes('creation') ? 'bg-purple-100 text-purple-700' :
+                                  op.attestation_type.includes('transfer') ? 'bg-orange-100 text-orange-700' :
+                                    'bg-blue-100 text-blue-700'
+                                  }`}>
+                                  {op.attestation_type.replace(/_/g, ' ')}
                                 </div>
-                                <div>
-                                  <span className="text-gray-600">Last Verified:</span>
-                                  <span className="ml-2 text-gray-900">
-                                    {new Date(dpp.lastVerified).toLocaleTimeString()}
-                                  </span>
-                                </div>
+                                <span className="text-xs text-gray-400">{new Date(op.timestamp).toLocaleString()}</span>
                               </div>
-
-                              <div className="flex gap-2">
+                              <div className="flex items-center gap-2">
+                                {showVerifiedBadge && (
+                                  <div className="flex items-center gap-1 text-emerald-600 text-[10px] font-extrabold px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 rounded-full border border-emerald-200 dark:border-emerald-800/50">
+                                    <ShieldCheck className="w-3 h-3" />
+                                    VERIFIED
+                                  </div>
+                                )}
+                                {isFlagged && (
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-1 text-red-600 text-xs font-bold px-2 py-1 bg-red-100 dark:bg-red-900/20 rounded-full border border-red-300 animate-in fade-in zoom-in duration-300">
+                                      <Flag className="w-3 h-3" />
+                                      REJECTED
+                                    </div>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const eventId = getEventId(op);
+                                        const numericId = parseInt(eventId);
+                                        // Pass specific ID if valid, otherwise it might resolve all
+                                        handleResolveAlerts(!isNaN(numericId) ? numericId : eventId);
+                                      }}
+                                      className="flex items-center gap-1 px-2 py-0.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 text-[10px] font-medium rounded transition-colors border border-gray-200 dark:border-gray-600"
+                                    >
+                                      <Shield className="w-3 h-3" />
+                                      Unflag
+                                    </button>
+                                  </div>
+                                )}
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setAlertModalDPP(dpp);
-                                    setAlertForm({ severity: 'warning', type: 'did_history_anomaly', description: '' });
-                                    setShowAlertModal(true);
+                                    setFlagTargetEvent(op);
+                                    setShowFlagModal(true);
                                   }}
-                                  className="px-3 py-1.5 text-sm bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200"
+                                  className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  title="Report Inconsistency"
                                 >
-                                  Report Issue
+                                  <Flag className="w-4 h-4" />
                                 </button>
                               </div>
                             </div>
 
-                            {/* Component Sub-DPPs */}
-                            {group.components && group.components.map((component) => {
-                              const componentKey = `${group.dppId}-${component.name}`;
-                              const isComponentExpanded = expandedComponents.has(componentKey);
-                              const compDpp = component.dpp;
-
-                              return (
-                                <div key={component.name} className="border-t border-gray-300">
-                                  {/* Component Header */}
-                                  <div
-                                    className={`bg-purple-100 px-4 py-2 cursor-pointer hover:bg-purple-200 transition-colors ${selectedDPPForDetails?.id === compDpp.id ? 'ring-2 ring-purple-500' : ''
-                                      }`}
-                                    onClick={() => {
-                                      const newExpanded = new Set(expandedComponents);
-                                      if (isComponentExpanded) {
-                                        newExpanded.delete(componentKey);
-                                      } else {
-                                        newExpanded.add(componentKey);
-                                      }
-                                      setExpandedComponents(newExpanded);
-                                      loadDPPDetails(compDpp);
-                                    }}
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-3 flex-1">
-                                        <Shield className="w-4 h-4 text-purple-600" />
-                                        <div className="flex-1">
-                                          <h4 className="font-semibold text-purple-900 text-sm">{component.name}</h4>
-                                          <p className="text-xs text-purple-600">component</p>
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-3">
-                                        <div className="text-right">
-                                          <div className={`text-lg font-bold ${getIntegrityColor(compDpp.integrityScore)}`}>
-                                            {compDpp.integrityScore}%
-                                          </div>
-                                        </div>
-                                        {isComponentExpanded ? (
-                                          <ChevronUp className="w-4 h-4 text-purple-600" />
-                                        ) : (
-                                          <ChevronDown className="w-4 h-4 text-purple-600" />
-                                        )}
-                                      </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-1">
+                                <div className="text-[10px] uppercase text-gray-500 font-bold">Witness Node</div>
+                                <div className="text-xs font-mono truncate text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/50 px-2 py-1 rounded">{op.witness_did}</div>
+                              </div>
+                              <div className="space-y-1">
+                                <div className="text-[10px] uppercase text-gray-500 font-bold">Cryptographic Anchor</div>
+                                {(() => {
+                                  const txHash = op.tx_hash || op.witness_proofs?.txHash;
+                                  return txHash ? (
+                                    <a
+                                      href={`https://sepolia.etherscan.io/tx/${txHash}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-xs font-mono truncate text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded hover:underline flex items-center gap-1"
+                                    >
+                                      <ExternalLink className="w-3 h-3" />
+                                      {txHash.substring(0, 18)}...
+                                    </a>
+                                  ) : (
+                                    <div className="text-xs font-mono truncate text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-900/50 px-2 py-1 rounded italic">
+                                      Local (Pending Anchor)
                                     </div>
-                                  </div>
-
-                                  {/* Component Details */}
-                                  {isComponentExpanded && (
-                                    <div className="bg-white p-3">
-                                      {compDpp.alertCount > 0 && (
-                                        <div className="flex items-center gap-2 text-sm text-red-600 mb-3">
-                                          <AlertCircle className="w-4 h-4" />
-                                          {compDpp.alertCount} active alert{compDpp.alertCount !== 1 ? 's' : ''}
-                                        </div>
-                                      )}
-
-                                      <div className="grid grid-cols-2 gap-2 text-sm mb-3">
-                                        <div>
-                                          <span className="text-gray-600">Status:</span>
-                                          <span className="ml-2 text-gray-900">{compDpp.lifecycle_status}</span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-600">Last Verified:</span>
-                                          <span className="ml-2 text-gray-900">
-                                            {new Date(compDpp.lastVerified).toLocaleTimeString()}
-                                          </span>
-                                        </div>
-                                      </div>
-
-                                      <div className="flex gap-2">
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setAlertModalDPP(compDpp);
-                                            setAlertForm({ severity: 'warning', type: 'did_history_anomaly', description: '' });
-                                            setShowAlertModal(true);
-                                          }}
-                                          className="px-3 py-1.5 text-xs bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200"
-                                        >
-                                          Report Issue
-                                        </button>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* DID Details Panel - Middle Column */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors">
-            <div className="border-b border-gray-200 dark:border-gray-700 p-4">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                <FileText className="w-5 h-5 text-green-600 dark:text-green-400" />
-                DID Verification Details
-              </h2>
-              {selectedDPPForDetails && (
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{selectedDPPForDetails.model}</p>
-              )}
-            </div>
-            <div className="p-4 max-h-[800px] overflow-y-auto">
-              {!selectedDPPForDetails ? (
-                <div className="text-center py-12">
-                  <Eye className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-500 dark:text-gray-400">Select a product to view DID details</p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">Click on any product to inspect signatures and hashes</p>
-                </div>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                </>
               ) : (
-                <div className="space-y-4">
-                  {/* DID Information */}
-                  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-                    <h3 className="font-semibold text-gray-900 dark:text-white mb-2 text-sm">DID Information</h3>
-                    <div className="space-y-2 text-xs">
-                      <div>
-                        <span className="text-gray-600 dark:text-gray-400">DID:</span>
-                        <p className="font-mono text-gray-900 dark:text-gray-200 break-all mt-1">{selectedDPPForDetails.did}</p>
+                <>
+                  {/* Technical Resources Section */}
+                  <div className="grid grid-cols-1 gap-6">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                      <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-orange-500" />
+                          <h3 className="text-sm font-bold">DID Resolver Log (did.jsonl)</h3>
+                        </div>
+                        <span className="text-[10px] text-gray-500 font-mono">raw_resource_01</span>
                       </div>
-                      <div>
-                        <span className="text-gray-600 dark:text-gray-400">Owner:</span>
-                        <p className="font-mono text-gray-900 dark:text-gray-200 break-all mt-1">{selectedDPPForDetails.owner}</p>
+                      <div className="p-4 bg-gray-900 min-h-[200px] max-h-[400px] overflow-auto">
+                        <pre className="text-emerald-400 text-xs font-mono">
+                          {rawLog ? (
+                            rawLog.split('\n')
+                              .filter(l => l.trim())
+                              .map(line => {
+                                try {
+                                  return JSON.stringify(JSON.parse(line), null, 2);
+                                } catch {
+                                  return line;
+                                }
+                              })
+                              .join('\n\n---\n\n')
+                          ) : (
+                            'Fetching log...'
+                          )}
+                        </pre>
                       </div>
-                      <div>
-                        <span className="text-gray-600 dark:text-gray-400">Status:</span>
-                        <span className="ml-2 px-2 py-0.5 bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 rounded">{selectedDPPForDetails.lifecycle_status}</span>
+                    </div>
+
+                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                      <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Database className="w-4 h-4 text-blue-500" />
+                          <h3 className="text-sm font-bold">Witness Anchor Proofs (did-witness.json)</h3>
+                        </div>
+                        <span className="text-[10px] text-gray-500 font-mono">raw_resource_02</span>
+                      </div>
+                      <div className="p-4 bg-gray-900 min-h-[200px] max-h-[400px] overflow-auto">
+                        <pre className="text-blue-400 text-xs font-mono">
+                          {rawWitness ? (
+                            (() => {
+                              try {
+                                return JSON.stringify(JSON.parse(rawWitness), null, 2);
+                              } catch {
+                                return rawWitness;
+                              }
+                            })()
+                          ) : (
+                            'Fetching proofs...'
+                          )}
+                        </pre>
                       </div>
                     </div>
                   </div>
-
-                  {/* DID Operations History */}
-                  <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-3">
-                    <h3 className="font-semibold text-gray-900 dark:text-white mb-2 text-sm flex items-center gap-2">
-                      <Activity className="w-4 h-4" />
-                      DID Operations History ({didHistory.length})
-                    </h3>
-                    {didHistory.length === 0 ? (
-                      <p className="text-xs text-gray-500 dark:text-gray-400">No DID operations recorded</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {didHistory.map((op: any, idx: number) => (
-                          <div key={idx} className="bg-white dark:bg-gray-800 rounded p-2 text-xs">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="font-semibold text-blue-900 dark:text-blue-300">{op.attestation_type.replace(/_/g, ' ').toUpperCase()}</span>
-                              <span className="text-gray-500 dark:text-gray-400">{new Date(op.timestamp).toLocaleString()}</span>
-                            </div>
-                            <div className="space-y-1">
-                              <div>
-                                <span className="text-gray-600 dark:text-gray-400">Witness:</span>
-                                <p className="font-mono text-gray-900 dark:text-gray-200 break-all">{op.witness_did}</p>
-                              </div>
-                              <div>
-                                <span className="text-gray-600 dark:text-gray-400">Signature:</span>
-                                <p className="font-mono text-gray-900 dark:text-gray-200 break-all">{op.signature}</p>
-                              </div>
-                              {op.approval_status && (
-                                <div>
-                                  <span className="text-gray-600 dark:text-gray-400">Status:</span>
-                                  <span className={`ml-2 px-2 py-0.5 rounded ${op.approval_status === 'approved' ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' :
-                                    op.approval_status === 'pending' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
-                                      'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
-                                    }`}>{op.approval_status}</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Attestations */}
-                  <div className="bg-purple-50 dark:bg-purple-900/30 rounded-lg p-3">
-                    <h3 className="font-semibold text-gray-900 dark:text-white mb-2 text-sm flex items-center gap-2">
-                      <Hash className="w-4 h-4" />
-                      All Attestations ({attestations.length})
-                    </h3>
-                    {attestations.length === 0 ? (
-                      <p className="text-xs text-gray-500 dark:text-gray-400">No attestations found</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {attestations.map((att: any, idx: number) => (
-                          <div key={idx} className="bg-white dark:bg-gray-800 rounded p-2 text-xs">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="font-semibold text-purple-900 dark:text-purple-300">{att.attestation_type.replace(/_/g, ' ').toUpperCase()}</span>
-                              <span className="text-gray-500 dark:text-gray-400">{new Date(att.timestamp).toLocaleString()}</span>
-                            </div>
-                            <div className="space-y-1">
-                              <div>
-                                <span className="text-gray-600 dark:text-gray-400">Witness DID:</span>
-                                <p className="font-mono text-gray-900 dark:text-gray-200 break-all">{att.witness_did}</p>
-                              </div>
-                              <div>
-                                <span className="text-gray-600 dark:text-gray-400">Signature:</span>
-                                <p className="font-mono text-gray-900 dark:text-gray-200 break-all bg-gray-50 dark:bg-gray-700 p-1 rounded">{att.signature}</p>
-                              </div>
-                              {att.attestation_data && Object.keys(att.attestation_data).length > 0 && (
-                                <div>
-                                  <span className="text-gray-600 dark:text-gray-400">Data Hash:</span>
-                                  <p className="font-mono text-gray-900 dark:text-gray-200 break-all bg-gray-50 dark:bg-gray-700 p-1 rounded">
-                                    {JSON.stringify(att.attestation_data).substring(0, 64)}...
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
+                </>
               )}
             </div>
+          </>
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center text-gray-500">
+            <Eye className="w-16 h-16 mb-4 text-gray-300" />
+            <h2 className="text-xl font-medium">Ready for Audit</h2>
+            <p className="max-w-xs text-center mt-2">Select a product from the sidebar to inspect its cryptographic integrity lifecycle.</p>
           </div>
-
-          {/* Alerts - Right Column */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors">
-            <div className="border-b border-gray-200 dark:border-gray-700">
-              <div className="flex">
-                {[
-                  { id: 'all', label: 'All Alerts', count: alerts.filter(a => a.status === 'active').length },
-                  ...(selectedDPPForDetails ? [{
-                    id: 'selected',
-                    label: selectedDPPForDetails.model || 'Selected',
-                    count: alerts.filter(a => a.dpp_id === selectedDPPForDetails.id && a.status === 'active').length
-                  }] : []),
-                  { id: 'critical', label: 'Critical', count: alerts.filter(a => a.severity === 'critical' && a.status === 'active').length },
-                  { id: 'warning', label: 'Warning', count: alerts.filter(a => a.severity === 'warning').length },
-                  { id: 'resolved', label: 'Resolved', count: alerts.filter(a => a.status === 'resolved').length },
-                ].map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setFilter(tab.id as any)}
-                    className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${filter === tab.id
-                      ? 'bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white border-b-2 border-blue-600'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700'
-                      }`}
-                  >
-                    {tab.label} ({tab.count})
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="p-4 min-h-[800px] max-h-[800px] overflow-y-auto">
-              {filteredAlerts.length === 0 ? (
-                <div className="text-center py-8">
-                  <CheckCircle className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-500 dark:text-gray-400">No alerts to display</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {filteredAlerts.map((alert) => {
-                    const dpp = monitoredDPPs.find(d => d.id === alert.dpp_id);
-                    return (
-                      <div
-                        key={alert.id}
-                        className={`border rounded-lg p-4 ${alert.severity === 'critical'
-                          ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/30'
-                          : alert.severity === 'warning'
-                            ? 'border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/30'
-                            : 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30'
-                          }`}
-                      >
-                        <div className="flex items-start gap-3">
-                          {getSeverityIcon(alert.severity)}
-                          <div className="flex-1">
-                            <div className="flex items-start justify-between mb-1">
-                              <div>
-                                <h3 className="font-semibold text-gray-900 dark:text-white">
-                                  {alert.alert_type.replace(/_/g, ' ').toUpperCase()}
-                                </h3>
-                                <p className="font-semibold text-sm text-white">{dpp?.model || 'Unknown Product'}</p>
-                              </div>
-                              <span className={`px-2 py-1 text-xs rounded ${alert.status === 'active'
-                                ? 'bg-red-100 text-red-700'
-                                : 'bg-green-100 text-green-700'
-                                }`}>
-                                {alert.status}
-                              </span>
-                            </div>
-                            <p className="text-sm text-gray-700 dark:text-white mb-2">{alert.description}</p>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                              Detected: {new Date(alert.detected_at).toLocaleString()}
-                            </div>
-
-                            {alert.status === 'active' && (
-                              <button
-                                onClick={() => resolveAlert(alert.id)}
-                                className="mt-2 px-3 py-1 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-50 dark:hover:bg-gray-600"
-                              >
-                                Mark Resolved
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* Alert Creation Modal */}
-      {showAlertModal && alertModalDPP && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-2xl w-full mx-4 p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Report Issue for {alertModalDPP.model}</h3>
+      {/* Flagging Modal */}
+      {showFlagModal && flagTargetEvent && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+            <div className="p-6 bg-red-50 dark:bg-red-900/20 border-b border-red-100 dark:border-red-900/40">
+              <div className="flex items-center gap-3 text-red-600">
+                <Flag className="w-6 h-6" />
+                <h3 className="text-xl font-bold">Flag Inconsistency</h3>
+              </div>
+              <p className="text-red-700/70 dark:text-red-400 text-sm mt-1">
+                This will alert all nodes that the event's data or signature is invalid.
+              </p>
+            </div>
 
-            <div className="space-y-4">
+            <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Severity</label>
+                <label className="block text-xs font-bold uppercase text-gray-500 mb-2">Issue Category</label>
                 <select
-                  value={alertForm.severity}
-                  onChange={(e) => setAlertForm({ ...alertForm, severity: e.target.value as any })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  value={flagForm.reason}
+                  onChange={(e) => setFlagForm({ ...flagForm, reason: e.target.value })}
+                  className="w-full bg-gray-100 dark:bg-gray-700 border-none rounded-lg p-3 text-sm focus:ring-2 focus:ring-red-500"
                 >
-                  <option value="info">Info</option>
-                  <option value="warning">Warning</option>
-                  <option value="critical">Critical</option>
+                  <option value="signature_mismatch">Invalid Cryptographic Signature</option>
+                  <option value="proof_mismatch">Merkle Proof Inconsistency</option>
+                  <option value="data_tampering">Potential Data Tampering</option>
+                  <option value="metadata_anomaly">Unexpected Metadata Changes</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Issue Type</label>
-                <select
-                  value={alertForm.type}
-                  onChange={(e) => setAlertForm({ ...alertForm, type: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="signature_mismatch">Signature Mismatch</option>
-                  <option value="hash_mismatch">Hash Mismatch</option>
-                  <option value="did_history_anomaly">DID History Anomaly</option>
-                  <option value="missing_attestation">Missing Attestation</option>
-                  <option value="integrity_failure">Integrity Failure</option>
-                  <option value="unauthorized_change">Unauthorized Change</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Description *</label>
+                <label className="block text-xs font-bold uppercase text-gray-500 mb-2">Observation Details</label>
                 <textarea
-                  value={alertForm.description}
-                  onChange={(e) => setAlertForm({ ...alertForm, description: e.target.value })}
-                  placeholder="Describe what you detected in the DID log, signatures, or hashes..."
                   rows={4}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  required
+                  value={flagForm.details}
+                  onChange={(e) => setFlagForm({ ...flagForm, details: e.target.value })}
+                  placeholder="Describe your findings..."
+                  className="w-full bg-gray-100 dark:bg-gray-700 border-none rounded-lg p-3 text-sm focus:ring-2 focus:ring-red-500"
                 />
               </div>
             </div>
 
-            <div className="flex gap-3 mt-6">
+            <div className="p-6 bg-gray-50 dark:bg-gray-900/50 flex gap-3">
               <button
-                onClick={() => {
-                  setShowAlertModal(false);
-                  setAlertModalDPP(null);
-                  setAlertForm({ severity: 'warning', type: 'signature_mismatch', description: '' });
-                }}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                onClick={() => setShowFlagModal(false)}
+                className="flex-1 px-4 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
-                onClick={createAlert}
-                disabled={!alertForm.description.trim()}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleFlagEvent}
+                className="flex-1 px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition-colors shadow-lg shadow-red-500/20"
               >
-                Create Alert
+                Submit Flag
               </button>
             </div>
           </div>
@@ -1028,3 +1040,4 @@ export default function WatcherDashboard() {
     </div>
   );
 }
+

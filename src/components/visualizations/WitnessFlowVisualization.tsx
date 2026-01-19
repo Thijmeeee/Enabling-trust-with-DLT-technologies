@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Shield, UserCheck, FileSignature, CheckCircle2, Clock } from 'lucide-react';
-import { localDB } from '../../lib/data/localData';
+import { hybridDataStore } from '../../lib/data/hybridDataStore';
 import type { WitnessAttestation } from '../../lib/data/localData';
 
 export default function WitnessFlowVisualization({ did }: { did: string }) {
@@ -13,7 +13,7 @@ export default function WitnessFlowVisualization({ did }: { did: string }) {
 
   async function loadAttestations() {
     setLoading(true);
-    const data = await localDB.getAttestationsByDID(did);
+    const data = await hybridDataStore.getAttestationsByDID(did);
     setAttestations(data);
     setLoading(false);
   }
@@ -157,3 +157,4 @@ export default function WitnessFlowVisualization({ did }: { did: string }) {
     </div>
   );
 }
+

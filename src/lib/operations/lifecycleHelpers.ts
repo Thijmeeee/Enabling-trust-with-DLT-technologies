@@ -1,5 +1,5 @@
-import { enhancedDB } from '../data/enhancedDataStore';
-import { localDB } from '../data/localData';
+import hybridDataStore from '../data/hybridDataStore';
+
 
 /**
  * Generate realistic witness attestations for DID events
@@ -117,10 +117,9 @@ export async function generateWitnessAttestations(dppId: string, did: string, dp
     });
   }
 
-  // Insert all attestations to both stores for compatibility
+  // Insert all attestations (once per attestation)
   for (const attestation of attestations) {
-    await enhancedDB.insertAttestation(attestation);
-    await localDB.insertAttestation(attestation);
+    await hybridDataStore.insertAttestation(attestation);
   }
 
   return attestations.length;
@@ -153,8 +152,8 @@ export async function generateAnchoringEvents(dppId: string, did: string, compon
       createdAt: new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString(),
     },
   };
-  await enhancedDB.insertAnchoringEvent(anchorData);
-  await localDB.insertAnchoringEvent(anchorData);
+  await hybridDataStore.insertAnchoringEvent(anchorData);
+  await hybridDataStore.insertAnchoringEvent(anchorData);
 
   // Verification anchoring (2 days after creation)
   if (Math.random() > 0.4) {
@@ -174,8 +173,8 @@ export async function generateAnchoringEvents(dppId: string, did: string, compon
         verifiedAt: new Date(now - 5 * 24 * 60 * 60 * 1000).toISOString(),
       },
     };
-    await enhancedDB.insertAnchoringEvent(verificationData);
-    await localDB.insertAnchoringEvent(verificationData);
+    await hybridDataStore.insertAnchoringEvent(verificationData);
+    await hybridDataStore.insertAnchoringEvent(verificationData);
   }
 }
 
@@ -201,8 +200,7 @@ export async function createLifecycleEvent(
     },
     signature: `0x${Math.random().toString(16).substring(2, 66)}`,
   };
-  await enhancedDB.insertAttestation(attestationData);
-  await localDB.insertAttestation(attestationData);
+  await hybridDataStore.insertAttestation(attestationData);
 
   // Also create anchoring event for important lifecycle changes
   if (eventType === 'installation' || eventType === 'disposal') {
@@ -222,8 +220,7 @@ export async function createLifecycleEvent(
         eventTimestamp: new Date().toISOString(),
       },
     };
-    await enhancedDB.insertAnchoringEvent(lifecycleAnchorData);
-    await localDB.insertAnchoringEvent(lifecycleAnchorData);
+    await hybridDataStore.insertAnchoringEvent(lifecycleAnchorData);
   }
 }
 
@@ -232,7 +229,7 @@ export async function createLifecycleEvent(
  * Note: Currently just logs the progression. In production, this would update the DID document.
  */
 export async function progressDIDLifecycle(did: string, stage: 'registered' | 'verified' | 'anchored') {
-  const didDoc = await enhancedDB.getDIDDocumentByDID(did);
+  const didDoc = await hybridDataStore.getDIDDocumentByDID(did);
   if (!didDoc) {
     console.warn(`DID document not found for ${did}`);
     return;
@@ -262,15 +259,14 @@ export async function progressDIDLifecycle(did: string, stage: 'registered' | 'v
     witness_did: 'did:webvh:example.com:system:lifecycle-manager',
     attestation_type: 'did_lifecycle_update',
     attestation_data: {
-      previousStage: didDoc.document_metadata['lifecycleStage'] || 'created',
+      previousStage: (didDoc.document_metadata as any).lifecycleStage || 'created',
       newStage: stage,
       timestamp: new Date().toISOString(),
       updates: updates,
     },
     signature: `0x${Math.random().toString(16).substring(2, 66)}`,
   };
-  await enhancedDB.insertAttestation(lifecycleAttestationData);
-  await localDB.insertAttestation(lifecycleAttestationData);
+  await hybridDataStore.insertAttestation(lifecycleAttestationData);
 }
 
 /**
@@ -365,12 +361,12 @@ export async function generateDefaultLifecycleEvents(
     });
   }
 
-  // Insert all events into both stores
+  // Insert all events
   for (const event of events) {
-    await enhancedDB.insertAttestation(event);
-    await localDB.insertAttestation(event);
+    await hybridDataStore.insertAttestation(event);
   }
 
   console.log(`Generated ${events.length} default lifecycle events for ${did}`);
   return events.length;
 }
+

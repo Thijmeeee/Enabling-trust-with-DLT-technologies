@@ -19,10 +19,18 @@ const fieldPermissions: Record<string, string> = {
 
 export function DPPCard({ dpp, onClick, viewMode }: DPPCardProps) {
   const { canSeeField } = useRole();
-  const productType = dpp.metadata.productType as string || 'unknown';
-  const schema = getSchemaForType(productType);
-
-  const color = schema?.color || '#6B7280';
+  
+  // Try to get product type from metadata, or fallback to fuzzy matching from model name
+  const rawProductType = dpp.metadata.productType as string || '';
+  let schema = getSchemaForType(rawProductType);
+  
+  // If no schema found by productType, try to infer from model name
+  if (!schema && dpp.model) {
+    schema = getSchemaForType(dpp.model);
+  }
+  
+  const productType = schema?.id || rawProductType || 'unknown';
+  const color = schema?.color || '#3B82F6'; // Use a more visible blue as default instead of gray
   const isMain = dpp.type === 'main';
 
   // Get primary fields from schema and filter based on permissions
@@ -130,83 +138,93 @@ export function DPPCard({ dpp, onClick, viewMode }: DPPCardProps) {
         e.stopPropagation();
         onClick();
       }}
-      className="w-full bg-white dark:bg-gray-800 border-2 hover:border-gray-300 dark:hover:border-gray-600 rounded-lg p-5 transition-all hover:shadow-lg text-left group"
+      className="w-full h-full bg-white dark:bg-gray-800 border-2 hover:border-gray-300 dark:hover:border-gray-600 rounded-lg p-5 transition-all hover:shadow-lg text-left group flex flex-col"
       style={{ borderColor: isMain ? color : undefined }}
     >
-      {/* Header */}
-      <div className="flex items-start justify-between mb-4">
-        <div
-          className="p-3 rounded-lg group-hover:scale-110 transition-transform"
-          style={{ backgroundColor: `${color}20` }}
-        >
-          <Package className="w-7 h-7" style={{ color }} />
-        </div>
-
-        <div className="flex flex-col items-end gap-1">
-          {isMain && (
-            <span className="px-3 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-bold rounded-full shadow-sm">
-              MAIN PRODUCT
-            </span>
-          )}
-          <span
-            className="px-3 py-1 text-xs font-semibold rounded-full"
-            style={{
-              backgroundColor: `${color}20`,
-              color: color
-            }}
+      <div className="flex-1 flex flex-col w-full">
+        {/* Header */}
+        <div className="flex items-start justify-between mb-4">
+          <div
+            className="p-3 rounded-lg group-hover:scale-110 transition-transform"
+            style={{ backgroundColor: `${color}20` }}
           >
-            {schema?.name || productType}
-          </span>
-        </div>
-      </div>
+            <Package className="w-7 h-7" style={{ color }} />
+          </div>
 
-      {/* Title */}
-      <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-        {dpp.model}
-      </h3>
-
-      {/* DID */}
-      <div className="bg-gray-50 dark:bg-gray-700 rounded p-2 mb-3 border border-gray-200 dark:border-gray-600 transition-colors">
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">DID</p>
-        <p className="text-xs font-mono text-gray-700 dark:text-gray-300 break-all leading-relaxed">{dpp.did}</p>
-      </div>
-
-      {/* Primary Fields */}
-      <div className="space-y-2 mb-4">
-        {primaryFields.map(renderField)}
-      </div>
-
-      {/* Secondary Fields */}
-      {secondaryFields.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-4">
-          {secondaryFields.map(key => {
-            const value = dpp.metadata[key];
-            if (!value) return null;
-
-            const propDef = schema?.properties.find(p => p.key === key);
-            let display = String(value);
-            if (propDef?.unit) {
-              display += ` ${propDef.unit}`;
-            }
-
-            return (
-              <span key={key} className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs rounded transition-colors">
-                {display}
+          <div className="flex flex-col items-end gap-1">
+            {isMain && (
+              <span className="px-3 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-bold rounded-full shadow-sm">
+                MAIN PRODUCT
               </span>
-            );
-          })}
+            )}
+            <span
+              className="px-3 py-1 text-xs font-semibold rounded-full"
+              style={{
+                backgroundColor: `${color}20`,
+                color: color
+              }}
+            >
+              {schema?.name || productType}
+            </span>
+          </div>
         </div>
-      )}
+
+        {/* Title */}
+        <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+          {dpp.model}
+        </h3>
+
+        {/* DID */}
+        <div className="bg-gray-50 dark:bg-gray-700 rounded p-2 mb-3 border border-gray-200 dark:border-gray-600 transition-colors shrink-0">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">DID</p>
+          <p className="text-xs font-mono text-gray-700 dark:text-gray-300 break-all leading-relaxed line-clamp-2">{dpp.did}</p>
+        </div>
+
+        {/* Primary Fields */}
+        <div className="space-y-2 mb-4">
+          {primaryFields.map(renderField)}
+        </div>
+
+        {/* Secondary Fields */}
+        {secondaryFields.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-4 mt-auto">
+            {secondaryFields.map(key => {
+              const value = dpp.metadata[key];
+              if (!value) return null;
+
+              const propDef = schema?.properties.find(p => p.key === key);
+              let display = String(value);
+              if (propDef?.unit) {
+                display += ` ${propDef.unit}`;
+              }
+
+              return (
+                <span key={key} className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs rounded transition-colors font-medium">
+                  {display}
+                </span>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
+      <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700 mt-auto w-full shrink-0">
         <div className="flex items-center gap-2">
           {dpp.lifecycle_status === 'active' ? (
             <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
+          ) : dpp.lifecycle_status === 'tampered' ? (
+            <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
           ) : (
             <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
           )}
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">
+          <span className={`text-sm font-medium capitalize ${
+            dpp.lifecycle_status === 'active' 
+              ? 'text-gray-700 dark:text-gray-300' 
+              : dpp.lifecycle_status === 'tampered'
+                ? 'text-red-700 dark:text-red-400'
+                : 'text-yellow-700 dark:text-yellow-400'
+          }`}>
             {dpp.lifecycle_status}
           </span>
         </div>

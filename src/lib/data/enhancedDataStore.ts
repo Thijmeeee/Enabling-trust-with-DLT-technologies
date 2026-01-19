@@ -535,6 +535,10 @@ export class EnhancedDataStore {
   async getAlertsByWatcherDID(watcherDID: string): Promise<WatcherAlert[]> {
     return Array.from(this.alerts.values()).filter(a => a.watcher_did === watcherDID);
   }
+
+  async getAlertsByDID(did: string): Promise<WatcherAlert[]> {
+    return Array.from(this.alerts.values()).filter(a => a.did === did || a.details?.did === did);
+  }
   
   // ========== Bulk Operations ==========
   
@@ -570,6 +574,18 @@ export class EnhancedDataStore {
     
     this.invalidateCache();
     this.idCounter = 0;
+  }
+
+  async clearAlerts(): Promise<void> {
+    this.alerts.clear();
+  }
+
+  async clearAlertsByDID(did: string): Promise<void> {
+    for (const [id, alert] of this.alerts.entries()) {
+      if (alert.did === did || alert.details?.did === did) {
+        this.alerts.delete(id);
+      }
+    }
   }
   
   // ========== Statistics ==========

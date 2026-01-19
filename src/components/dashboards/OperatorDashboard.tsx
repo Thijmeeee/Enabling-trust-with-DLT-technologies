@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Plus, Package, CheckCircle, Clock, ChevronRight } from 'lucide-react';
-import { enhancedDB } from '../../lib/data/enhancedDataStore';
+import { hybridDataStore as enhancedDB } from '../../lib/data/hybridDataStore';
 import { useRole } from '../../lib/utils/roleContext';
 import type { DPP } from '../../lib/data/localData';
 
@@ -23,23 +23,23 @@ export default function OperatorDashboard({ onRegisterWindow, onNavigate }: Oper
     setLoading(true);
     try {
       const allDpps = await enhancedDB.getAllDPPs();
-      
+
       // Get items created today
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      
+
       const todayItems = allDpps.filter(dpp => {
         const createdDate = new Date(dpp.created_at);
         return createdDate >= today;
       });
-      
+
       setTodayCount(todayItems.length);
-      
+
       // Get recent items (last 5)
       const sorted = allDpps
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         .slice(0, 5);
-      
+
       setRecentItems(sorted);
     } catch (error) {
       console.error('Error loading recent items:', error);
@@ -103,7 +103,7 @@ export default function OperatorDashboard({ onRegisterWindow, onNavigate }: Oper
               Recent Toegevoegd
             </h2>
           </div>
-          
+
           {loading ? (
             <div className="p-8 text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
@@ -147,7 +147,7 @@ export default function OperatorDashboard({ onRegisterWindow, onNavigate }: Oper
 
         {/* Help Text */}
         <p className="text-center text-gray-400 text-sm mt-8">
-          Hulp nodig? Vraag uw supervisor.
+          Need help? Contact system support.
         </p>
       </div>
     </div>
