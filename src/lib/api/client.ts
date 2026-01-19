@@ -58,6 +58,16 @@ export interface Audit {
   checked_at: string;
 }
 
+export interface Relationship {
+  id: number;
+  parent_did: string;
+  child_did: string;
+  relationship_type: string;
+  position?: number;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+}
+
 // API Response types
 export interface CreateProductResponse {
   did: string;
@@ -148,6 +158,29 @@ export const identityApi = {
    */
   async getEvents(did: string): Promise<DIDEvent[]> {
     return fetchApi<DIDEvent[]>(`${API_CONFIG.IDENTITY.EVENTS}?did=${encodeURIComponent(did)}`);
+  },
+
+  /**
+   * Create a relationship between DIDs
+   */
+  async createRelationship(data: {
+    parent_did: string;
+    child_did: string;
+    relationship_type: string;
+    position?: number;
+    metadata?: Record<string, unknown>;
+  }): Promise<Relationship> {
+    return fetchApi<Relationship>(`/relationships`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Get relationships for a DID
+   */
+  async getRelationships(did: string, type: 'parent' | 'child' | 'all' = 'all'): Promise<Relationship[]> {
+    return fetchApi<Relationship[]>(`/relationships/${encodeURIComponent(did)}?type=${type}`);
   },
 };
 

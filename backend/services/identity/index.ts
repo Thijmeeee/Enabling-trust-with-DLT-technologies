@@ -1402,8 +1402,78 @@ app.get('/health', (req, res) => {
 // START SERVER
 // ============================================
 
+// ============================================
+// RELATIONSHIP MANAGEMENT
+// ============================================
+
+/**
+ * Create a relationship between two DIDs (Parent -> Child)
+ */
+app.post('/api/relationships', async (req, res) => {
+    try {
+        // Log the body for debugging
+        console.log('[Identity] POST /api/relationships body:', req.body);
+
+        const { parent_did, child_did, relationship_type, position, metadata } = req.body;
+
+        if (!parent_did || !child_did || !relationship_type) {
+            console.warn('[Identity] Missing required fields for relationship:', req.body);
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+
+        const result = await pool.query(
+            `INSERT INTO relationships 
+            (parent_did, child_did, relationship_type, position, metadata) 
+            VALUES ($1, $2, $3, $4, $5) 
+            RETURNING *`,
+            [parent_did, child_did, relationship_type, position, metadata]
+        );
+
+        console.log(`[Identity] Created relationship: ${parent_did} -> ${child_did} (${relationship_type})`);
+        res.json(result.rows[0]);
+    } catch (err: any) {
+        console.error('[Identity] Error creating relationship:', err);
+        // Handle duplicate key error gracefully
+        if (err.code === '23505') {
+            return res.status(409).json({ error: 'Relationship already exists' });
+        }
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * Get relationships by DID
+ */
+app.get('/api/relationships/:did', async (req, res) => {
+    try {
+        const { did } = req.params;
+        const { type } = req.query; // 'parent' or 'child'
+
+        console.log(`[Identity] GET /api/relationships/${did} type=${type}`);
+
+        let query = `SELECT * FROM relationships WHERE parent_did = $1 OR child_did = $1`;
+        let params = [did];
+
+        if (type === 'child') {
+            // "Who are my children?" -> I am the parent
+            query = `SELECT * FROM relationships WHERE parent_did = $1`;
+        } else if (type === 'parent') {
+            // "Who is my parent?" -> I am the child
+            query = `SELECT * FROM relationships WHERE child_did = $1`;
+        }
+
+        const result = await pool.query(query, params);
+        console.log(`[Identity] Found ${result.rows.length} relationships for ${did}`);
+        res.json(result.rows);
+    } catch (err: any) {
+        console.error('[Identity] Error fetching relationships:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
+
     console.log(`🚀 Identity Service v2.0 running on port ${PORT}`);
     console.log(`📍 Domain: ${DOMAIN}`);
     console.log(`📁 Storage: ${STORAGE_ROOT}`);

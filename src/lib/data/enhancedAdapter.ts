@@ -21,7 +21,7 @@ export async function getDPPWithRelations(did: string) {
   const didDocument = await dataStore.getDIDDocumentByDID(did);
   const attestations = await dataStore.getAttestationsByDID(did);
   const anchoringEvents = await dataStore.getAnchoringEventsByDID(did);
-  
+
   // These methods are on localDB, not hybridDataStore
   const credentials = await localDB.getCredentialsByDPP(dpp.id);
   const specifications = await localDB.getSpecificationsByDPP(dpp.id);
@@ -39,7 +39,7 @@ export async function getDPPWithRelations(did: string) {
   // Get relationships from both data stores (localDB for mock data, enhancedDB for runtime data)
   let relationships = await localDB.getRelationshipsByParent(did);
   if (relationships.length === 0) {
-    relationships = await enhancedDB.getRelationshipsByParent(did);
+    relationships = await dataStore.getRelationshipsByParent(did);
   }
 
   console.log('Specifications found:', specifications);
@@ -50,7 +50,7 @@ export async function getDPPWithRelations(did: string) {
   if (dpp.type === 'component') {
     let parentRelations = await localDB.getRelationshipsByChild(did);
     if (parentRelations.length === 0) {
-      parentRelations = await enhancedDB.getRelationshipsByChild(did);
+      parentRelations = await dataStore.getRelationshipsByChild(did);
     }
     if (parentRelations.length > 0) {
       const parentDpp = await dataStore.getDPPByDID(parentRelations[0].parent_did);

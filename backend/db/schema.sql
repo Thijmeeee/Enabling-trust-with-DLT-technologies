@@ -53,3 +53,17 @@ CREATE TABLE watcher_alerts (
     reporter VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Relationships (Managed by Identity Service)
+CREATE TABLE relationships (
+    id SERIAL PRIMARY KEY,
+    parent_did VARCHAR(255) REFERENCES identities(did),
+    child_did VARCHAR(255) REFERENCES identities(did),
+    relationship_type VARCHAR(50) NOT NULL, -- 'component', 'partOf', etc.
+    position INTEGER, -- Ordered position for lists
+    metadata JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(parent_did, child_did, relationship_type) -- Prevent duplicate links
+);
+

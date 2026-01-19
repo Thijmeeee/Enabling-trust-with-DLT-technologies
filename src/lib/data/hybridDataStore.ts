@@ -12,7 +12,7 @@ import { api, blockchainClient, etherscanBlockUrl } from '../api';
 import { API_CONFIG } from '../api/config';
 import type { Identity, DIDEvent, Batch, Audit } from '../api/client';
 import { localDB } from './localData';
-import type { DPP, AnchoringEvent, WitnessAttestation, WatcherAlert } from './localData';
+import type { DPP, AnchoringEvent, WitnessAttestation, WatcherAlert, DPPRelationship } from './localData';
 import { enhancedDB } from './enhancedDataStore';
 
 // Mode configuration
@@ -67,6 +67,7 @@ export function getDataStoreMode(): { useBackend: boolean; backendAvailable: boo
 // ============================================
 // DPP / Identity Operations
 // ============================================
+
 
 /**
  * Get all DPPs/Identities
@@ -606,6 +607,21 @@ export async function insertDPP(data: Omit<DPP, 'id' | 'created_at' | 'updated_a
  * Insert Relationship
  */
 export async function insertRelationship(data: { parent_did: string; child_did: string; relationship_type: string; position?: number; metadata?: Record<string, any> }) {
+  if (useBackendApi && backendAvailable) {
+    try {
+      const result = await api.identity.createRelationship(data);
+      return {
+        id: result.id,
+        parent_did: result.parent_did,
+        child_did: result.child_did,
+        relationship_type: result.relationship_type,
+        created_at: result.created_at
+      };
+    } catch (e) {
+      console.warn('Backend insert relationship failed, using local:', e);
+    }
+  }
+
   const { enhancedDB } = await import('./enhancedDataStore');
   return enhancedDB.insertRelationship({
     ...data,
@@ -626,6 +642,15 @@ export async function insertDIDDocument(data: any) {
  * Get relationships by parent DID
  */
 export async function getRelationshipsByParent(parentDid: string): Promise<any[]> {
+  if (useBackendApi && backendAvailable) {
+    try {
+      const relationships = await api.identity.getRelationships(parentDid, 'child');
+      return relationships;
+    } catch (e) {
+      console.warn('Backend fetch relationships failed, using local:', e);
+    }
+  }
+
   const { enhancedDB } = await import('./enhancedDataStore');
   return enhancedDB.getRelationshipsByParent(parentDid);
 }
@@ -634,6 +659,15 @@ export async function getRelationshipsByParent(parentDid: string): Promise<any[]
  * Get relationships by child DID
  */
 export async function getRelationshipsByChild(childDid: string): Promise<any[]> {
+  if (useBackendApi && backendAvailable) {
+    try {
+      const relationships = await api.identity.getRelationships(childDid, 'parent');
+      return relationships;
+    } catch (e) {
+      console.warn('Backend fetch relationships failed, using local:', e);
+    }
+  }
+
   const { enhancedDB } = await import('./enhancedDataStore');
   return enhancedDB.getRelationshipsByChild(childDid);
 }
