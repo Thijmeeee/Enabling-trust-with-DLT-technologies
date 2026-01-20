@@ -10,7 +10,7 @@ interface ManufacturerSimpleDashboardProps {
 }
 
 export default function ManufacturerSimpleDashboard({ onRegisterWindow, onNavigate }: ManufacturerSimpleDashboardProps) {
-  const { currentRoleDID } = useRole();
+  const { currentRole, currentRoleDID } = useRole();
   const [recentItems, setRecentItems] = useState<DPP[]>([]);
   const [loading, setLoading] = useState(true);
   const [todayCount, setTodayCount] = useState(0);
@@ -65,7 +65,9 @@ export default function ManufacturerSimpleDashboard({ onRegisterWindow, onNaviga
       {/* Clean Header */}
       <div className="border-b border-gray-100 dark:border-gray-800 px-6 py-6">
         <div className="max-w-2xl mx-auto">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Welcome, Manufacturer</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            Welcome, {currentRole}
+          </h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">What would you like to do today?</p>
         </div>
       </div>

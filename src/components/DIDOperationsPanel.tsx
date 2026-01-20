@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useRole, roleDIDs, type UserRole } from '../lib/utils/roleContext';
+import { useWallet } from '../lib/utils/WalletContext';
 import { transferOwnership, rotateKey, getDIDOperationsHistory, getPendingAndRejectedOperations, deactivateDID, updateDIDViaBackend } from '../lib/operations/didOperationsLocal';
+import { performTransferOwnership, performRotateKey, performDeactivateDID, performUpdateDID } from '../lib/operations/didOperationsMetaMask';
 import type { DPP, WitnessAttestation } from '../lib/data/localData';
 import { Key, ArrowRightLeft, ChevronDown, ChevronUp, Clock, XCircle, CheckCircle, Shield, Power, FileEdit, AlertTriangle, ExternalLink } from 'lucide-react';
 import { etherscanTxUrl } from '../lib/api/config';
@@ -11,7 +13,8 @@ interface DIDOperationsPanelProps {
 }
 
 export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanelProps) {
-  const { currentRoleDID } = useRole();
+  const { currentRole, currentRoleDID } = useRole();
+  const { signer, address } = useWallet();
   const [history, setHistory] = useState<WitnessAttestation[]>([]);
 
   // Load pending/approved/rejected from localStorage on mount
@@ -38,7 +41,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
   const [updateServiceEndpoint, setUpdateServiceEndpoint] = useState('');
   const [updateDescription, setUpdateDescription] = useState('');
   const [deactivateReason, setDeactivateReason] = useState('');
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
   const [operationLoading, setOperationLoading] = useState<string | null>(null);
 
@@ -92,20 +95,19 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
   useEffect(() => {
     if (!currentPendingOp) return;
 
+    // Increase polling interval to 10 seconds to reduce console noise
     const interval = setInterval(async () => {
       const statusResult = await getPendingAndRejectedOperations(dpp.did);
 
-      console.log('🔍 Polling status:', {
-        dppDid: dpp.did,
-        currentPendingType: currentPendingOp.type,
-        rejectedCount: statusResult.rejected.length,
-        rejectedItems: statusResult.rejected.map((r: any) => ({
-          type: r.attestation_type,
-          approval_status: r.approval_status,
-          id: r.id
-        })),
-        pendingCount: statusResult.pending.length
-      });
+      // Only log polling if state is interesting (rarely)
+      if ((statusResult.pending.length > 0 || statusResult.rejected.length > 0) && Math.random() < 0.2) {
+        console.log('🔍 Polling status (active):', {
+          dppDid: dpp.did,
+          currentPendingType: currentPendingOp.type,
+          rejectedCount: statusResult.rejected.length,
+          pendingCount: statusResult.pending.length
+        });
+      }
 
       // Check if operation was rejected
       if (statusResult.rejected.length > 0) {
@@ -113,11 +115,13 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
         const rejectedOp = statusResult.rejected.find((op: any) => {
           const attestationType = op.attestation_type;
           const matches = attestationType === currentPendingOp.type;
-          console.log('🔎 Checking rejection match:', {
-            attestationType,
-            currentPendingType: currentPendingOp.type,
-            matches
-          });
+          // Silent by default unless matches
+          if (matches) {
+            console.log('🔎 Found matching rejection:', {
+              attestationType,
+              currentPendingType: currentPendingOp.type
+            });
+          }
           return matches;
         });
 
@@ -162,7 +166,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
           }
         }
       }
-    }, 2000); // Poll every 2 seconds
+    }, 10000); // Poll every 10 seconds (reduced from 2s to silence console)
 
     return () => clearInterval(interval);
   }, [currentPendingOp, dpp.id, onUpdate]);
@@ -173,7 +177,21 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
       return;
     }
 
-    const result = await transferOwnership(dpp.id, currentRoleDID, newOwnerDID);
+    setOperationLoading('transfer');
+    let result;
+    try {
+      if (currentRole === 'Wallet User' && signer) {
+        const walletInfo = { address: address || '', signer: signer, did: currentRoleDID };
+        result = await performTransferOwnership(walletInfo, dpp.id, dpp.did, newOwnerDID);
+      } else {
+        result = await transferOwnership(dpp.id, currentRoleDID, newOwnerDID);
+      }
+    } catch (err: any) {
+      console.error('[DID Operations] Transfer error:', err);
+      result = { success: false, message: err.message || 'Transfer failed' };
+    } finally {
+      setOperationLoading(null);
+    }
     if (result.success) {
       setMessage(null);
       setNewOwnerDID('');
@@ -201,7 +219,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
         // Backend success = immediately approved (green)
         localStorage.setItem(`approved_op_${dpp.did}`, JSON.stringify(opDetails));
         setCurrentApprovedOp(opDetails);
-        setMessage({ type: 'success', text: '✅ Ownership transferred and anchored to blockchain!' });
+        setMessage({ type: 'success', text: '✅ Ownership transferred and verified by decentralized network!' });
       } else {
         // Fallback mode = pending (orange)
         localStorage.setItem(`pending_op_${dpp.did}`, JSON.stringify(opDetails));
@@ -225,8 +243,22 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
     }
 
     setOperationLoading('rotate');
-    const result = await rotateKey(dpp.id, currentRoleDID);
-    setOperationLoading(null);
+
+    setOperationLoading('rotate');
+    let result;
+    try {
+      if (currentRole === 'Wallet User' && signer) {
+        const walletInfo = { address: address || '', signer: signer, did: currentRoleDID };
+        result = await performRotateKey(walletInfo, dpp.id, dpp.did);
+      } else {
+        result = await rotateKey(dpp.id, currentRoleDID);
+      }
+    } catch (err: any) {
+      console.error('[DID Operations] Role Error:', err);
+      result = { success: false, message: err.message || 'Rotation failed' };
+    } finally {
+      setOperationLoading(null);
+    }
     
     if (result.success) {
       setMessage(null);
@@ -252,7 +284,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
         // Backend success = immediately approved (green)
         localStorage.setItem(`approved_op_${dpp.did}`, JSON.stringify(opDetails));
         setCurrentApprovedOp(opDetails);
-        setMessage({ type: 'success', text: '✅ Key rotated and anchored to blockchain!' });
+        setMessage({ type: 'success', text: '✅ Key rotated and verified by decentralized network!' });
       } else {
         // Fallback mode = pending (orange)
         localStorage.setItem(`pending_op_${dpp.did}`, JSON.stringify(opDetails));
@@ -281,14 +313,31 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
     }
 
     setOperationLoading('update');
-    const result = await updateDIDViaBackend(dpp.id, currentRoleDID, {
+
+    setOperationLoading('update');
+    let result;
+    const updates = {
+      description: updateDescription,
       serviceEndpoints: updateType === 'service' && updateServiceEndpoint ? [{
         id: `#${selectedServiceType.toLowerCase()}-service`,
         type: selectedServiceType,
         serviceEndpoint: updateServiceEndpoint
-      }] : undefined,
-      description: updateType === 'metadata' ? updateDescription : undefined
-    });
+      }] : undefined
+    };
+
+    try {
+      if (currentRole === 'Wallet User' && signer) {
+        const walletInfo = { address: address || '', signer: signer, did: currentRoleDID };
+        result = await performUpdateDID(walletInfo, dpp.id, dpp.did, updates);
+      } else {
+        result = await updateDIDViaBackend(dpp.id, currentRoleDID, updates);
+      }
+    } catch (err: any) {
+      console.error('[DID Operations] Update Error:', err);
+      result = { success: false, message: err.message || 'Update failed' };
+    } finally {
+      setOperationLoading(null);
+    }
     setOperationLoading(null);
 
     if (result.success) {
@@ -317,7 +366,43 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
     }
 
     setOperationLoading('deactivate');
-    const result = await deactivateDID(dpp.id, currentRoleDID, deactivateReason);
+
+    // MetaMask Signature for Wallet Users
+    if (currentRole === 'Wallet User') {
+      if (!signer) {
+        setMessage({ type: 'error', text: 'Please connect your wallet first' });
+        setOperationLoading(null);
+        return;
+      }
+      try {
+        setMessage({ type: 'info', text: 'Please sign the message in MetaMask to authorize deactivation...' });
+        const signatureMessage = `Authorize deactivation of product:\n\nDID: ${dpp.did}\nReason: ${deactivateReason}\n\nWARNING: This is permanent and cannot be undone.`;
+        await signer.signMessage(signatureMessage);
+        setMessage(null); // Clear prompt immediately after signing
+        console.log('[DID Operations] MetaMask signature obtained');
+      } catch (err: any) {
+        console.error('[DID Operations] MetaMask signature failed:', err);
+        setMessage({ type: 'error', text: 'MetaMask signature rejected. Operation cancelled.' });
+        setOperationLoading(null);
+        return;
+      }
+    }
+
+    setOperationLoading('deactivate');
+    let result;
+    try {
+      if (currentRole === 'Wallet User' && signer) {
+        const walletInfo = { address: address || '', signer: signer, did: currentRoleDID };
+        result = await performDeactivateDID(walletInfo, dpp.id, dpp.did, deactivateReason);
+      } else {
+        result = await deactivateDID(dpp.id, currentRoleDID, deactivateReason);
+      }
+    } catch (err: any) {
+      console.error('[DID Operations] Deactivate Error:', err);
+      result = { success: false, message: err.message || 'Deactivation failed' };
+    } finally {
+      setOperationLoading(null);
+    }
     setOperationLoading(null);
 
     if (result.success) {

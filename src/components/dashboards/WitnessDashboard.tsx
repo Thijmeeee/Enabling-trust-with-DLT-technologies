@@ -57,7 +57,7 @@ export default function WitnessDashboard() {
 
   useEffect(() => {
     loadAssets();
-    const interval = setInterval(loadAssets, 5000); // 5s for better "live" feeling
+    const interval = setInterval(loadAssets, 10000); // 10s is sufficient
     return () => clearInterval(interval);
   }, []);
 
@@ -77,7 +77,6 @@ export default function WitnessDashboard() {
   async function loadAssets() {
     try {
       const allDPPs = await enhancedDB.getAllDPPs();
-      const allBatches = await backendAPI.getBatches();
       
       const monitored: MonitoredAsset[] = await Promise.all(allDPPs.map(async dpp => {
         const history = await getDIDOperationsHistory(dpp.id);
@@ -107,6 +106,8 @@ export default function WitnessDashboard() {
   async function loadAssetEvidence(dppId: string) {
     try {
       const history = await getDIDOperationsHistory(dppId);
+      let relevantBatchIds = new Set<number>();
+      
       if (history.success) {
         const formattedEvents: EvidenceEvent[] = history.operations.map((op: any) => {
           // Determine a readable description
@@ -123,6 +124,10 @@ export default function WitnessDashboard() {
               'deactivate': 'Product Deactivated'
             };
             description = typeMap[op.attestation_type] || 'Process Operation';
+          }
+
+          if (op.witness_proofs?.batchId !== undefined) {
+            relevantBatchIds.add(Number(op.witness_proofs.batchId));
           }
 
           return {
@@ -143,9 +148,14 @@ export default function WitnessDashboard() {
         setEvents(formattedEvents);
       }
       
-      // Load batches for this asset
+      // Load and filter batches for this specific asset
       const allBatches = await backendAPI.getBatches();
-      setBatches(allBatches || []);
+      if (allBatches && history.success) {
+        const filtered = allBatches.filter(b => relevantBatchIds.has(Number(b.batch_id)));
+        setBatches(filtered);
+      } else {
+        setBatches(allBatches || []);
+      }
     } catch (err) {
       console.error('Failed to load asset evidence:', err);
     }
@@ -411,8 +421,8 @@ export default function WitnessDashboard() {
                 /* 3. De "Blockchain Anchor Room" */
                 <div className="max-w-5xl mx-auto space-y-6">
                   <div className="grid grid-cols-3 gap-6 mb-8">
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm text-center">
-                      <div className="text-sm text-gray-500 mb-1">Total Batches</div>
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm text-center border-b-4 border-b-blue-500">
+                      <div className="text-sm text-gray-500 mb-1">Relevant Batches</div>
                       <div className="text-4xl font-bold text-gray-900 dark:text-white">{batches.length}</div>
                     </div>
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm text-center">

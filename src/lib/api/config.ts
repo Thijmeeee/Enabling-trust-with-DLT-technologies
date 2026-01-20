@@ -19,6 +19,11 @@ export const API_CONFIG = {
     GET: '/identity', // + /:scid
     LIST: '/identities',
     EVENTS: '/events',
+    RELATIONSHIPS: '/relationships',
+    TRANSFER: '/did', // + /:did/transfer
+    ROTATE: '/did', // + /:did/rotate
+    UPDATE: '/did', // + /:did/update
+    DEACTIVATE: '/did', // + /:did/deactivate
   },
 
   // Witness Service endpoints  

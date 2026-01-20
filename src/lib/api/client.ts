@@ -26,18 +26,21 @@ export interface DIDEvent {
   signature: string;
   leaf_hash: string;
   version_id: string;
-  timestamp: number;
-  witness_proofs: WitnessProof | null;
+  timestamp: string | number;
+  witness_proofs: AnchoringProof | null;
   created_at: string;
 }
 
-export interface WitnessProof {
-  batchId?: number;
-  witnesses?: Array<{
-    witnessDid: string;
-    signature: string;
-    timestamp: string;
-  }>;
+export interface AnchoringProof {
+  versionId: string;
+  batchId: number;
+  merkleRoot: string;
+  leafHash: string;
+  merkleProof: string[];
+  leafIndex: number;
+  txHash: string;
+  blockNumber: number;
+  timestamp: string;
 }
 
 export interface Batch {
@@ -56,16 +59,6 @@ export interface Audit {
   status: 'valid' | 'invalid';
   details: string;
   checked_at: string;
-}
-
-export interface Relationship {
-  id: number;
-  parent_did: string;
-  child_did: string;
-  relationship_type: string;
-  position?: number;
-  metadata?: Record<string, unknown>;
-  created_at: string;
 }
 
 // API Response types
@@ -118,6 +111,8 @@ export const identityApi = {
     type: string;
     model: string;
     metadata?: Record<string, unknown>;
+    ownerDid?: string;
+    requestedDid?: string;
   }): Promise<CreateProductResponse> {
     return fetchApi<CreateProductResponse>(API_CONFIG.IDENTITY.CREATE, {
       method: 'POST',
@@ -161,7 +156,64 @@ export const identityApi = {
   },
 
   /**
-   * Create a relationship between DIDs
+   * Transfer ownership of a DID
+   */
+  async transferOwnership(did: string, data: {
+    newOwnerDID: string;
+    newOwnerPublicKey?: string;
+    reason?: string;
+    signature: string;
+    signerAddress: string;
+  }): Promise<{ status: string; versionId: string }> {
+    return fetchApi(`${API_CONFIG.IDENTITY.TRANSFER}/${encodeURIComponent(did)}/transfer`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Rotate signing key for a DID
+   */
+  async rotateKey(did: string, data: {
+    newPublicKey: string;
+    signature: string;
+    signerAddress: string;
+  }): Promise<{ status: string; versionId: string }> {
+    return fetchApi(`${API_CONFIG.IDENTITY.ROTATE}/${encodeURIComponent(did)}/rotate`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Update DID document data
+   */
+  async updateDID(did: string, data: {
+    updates: any;
+    signature: string;
+    signerAddress: string;
+  }): Promise<{ status: string; versionId: string }> {
+    return fetchApi(`${API_CONFIG.IDENTITY.UPDATE}/${encodeURIComponent(did)}/update`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Deactivate a DID
+   */
+  async deactivateDID(did: string, data: {
+    signature: string;
+    signerAddress: string;
+  }): Promise<{ status: string; versionId: string }> {
+    return fetchApi(`${API_CONFIG.IDENTITY.DEACTIVATE}/${encodeURIComponent(did)}/deactivate`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Create a relationship between two DIDs
    */
   async createRelationship(data: {
     parent_did: string;
@@ -169,18 +221,22 @@ export const identityApi = {
     relationship_type: string;
     position?: number;
     metadata?: Record<string, unknown>;
-  }): Promise<Relationship> {
-    return fetchApi<Relationship>(`/relationships`, {
+  }): Promise<{ status: string }> {
+    return fetchApi(API_CONFIG.IDENTITY.RELATIONSHIPS, {
       method: 'POST',
       body: JSON.stringify(data),
     });
   },
 
   /**
-   * Get relationships for a DID
+   * Get relationships for a DID or all relationships
    */
-  async getRelationships(did: string, type: 'parent' | 'child' | 'all' = 'all'): Promise<Relationship[]> {
-    return fetchApi<Relationship[]>(`/relationships/${encodeURIComponent(did)}?type=${type}`);
+  async getRelationships(did?: string, type?: 'parent' | 'child' | 'all'): Promise<any[]> {
+    let url = API_CONFIG.IDENTITY.RELATIONSHIPS;
+    if (did) {
+      url = `${url}/${encodeURIComponent(did)}${type ? `?type=${type}` : ''}`;
+    }
+    return fetchApi<any[]>(url);
   },
 };
 
@@ -283,10 +339,7 @@ export const watcherApi = {
   /**
    * Delete alerts for a DID
    */
-  /**
-   * Delete alerts for a DID
-   */
-  async deleteAlerts(did: string, eventId?: number | string): Promise<any> {
+  async deleteAlerts(did: string, eventId?: string | number): Promise<any> {
     const query = eventId ? `?event_id=${eventId}` : '';
     return fetchApi(`${API_CONFIG.WATCHER.ALERTS}/${encodeURIComponent(did)}${query}`, {
       method: 'DELETE',

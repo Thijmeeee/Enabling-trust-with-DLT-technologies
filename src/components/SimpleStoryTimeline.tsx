@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle2, Factory, ShieldCheck, Recycle, User } from 'lucide-react';
+import { CheckCircle2, Factory, ShieldCheck, Recycle, User, ExternalLink } from 'lucide-react';
 import { hybridDataStore } from '../lib/data/hybridDataStore';
+import { etherscanTxUrl } from '../lib/api/config';
 
 interface StoryEvent {
   id: string;
@@ -10,6 +11,7 @@ interface StoryEvent {
   icon: any;
   color: string;
   status: 'completed' | 'pending';
+  txHash?: string;
 }
 
 export default function SimpleStoryTimeline({ did }: { did: string }) {
@@ -40,14 +42,16 @@ export default function SimpleStoryTimeline({ did }: { did: string }) {
     // 2. Notarization Stage
     const anchorings = await hybridDataStore.getAnchoringEventsByDID(did);
     if (anchorings.length > 0) {
+      const latestAnchor = anchorings[anchorings.length - 1];
       story.push({
         id: 'anchor',
-        timestamp: anchorings[0].timestamp,
+        timestamp: latestAnchor.timestamp,
         title: 'Security Seal Applied',
         description: 'The product identity has been locked in the public notarization system. It cannot be faked or altered.',
         icon: ShieldCheck,
         color: 'purple',
-        status: 'completed'
+        status: 'completed',
+        txHash: latestAnchor.transaction_hash
       });
     }
 
@@ -110,6 +114,20 @@ export default function SimpleStoryTimeline({ did }: { did: string }) {
               </div>
               <p className="text-gray-600 dark:text-gray-300 leading-relaxed">{event.description}</p>
               
+              {event.txHash && (
+                <div className="mt-3">
+                  <a 
+                    href={etherscanTxUrl(event.txHash) || '#'} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 transition-colors bg-purple-50 dark:bg-purple-900/20 px-3 py-1.5 rounded-lg border border-purple-100 dark:border-purple-800"
+                  >
+                    <ExternalLink size={12} />
+                    View Blockchain Transaction
+                  </a>
+                </div>
+              )}
+
               {event.status === 'completed' && index === 0 && (
                 <div className="mt-3 inline-flex items-center gap-2 px-3 py-1 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full text-sm font-medium border border-green-100 dark:border-green-900/50">
                   <CheckCircle2 className="w-4 h-4" />

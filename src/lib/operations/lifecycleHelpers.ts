@@ -5,7 +5,12 @@ import hybridDataStore from '../data/hybridDataStore';
  * Generate realistic witness attestations for DID events
  * Witnesses monitor and attest to DID operations, not product events
  */
-export async function generateWitnessAttestations(dppId: string, did: string, dppType: 'main' | 'component') {
+export async function generateWitnessAttestations(
+  dppId: string, 
+  did: string, 
+  dppType: 'main' | 'component',
+  isNew: boolean = false
+) {
   const witnesses = [
     {
       did: 'did:webvh:example.com:witnesses:did-validator-1',
@@ -27,94 +32,108 @@ export async function generateWitnessAttestations(dppId: string, did: string, dp
   const now = Date.now();
   const attestations = [];
 
-  // DID Creation/Registration attestation (always)
-  attestations.push({
-    dpp_id: dppId,
-    did: did,
-    witness_did: witnesses[0].did,
-    attestation_type: 'did_creation',
-    attestation_data: {
-      timestamp: new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString(),
-      witness: witnesses[0].name,
-      organization: witnesses[0].org,
-      eventType: 'DID Creation',
-      method: 'did:webvh',
-      controller: did,
-      notes: 'DID document created and registered on decentralized network',
-      verificationMethodsCount: 1,
-      initialProofType: 'Ed25519Signature2020',
-    },
-    signature: `witness-sig-${Math.random().toString(16).substring(2, 18)}`,
-    approval_status: 'approved' as const,
-  });
+  // Check for existing creation events to avoid duplicates
+  const existingAttestations = await hybridDataStore.getAttestationsByDID(did);
+  const hasCreation = existingAttestations.some(a => 
+    a.attestation_type === 'did_creation' || a.attestation_type === 'create'
+  );
 
-  // Key Rotation attestation (70% chance)
-  if (Math.random() > 0.3) {
-    attestations.push({
-      dpp_id: dppId,
-      did: did,
-      witness_did: witnesses[1].did,
-      attestation_type: 'key_rotation',
-      attestation_data: {
-        timestamp: new Date(now - 4 * 24 * 60 * 60 * 1000).toISOString(),
-        witness: witnesses[1].name,
-        organization: witnesses[1].org,
-        eventType: 'Key Rotation',
-        oldKeyId: `${did}#key-1`,
-        newKeyId: `${did}#key-2`,
-        rotationReason: 'Scheduled security rotation',
-        previousKeyRevoked: true,
-        newKeyType: 'Ed25519VerificationKey2020',
-      },
-      signature: `witness-sig-${Math.random().toString(16).substring(2, 18)}`,
-      approval_status: 'approved' as const,
-    });
-  }
-
-  // Ownership Change attestation (for components and some main products)
-  if (dppType === 'component' || Math.random() > 0.6) {
-    attestations.push({
-      dpp_id: dppId,
-      did: did,
-      witness_did: witnesses[2].did,
-      attestation_type: 'ownership_change',
-      attestation_data: {
-        timestamp: new Date(now - 2 * 24 * 60 * 60 * 1000).toISOString(),
-        witness: witnesses[2].name,
-        organization: witnesses[2].org,
-        eventType: 'Ownership Transfer',
-        previousOwner: 'did:webvh:example.com:organizations:original-owner',
-        newOwner: 'did:webvh:example.com:organizations:current-owner',
-        transferMethod: 'Smart Contract',
-        blockchainTxHash: `0x${Math.random().toString(16).substring(2, 66)}`,
-        transferApproved: true,
-      },
-      signature: `witness-sig-${Math.random().toString(16).substring(2, 18)}`,
-      approval_status: 'approved' as const,
-    });
-  }
-
-  // DID Document Update attestation (60% chance)
-  if (Math.random() > 0.4) {
+  // DID Creation/Registration attestation (only if not already present)
+  if (!hasCreation) {
     attestations.push({
       dpp_id: dppId,
       did: did,
       witness_did: witnesses[0].did,
-      attestation_type: 'did_update',
+      attestation_type: 'did_creation',
       attestation_data: {
-        timestamp: new Date(now - 1 * 24 * 60 * 60 * 1000).toISOString(),
+        timestamp: new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString(),
         witness: witnesses[0].name,
         organization: witnesses[0].org,
-        eventType: 'DID Document Update',
-        updateType: 'Service Endpoint Addition',
-        changeDescription: 'Added new service endpoint for data access',
-        versionNumber: 2,
-        previousHash: `0x${Math.random().toString(16).substring(2, 66)}`,
-        newHash: `0x${Math.random().toString(16).substring(2, 66)}`,
+        eventType: 'DID Creation',
+        method: 'did:webvh',
+        controller: did,
+        notes: 'DID document created and registered on decentralized network',
+        verificationMethodsCount: 1,
+        initialProofType: 'Ed25519Signature2020',
       },
       signature: `witness-sig-${Math.random().toString(16).substring(2, 18)}`,
       approval_status: 'approved' as const,
     });
+  }
+
+  // ONLY add history if it's NOT a brand new product
+  if (!isNew) {
+    // Key Rotation attestation (70% chance, only if no key_rotation exists)
+    const hasRotation = existingAttestations.some(a => a.attestation_type === 'key_rotation' || a.attestation_type === 'rotate');
+    if (!hasRotation && Math.random() > 0.3) {
+      attestations.push({
+        dpp_id: dppId,
+        did: did,
+        witness_did: witnesses[1].did,
+        attestation_type: 'key_rotation',
+        attestation_data: {
+          timestamp: new Date(now - 4 * 24 * 60 * 60 * 1000).toISOString(),
+          witness: witnesses[1].name,
+          organization: witnesses[1].org,
+          eventType: 'Key Rotation',
+          oldKeyId: `${did}#key-1`,
+          newKeyId: `${did}#key-2`,
+          rotationReason: 'Scheduled security rotation',
+          previousKeyRevoked: true,
+          newKeyType: 'Ed25519VerificationKey2020',
+        },
+        signature: `witness-sig-${Math.random().toString(16).substring(2, 18)}`,
+        approval_status: 'approved' as const,
+      });
+    }
+
+    // Ownership Change attestation (for components and some main products, if not exists)
+    const hasOwnership = existingAttestations.some(a => a.attestation_type === 'ownership_change' || a.attestation_type === 'ownership_transfer');
+    if (!hasOwnership && (dppType === 'component' || Math.random() > 0.6)) {
+      attestations.push({
+        dpp_id: dppId,
+        did: did,
+        witness_did: witnesses[2].did,
+        attestation_type: 'ownership_change',
+        attestation_data: {
+          timestamp: new Date(now - 2 * 24 * 60 * 60 * 1000).toISOString(),
+          witness: witnesses[2].name,
+          organization: witnesses[2].org,
+          eventType: 'Ownership Transfer',
+          previousOwner: 'did:webvh:example.com:organizations:original-owner',
+          newOwner: 'did:webvh:example.com:organizations:current-owner',
+          transferMethod: 'Smart Contract',
+          blockchainTxHash: `0x${Math.random().toString(16).substring(2, 66)}`,
+          transferApproved: true,
+        },
+        signature: `witness-sig-${Math.random().toString(16).substring(2, 18)}`,
+        approval_status: 'approved' as const,
+      });
+    }
+
+    // DID Document Update attestation (60% chance, if not exists)
+    const hasUpdate = existingAttestations.some(a => a.attestation_type === 'did_update' || a.attestation_type === 'update');
+    if (!hasUpdate && Math.random() > 0.4) {
+      attestations.push({
+        dpp_id: dppId,
+        did: did,
+        witness_did: witnesses[0].did,
+        attestation_type: 'did_update',
+        attestation_data: {
+          timestamp: new Date(now - 1 * 24 * 60 * 60 * 1000).toISOString(),
+          witness: witnesses[0].name,
+          organization: witnesses[0].org,
+          eventType: 'DID Document Update',
+          updateType: 'Service Endpoint Addition',
+          changeDescription: 'Added new service endpoint for data access',
+          versionNumber: 2,
+          previousHash: `0x${Math.random().toString(16).substring(2, 66)}`,
+          newHash: `0x${Math.random().toString(16).substring(2, 66)}`,
+        },
+        signature: `witness-sig-${Math.random().toString(16).substring(2, 18)}`,
+        approval_status: 'approved' as const,
+      });
+    }
   }
 
   // Insert all attestations (once per attestation)

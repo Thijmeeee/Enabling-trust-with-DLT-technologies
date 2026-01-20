@@ -260,6 +260,26 @@ export async function deleteKey(keyId: string): Promise<boolean> {
 }
 
 /**
+ * Find a key ID by its public key multibase
+ */
+export async function findKeyIdByPublicKey(publicKeyMultibase: string): Promise<string | null> {
+    try {
+        const keys = await listKeys();
+        for (const keyId of keys) {
+            const keyPath = path.join(KEY_STORAGE_DIR, `${keyId}.json`);
+            const data = await fs.readFile(keyPath, 'utf-8');
+            const stored: StoredKeyPair = JSON.parse(data);
+            if (stored.publicKeyMultibase === publicKeyMultibase) {
+                return keyId;
+            }
+        }
+    } catch (error) {
+        console.error('[KeyManagement] Error finding key by public key:', error);
+    }
+    return null;
+}
+
+/**
  * Verify a signature
  */
 export async function verifySignature(
@@ -285,6 +305,7 @@ export const keyManagementService = {
     createSigner,
     listKeys,
     deleteKey,
+    findKeyIdByPublicKey,
     verifySignature,
     toMultibase
 };

@@ -18,10 +18,16 @@ const pool = new Pool({
     port: parseInt(process.env.DB_PORT || '5432')
 });
 
+// Add error handler to pool to prevent process crash
+pool.on('error', (err) => {
+    log.error('Unexpected error on idle database client', err);
+});
+
 // Contract ABI for the anchor function
 const CONTRACT_ABI = [
     "function anchor(bytes32 merkleRoot) external returns (uint256 batchId)",
     "function getBatch(uint256 batchId) external view returns (bytes32 root, uint256 timestamp, uint256 blockNum)",
+    "function batchCount() external view returns (uint256)",
     "event Anchored(uint256 indexed batchId, bytes32 indexed root, uint256 timestamp, uint256 blockNumber)"
 ];
 
@@ -153,39 +159,69 @@ async function processBatch() {
 
         log.info('Anchoring to blockchain', { contractAddress, merkleRoot: root });
 
-        const tx = await contract.anchor(root);
-        log.info('Transaction sent', { txHash: tx.hash });
+        // Check if this root was already anchored in the last 1000 blocks
+        // (Handles process restarts or double-broadcasts)
+        const filter = contract.filters.Anchored(null, root);
+        const existingEvents = await contract.queryFilter(filter, -1000);
 
-        const receipt = await tx.wait();
-
-        log.info('Transaction confirmed', {
-            txHash: receipt.hash,
-            blockNumber: receipt.blockNumber,
-            gasUsed: receipt.gasUsed?.toString()
-        });
-
-        // D. Parse the Anchored event to get the REAL batch ID from the contract
-        // The contract returns batchId via the Anchored event
+        let receipt;
         let contractBatchId: number;
 
-        const iface = new ethers.Interface(CONTRACT_ABI);
-        const anchoredLog = receipt.logs.find((log: any) => {
-            try {
-                const parsed = iface.parseLog({ topics: log.topics as string[], data: log.data });
-                return parsed?.name === 'Anchored';
-            } catch {
-                return false;
-            }
-        });
+        if (existingEvents.length > 0) {
+            const event = existingEvents[0] as any;
+            contractBatchId = Number(event.args.batchId);
+            const txHash = event.transactionHash;
+            log.info('Merkle root already anchored, recovery mode', {
+                batchId: contractBatchId,
+                txHash
+            });
+            receipt = await provider.getTransactionReceipt(txHash);
 
-        if (anchoredLog) {
-            const parsedEvent = iface.parseLog({ topics: anchoredLog.topics as string[], data: anchoredLog.data });
-            contractBatchId = Number(parsedEvent?.args?.batchId ?? 0);
-            log.info('Parsed Anchored event', { batchId: contractBatchId });
+            if (!receipt) {
+                throw new Error(`Could not fetch receipt for existing transaction ${txHash}`);
+            }
         } else {
-            // Fallback: query contract for latest batch count (less reliable)
-            log.warn('Could not parse Anchored event, using fallback');
-            contractBatchId = (await pool.query('SELECT COALESCE(MAX(batch_id), -1) + 1 as next_id FROM batches')).rows[0].next_id;
+            // Normal path: send new transaction
+            try {
+                const tx = await contract.anchor(root);
+                log.info('Transaction sent', { txHash: tx.hash });
+                receipt = await tx.wait();
+            } catch (txErr: any) {
+                // If it's already known, it means it's in the mempool.
+                // We'll let the next run pick it up via queryFilter above.
+                if (txErr.message?.includes('already known')) {
+                    log.warn('Transaction already in mempool, skipping to wait for confirmation', { root });
+                    isProcessing = false;
+                    return;
+                }
+                throw txErr;
+            }
+
+            // D. Parse the Anchored event to get the REAL batch ID from the contract
+            const iface = new ethers.Interface(CONTRACT_ABI);
+            const anchoredLog = receipt.logs.find((log: any) => {
+                try {
+                    const parsed = iface.parseLog({ topics: log.topics as string[], data: log.data });
+                    return parsed?.name === 'Anchored';
+                } catch {
+                    return false;
+                }
+            });
+
+            if (anchoredLog) {
+                const parsedEvent = iface.parseLog({ topics: anchoredLog.topics as string[], data: anchoredLog.data });
+                contractBatchId = Number(parsedEvent?.args?.batchId ?? 0);
+                log.info('Parsed Anchored event', { batchId: contractBatchId });
+            } else {
+                log.warn('Could not parse Anchored event from receipt');
+                // Fallback to query contract for latest batch count (less reliable)
+                contractBatchId = Number(await contract.batchCount()) - 1;
+            }
+        }
+
+        // Wait, if contractBatchId is undefined here, something is wrong
+        if (contractBatchId === undefined || contractBatchId === null) {
+            throw new Error('Failed to determine batchId');
         }
 
         // If we are anchoring batch 0 but the DB already has batches, the blockchain was reset.
@@ -296,8 +332,12 @@ log.info('Witness Engine starting', {
 
 // Run immediately once, then on schedule
 setTimeout(async () => {
-    log.info('Running initial batch check');
-    await processBatch();
+    try {
+        log.info('Running initial batch check');
+        await processBatch();
+    } catch (err) {
+        log.error('Initial batch check failed', err);
+    }
 }, 5000);
 
 // Schedule: Run every 10 seconds for testing (change to '*/10 * * * *' for production = every 10 min)

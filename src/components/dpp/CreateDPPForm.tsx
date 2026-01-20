@@ -3,6 +3,7 @@ import { X, Plus, CheckCircle, ArrowRight, ArrowLeft, Package } from 'lucide-rea
 import { hybridDataStore } from '../../lib/data/hybridDataStore';
 import { generateWitnessAttestations } from '../../lib/operations/lifecycleHelpers';
 import { useRole, roleDIDs } from '../../lib/utils/roleContext';
+import { useWallet } from '../../lib/utils/WalletContext';
 
 interface WindowData {
   model: string;
@@ -23,7 +24,14 @@ export default function CreateDPPForm({ onClose, onComplete }: {
   onClose: () => void;
   onComplete: () => void;
 }) {
-  const { currentRoleDID } = useRole();
+  const { currentRole, currentRoleDID } = useRole();
+  const { isConnected, address } = useWallet();
+  
+  const walletId = address ? address.substring(2, 10).toLowerCase() : '';
+  const walletDID = (isConnected && address) ? `did:webvh:company-${walletId}:user-${walletId}` : null;
+  // If role is Wallet User, MUST use walletDID. Otherwise use walletDID if available as fallback to currentRoleDID
+  const productOwner = currentRole === 'Wallet User' ? (walletDID || 'did:pkh:unknown') : (walletDID || currentRoleDID);
+
   const [step, setStep] = useState<'window' | 'glass' | 'frame' | 'review' | 'creating'>('window');
   const [windowData, setWindowData] = useState<WindowData>({
     model: '',
@@ -104,7 +112,7 @@ export default function CreateDPPForm({ onClose, onComplete }: {
         model: windowData.model,
         parent_did: null,
         lifecycle_status: 'active',
-        owner: currentRoleDID, // Correctly set current manufacturer as owner
+        owner: productOwner, // Use wallet DID if connected
         custodian: null,
         metadata: {
           description: windowData.description,
@@ -166,9 +174,9 @@ export default function CreateDPPForm({ onClose, onComplete }: {
       });
 
       // Generate DID attestations (creation events)
-      await generateWitnessAttestations(windowResult.id, windowDid, 'main');
-      await generateWitnessAttestations(glassResult.id, glassDid, 'component');
-      await generateWitnessAttestations(frameResult.id, frameDid, 'component');
+      await generateWitnessAttestations(windowResult.id, windowDid, 'main', true);
+      await generateWitnessAttestations(glassResult.id, glassDid, 'component', true);
+      await generateWitnessAttestations(frameResult.id, frameDid, 'component', true);
 
       // Success!
       setTimeout(() => {

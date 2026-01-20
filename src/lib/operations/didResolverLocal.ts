@@ -216,25 +216,48 @@ export function parseDID(did: string): ParsedDID {
 /**
  * Transform DID to HTTPS URL for did.jsonl
  * did:webvh:example.com:abc123 -> https://example.com/.well-known/did/abc123/did.jsonl
+ * did:webvh:example.com:products:abc123 -> https://example.com/products/.well-known/did/abc123/did.jsonl
  */
 export function didToHttpsUrl(did: string): string {
   const parsed = parseDID(did);
   if (!parsed.domain || !parsed.scid) return '';
 
+  // FOR THE UI: Use a relative path to leverage the Vite proxy
+  // This ensures it works regardless of whether the domain is localhost or example.com
+  // and bypasses the "products" path segment which the local backend doesn't use in its routes.
+  if (typeof window !== 'undefined') {
+    return `/.well-known/did/${parsed.scid}/did.jsonl`;
+  }
+
+  // Fallback for non-browser environments (like scripts)
+  // segments[0] is host, segments[1...] are either port or path segments
+  const segments = parsed.domain.split(':');
+  let host = segments[0];
+  let pathSegments = segments.slice(1);
+  let path = '';
+
+  // Check if first path segment is actually a port number
+  if (pathSegments.length > 0 && /^\d+$/.test(pathSegments[0])) {
+    host = `${host}:${pathSegments[0]}`;
+    pathSegments = pathSegments.slice(1);
+  }
+
+  if (pathSegments.length > 0) {
+    path = '/' + pathSegments.join('/');
+  }
+
   // Handle local development or explicit ports
-  const isLocal = parsed.domain.includes('localhost') || 
-                  parsed.domain.includes('127.0.0.1') || 
-                  parsed.domain.includes(':');
+  const isLocal = host.includes('localhost') || 
+                  host.includes('127.0.0.1');
                   
   const protocol = isLocal ? 'http' : 'https';
 
   // FIX: If domain is localhost/127.0.0.1 without port, default to dev backend port
-  let domain = parsed.domain;
-  if ((domain === 'localhost' || domain === '127.0.0.1')) {
-    domain = 'localhost:3000';
+  if ((host === 'localhost' || host === '127.0.0.1')) {
+    host = 'localhost:3000';
   }
 
-  return `${protocol}://${domain}/.well-known/did/${parsed.scid}/did.jsonl`;
+  return `${protocol}://${host}${path}/.well-known/did/${parsed.scid}/did.jsonl`;
 }
 
 /**
@@ -245,20 +268,39 @@ export function didToWitnessUrl(did: string): string {
   const parsed = parseDID(did);
   if (!parsed.domain || !parsed.scid) return '';
 
+  // FOR THE UI: Use a relative path to leverage the Vite proxy
+  if (typeof window !== 'undefined') {
+    return `/.well-known/did/${parsed.scid}/did-witness.json`;
+  }
+
+  // segments[0] is host, segments[1...] are either port or path segments
+  const segments = parsed.domain.split(':');
+  let host = segments[0];
+  let pathSegments = segments.slice(1);
+  let path = '';
+
+  // Check if first path segment is actually a port number
+  if (pathSegments.length > 0 && /^\d+$/.test(pathSegments[0])) {
+    host = `${host}:${pathSegments[0]}`;
+    pathSegments = pathSegments.slice(1);
+  }
+
+  if (pathSegments.length > 0) {
+    path = '/' + pathSegments.join('/');
+  }
+
   // Handle local development or explicit ports
-  const isLocal = parsed.domain.includes('localhost') || 
-                  parsed.domain.includes('127.0.0.1') || 
-                  parsed.domain.includes(':');
+  const isLocal = host.includes('localhost') || 
+                  host.includes('127.0.0.1');
                   
   const protocol = isLocal ? 'http' : 'https';
 
   // FIX: If domain is localhost/127.0.0.1 without port, default to dev backend port
-  let domain = parsed.domain;
-  if ((domain === 'localhost' || domain === '127.0.0.1')) {
-    domain = 'localhost:3000';
+  if ((host === 'localhost' || host === '127.0.0.1')) {
+    host = 'localhost:3000';
   }
 
-  return `${protocol}://${domain}/.well-known/did/${parsed.scid}/did-witness.json`;
+  return `${protocol}://${host}${path}/.well-known/did/${parsed.scid}/did-witness.json`;
 }
 
 /**

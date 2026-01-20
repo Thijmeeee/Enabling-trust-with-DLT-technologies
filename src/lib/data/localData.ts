@@ -1,4 +1,3 @@
-
 export type DPP = {
   id: string;
   did: string;
@@ -202,6 +201,10 @@ class LocalDataStore {
   async getDPPs(limit?: number): Promise<DPP[]> {
     const dpps = Array.from(this.dpps.values());
     return limit ? dpps.slice(0, limit) : dpps;
+  }
+
+  async getDPP(id: string): Promise<DPP | null> {
+    return this.dpps.get(id) || null;
   }
 
   async getDPPByDID(did: string): Promise<DPP | null> {

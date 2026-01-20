@@ -48,9 +48,16 @@ export async function transferOwnership(
           message: 'Ownership transferred successfully via backend',
           dpp: await enhancedDB.getDPPById(dppId)
         };
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[DID Operations] Backend ownership transfer failed:', response.status, errorData);
+        return { 
+          success: false, 
+          message: errorData.error || `Backend error: ${response.status} Forbidden` 
+        };
       }
     } catch (backendError) {
-      console.log('[DID Operations] Backend not available, using local fallback');
+      console.log('[DID Operations] Backend connection error, using local fallback');
     }
 
     // Fallback: Local mock transfer for demo (pending approval flow)
@@ -144,15 +151,24 @@ export async function rotateKey(
         const result = await response.json();
         console.log('[DID Operations] Backend key rotation successful:', result);
 
-        // Backend already created event - don't create local attestation (prevents duplicates)
+        // No need to create a local attestation - backend already created a real event
+        // which will be fetched by getDIDOperationsHistory
+        
         return {
           success: true,
           message: 'Key rotated successfully via backend',
           newKeyId: result.newKeyId
         };
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[DID Operations] Backend key rotation failed:', response.status, errorData);
+        return { 
+          success: false, 
+          message: errorData.error || `Backend error: ${response.status} Forbidden` 
+        };
       }
     } catch (backendError) {
-      console.log('[DID Operations] Backend not available, using local fallback');
+      console.log('[DID Operations] Backend connection error, using local fallback');
     }
 
     // Fallback: Local mock rotation for demo
@@ -290,17 +306,41 @@ export async function getDIDOperationsHistory(dppId: string) {
       return isApproved || hasSignature;
     });
 
-    // Deduplicate operations to prevent double-showing in Merkle Tree
-    // We deduplicate by HASH to ensure logically identical events are merged
+    // Deduplicate operations to prevent double-showing
+    // We deduplicate by HASH for general events, but also by TYPE for singleton events (like creation)
     const uniqueOperations = new Map<string, any>();
+    const seenSignatures = new Set<string>();
+    const seenTypes = new Set<string>();
     
-    didOperations.forEach(op => {
+    // Sort slightly to prefer real signatures over mock ones during deduplication
+    const sortedOperations = [...didOperations].sort((a, b) => {
+      const aIsMock = a.signature?.startsWith('witness-sig-') || a.signature?.startsWith('mock-');
+      const bIsMock = b.signature?.startsWith('witness-sig-') || b.signature?.startsWith('mock-');
+      if (aIsMock && !bIsMock) return 1;
+      if (!aIsMock && bIsMock) return -1;
+      return 0;
+    });
+
+    sortedOperations.forEach(op => {
       const hash = hashOperation(op);
+      const isSingleton = op.attestation_type === 'did_creation' || op.attestation_type === 'create';
+      const sig = op.signature;
       
-      // If we already have this event, prefer the one with a witness DID
-      if (uniqueOperations.has(hash)) {
+      // Deduplicate by Signature if possible (most reliable for frontend/backend matches)
+      if (sig && !sig.startsWith('mock-') && !sig.startsWith('pending-')) {
+        if (seenSignatures.has(sig)) return;
+        seenSignatures.add(sig);
+      }
+
+      if (isSingleton) {
+        if (!seenTypes.has('creation')) {
+          uniqueOperations.set(hash, op);
+          seenTypes.add('creation');
+        }
+      } else if (uniqueOperations.has(hash)) {
         const existing = uniqueOperations.get(hash);
-        if (!existing.witness_did && op.witness_did) {
+        // Prefer anchored version if we have duplicates
+        if (!existing.witness_status || (existing.witness_status === 'pending' && op.witness_status === 'anchored')) {
           uniqueOperations.set(hash, op);
         }
       } else {
@@ -341,7 +381,10 @@ export async function getPendingAndRejectedOperations(did: string) {
     const pending = allAttestations.filter((att: any) => att.approval_status === 'pending');
     const rejected = allAttestations.filter((att: any) => att.approval_status === 'rejected');
 
-    console.log('getPendingAndRejectedOperations:', { did: dpp.did, pending, rejected });
+    // Only log if something is actually happening or sampled
+    if (pending.length > 0 || rejected.length > 0 || Math.random() < 0.05) {
+      console.log('getPendingAndRejectedOperations (sampled):', { did: dpp.did, pending, rejected });
+    }
 
     return { pending, rejected };
   } catch (error) {
@@ -400,9 +443,16 @@ export async function deactivateDID(
           success: true,
           message: 'DID deactivated successfully via backend (didwebvh-ts)'
         };
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[DID Operations] Backend DID deactivation failed:', response.status, errorData);
+        return { 
+          success: false, 
+          message: errorData.error || `Backend error: ${response.status} Forbidden` 
+        };
       }
     } catch (backendError) {
-      console.log('[DID Operations] Backend not available, using local fallback');
+      console.log('[DID Operations] Backend connection error, using local fallback');
     }
 
     // Fallback: Local mock deactivation for demo
@@ -495,9 +545,16 @@ export async function updateDIDViaBackend(
           message: 'DID updated successfully via backend (didwebvh-ts)',
           versionId: result.versionId
         };
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[DID Operations] Backend DID update failed:', response.status, errorData);
+        return { 
+          success: false, 
+          message: errorData.error || `Backend error: ${response.status} Forbidden` 
+        };
       }
     } catch (backendError) {
-      console.log('[DID Operations] Backend not available, using local fallback');
+      console.log('[DID Operations] Backend connection error, using local fallback');
     }
 
     // Fallback: Use existing local updateDIDDocument function
