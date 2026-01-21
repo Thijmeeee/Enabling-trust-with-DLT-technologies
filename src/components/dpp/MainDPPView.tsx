@@ -170,7 +170,16 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
       // Use MetaMask if wallet is connected
       if (isConnected && signer && address) {
         const walletInfo = { address, signer, did: currentRoleDID };
-        result = await performTransferOwnership(walletInfo, data.dpp.id, data.dpp.owner, newOwnerDID);
+        result = await performTransferOwnership(
+          walletInfo, 
+          data.dpp.id, 
+          data.dpp.owner, 
+          newOwnerDID,
+          () => {
+            setShowTransferModal(false);
+            console.log('✍️ Signature received, syncing...');
+          }
+        );
       } else {
         result = await transferOwnership(data.dpp.id, data.dpp.owner, newOwnerDID);
       }
@@ -205,8 +214,13 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
       } else {
         alert('Error during transfer: ' + result.message);
       }
-    } catch (err) {
-      alert('An unexpected error occurred.');
+    } catch (err: any) {
+      if (err.code === 'ACTION_REJECTED' || err.code === 4001) {
+        console.log('[DID Operations] User cancelled transaction');
+      } else {
+        console.error('[DID Operations] Transfer error:', err);
+        alert('An unexpected error occurred.');
+      }
     } finally {
       setOpLoading(false);
     }
@@ -229,7 +243,16 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
           }] : undefined,
           description: params.updateType === 'metadata' ? params.description : undefined
         };
-        result = await performUpdateDID(walletInfo, data.dpp.id, data.dpp.owner, updates);
+        result = await performUpdateDID(
+          walletInfo, 
+          data.dpp.id, 
+          data.dpp.owner, 
+          updates,
+          () => {
+            setShowUpdateModal(false);
+            console.log('✍️ Signature received, updating...');
+          }
+        );
       } else {
         result = await updateDIDViaBackend(data.dpp.id, data.dpp.owner, {
           serviceEndpoints: params.updateType === 'service' ? [{
@@ -267,8 +290,13 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
       } else {
         alert('Error during update: ' + result.message);
       }
-    } catch (err) {
-      alert('An unexpected error occurred.');
+    } catch (err: any) {
+      if (err.code === 'ACTION_REJECTED' || err.code === 4001) {
+        console.log('[DID Operations] User cancelled update');
+      } else {
+        console.error('[DID Operations] Update error:', err);
+        alert('An unexpected error occurred.');
+      }
     } finally {
       setOpLoading(false);
     }
@@ -283,7 +311,16 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
       // Use MetaMask if wallet is connected
       if (isConnected && signer && address) {
         const walletInfo = { address, signer, did: currentRoleDID };
-        result = await performCertifyProduct(walletInfo, data.dpp.id, data.dpp.owner, certData);
+        result = await performCertifyProduct(
+          walletInfo, 
+          data.dpp.id, 
+          data.dpp.owner, 
+          certData,
+          () => {
+            setShowCertifyModal(false);
+            console.log('✍️ Signature received, certifying...');
+          }
+        );
       } else {
         result = await certifyProduct(data.dpp.id, data.dpp.owner, certData);
       }
@@ -308,8 +345,13 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
       } else {
         alert('Error during certification: ' + result.message);
       }
-    } catch (err) {
-      alert('An unexpected error occurred.');
+    } catch (err: any) {
+      if (err.code === 'ACTION_REJECTED' || err.code === 4001) {
+        console.log('[DID Operations] User cancelled certification');
+      } else {
+        console.error('[DID Operations] Certification error:', err);
+        alert('An unexpected error occurred.');
+      }
     } finally {
       setOpLoading(false);
     }
@@ -324,7 +366,16 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
       // Use MetaMask if wallet is connected
       if (isConnected && signer && address) {
         const walletInfo = { address, signer, did: currentRoleDID };
-        result = await performDeactivateDID(walletInfo, data.dpp.id, data.dpp.owner, reason);
+        result = await performDeactivateDID(
+          walletInfo, 
+          data.dpp.id, 
+          data.dpp.owner, 
+          reason,
+          () => {
+            setShowDeactivateModal(false);
+            console.log('✍️ Signature received, deactivating...');
+          }
+        );
       } else {
         result = await deactivateDID(data.dpp.id, data.dpp.owner, reason);
       }
@@ -348,8 +399,13 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
       } else {
         alert('Error during deactivation: ' + result.message);
       }
-    } catch (err) {
-      alert('An unexpected error occurred.');
+    } catch (err: any) {
+      if (err.code === 'ACTION_REJECTED' || err.code === 4001) {
+        console.log('[DID Operations] User cancelled deactivation');
+      } else {
+        console.error('[DID Operations] Deactivation error:', err);
+        alert('An unexpected error occurred.');
+      }
     } finally {
       setOpLoading(false);
     }

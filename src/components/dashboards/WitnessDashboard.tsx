@@ -110,20 +110,28 @@ export default function WitnessDashboard() {
       
       if (history.success) {
         const formattedEvents: EvidenceEvent[] = history.operations.map((op: any) => {
-          // Determine a readable description
-          let description = op.attestation_data?.description || op.description;
+          // Determine a readable description - Prefer specific mapping over generic "Process Operation"
+          let description = null;
+          
+          const typeMap: Record<string, string> = {
+            'create': 'Creation',
+            'did_creation': 'Creation',
+            'update': 'DID-update',
+            'did_update': 'DID-update',
+            'transfer': 'Transfer Ownership',
+            'ownership_transfer': 'Transfer Ownership',
+            'ownership_change': 'Transfer Ownership',
+            'key_rotation': 'Key Rotation',
+            'rotate': 'Key Rotation',
+            'certification': 'Certification',
+            'deactivate': 'Deactivated',
+            'deactivation': 'Deactivated'
+          };
+          
+          description = typeMap[op.attestation_type] || op.attestation_data?.description || op.description;
           
           if (!description || description === 'Process Operation') {
-            const typeMap: Record<string, string> = {
-              'create': 'Product Identity Created',
-              'update': 'Product Update Logged',
-              'transfer': 'Change of Ownership',
-              'ownership_change': 'Change of Ownership',
-              'did_update': 'DID Document Updated',
-              'certification': 'Quality Certification Issued',
-              'deactivate': 'Product Deactivated'
-            };
-            description = typeMap[op.attestation_type] || 'Process Operation';
+            description = 'Action Logged';
           }
 
           if (op.witness_proofs?.batchId !== undefined) {
@@ -444,6 +452,7 @@ export default function WitnessDashboard() {
                       <thead className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700">
                         <tr>
                           <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Batch Info</th>
+                          <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Action / Event</th>
                           <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Merkle Root</th>
                           <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Network Proof</th>
                           <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Status</th>
@@ -452,7 +461,7 @@ export default function WitnessDashboard() {
                       <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
                         {batches.length === 0 ? (
                           <tr>
-                            <td colSpan={4} className="px-6 py-12 text-center">
+                            <td colSpan={5} className="px-6 py-12 text-center">
                               <div className="flex flex-col items-center gap-2 text-gray-400">
                                 <Database className="w-8 h-8 opacity-20" />
                                 <p className="text-sm">No batches found in the blockchain history yet.</p>
@@ -465,6 +474,17 @@ export default function WitnessDashboard() {
                             <td className="px-6 py-4">
                               <div className="font-bold text-gray-900 dark:text-white">Batch #{batch.batch_id}</div>
                               <div className="text-xs text-gray-500">{new Date(batch.timestamp || Date.now()).toLocaleString()}</div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                {(() => {
+                                  // Find the event for this specific asset that was in this batch
+                                  const batchEvents = events.filter(e => Number(e.witness_proofs?.batchId) === Number(batch.batch_id));
+                                  if (batchEvents.length === 0) return <span className="text-gray-400 italic">Unknown Action</span>;
+                                  if (batchEvents.length === 1) return batchEvents[0].description;
+                                  return `${batchEvents[0].description} (+${batchEvents.length - 1} more)`;
+                                })()}
+                              </div>
                             </td>
                             <td className="px-6 py-4">
                               <div className="font-mono text-xs text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-900 px-2 py-1 rounded max-w-[200px] truncate" title={batch.merkle_root}>

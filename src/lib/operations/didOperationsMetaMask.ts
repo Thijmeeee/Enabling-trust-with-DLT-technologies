@@ -23,15 +23,23 @@ function generateDID(domain: string, type: string, uniqueId: string): string {
 /**
  * Sign a payload using EIP-712 or Personal Sign
  */
-async function signPayload(signer: ethers.JsonRpcSigner, payload: any): Promise<{ signature: string, timestamp: string }> {
+async function signPayload(signer: ethers.JsonRpcSigner, payload: any): Promise<{ signature: string, timestamp: string } | null | never> {
     const timestamp = new Date().toISOString();
     const message = JSON.stringify({
         ...payload,
         timestamp
     }, null, 2);
 
-    const signature = await signer.signMessage(message);
-    return { signature, timestamp };
+    try {
+        const signature = await signer.signMessage(message);
+        return { signature, timestamp };
+    } catch (err: any) {
+        // Handle MetaMask rejection (Ethers v6 uses ACTION_REJECTED)
+        if (err.code === 'ACTION_REJECTED' || err.code === 4001 || err.message?.includes('rejected')) {
+            return null;
+        }
+        throw err;
+    }
 }
 
 // --- Batch Operation Primitives ---
@@ -193,7 +201,7 @@ export function prepareTransferOwnership(
         description: `Transfer ownership to ${newOwner}`,
         payload: payload,
         execute: async (signature: string, timestamp: string) => {
-            let result = { success: true, message: 'Ownership transferred and synced' };
+            let result = { success: true, message: 'Ownership transferred and synced via backend' };
 
             // Call backend via hybrid data store
             await enhancedDB.transferOwnership(dppId, {
@@ -235,7 +243,7 @@ export function prepareRotateKey(
                 signerAddress: wallet.address
             });
 
-            return { success: true, message: 'Key rotated and synced' };
+            return { success: true, message: 'Key rotated and synced via backend' };
         }
     };
 }
@@ -276,7 +284,7 @@ export function prepareUpdateDID(
                 });
             }
 
-            return { success: true, message: 'DID updated successfully' };
+            return { success: true, message: 'DID updated successfully via backend' };
         }
     };
 }
@@ -307,7 +315,7 @@ export function prepareDeactivateDID(
                 signerAddress: wallet.address
             });
 
-            return { success: true, message: 'DID deactivated successfully' };
+            return { success: true, message: 'DID deactivated successfully via backend' };
         }
     };
 }
@@ -360,7 +368,7 @@ export function prepareCertifyProduct(
                 timestamp: timestamp
             });
 
-            return { success: true, message: 'Product certified successfully' };
+            return { success: true, message: 'Product certified successfully via backend' };
         }
     };
 }
@@ -370,7 +378,8 @@ export function prepareCertifyProduct(
  */
 export async function executeBatch(
     wallet: WalletInfo,
-    operations: PreparedOperation[]
+    operations: PreparedOperation[],
+    onSigned?: () => void
 ) {
     if (operations.length === 0) return [];
 
@@ -389,7 +398,14 @@ export async function executeBatch(
     };
 
     // 2. Sign Batch Payload ONCE
-    const { signature, timestamp } = await signPayload(wallet.signer, batchPayload);
+    const signResult = await signPayload(wallet.signer, batchPayload);
+    if (!signResult) {
+        throw new Error('Transaction cancelled');
+    }
+
+    if (onSigned) onSigned();
+
+    const { signature, timestamp } = signResult;
 
     // 3. Execute all operations using the batch signature
     const results = [];
@@ -411,10 +427,15 @@ export async function createSignedDPP(
         metadata: any;
         parentDid?: string;
     },
-    domain: string = 'example.com'
+    domain: string = 'example.com',
+    onSigned?: () => void
 ) {
     const prep = prepareCreateDPP(wallet, productData, domain);
-    const { signature, timestamp } = await signPayload(wallet.signer, prep.payload);
+    const signResult = await signPayload(wallet.signer, prep.payload);
+    if (!signResult) return { success: false, message: 'Operation cancelled by user' };
+    
+    if (onSigned) onSigned();
+    const { signature, timestamp } = signResult;
     return prep.execute(signature, timestamp);
 }
 
@@ -425,10 +446,15 @@ export async function createSignedRelationship(
         childDid: string;
         type: string;
         metadata?: any;
-    }
+    },
+    onSigned?: () => void
 ) {
     const prep = prepareRelationship(wallet, relationship);
-    const { signature, timestamp } = await signPayload(wallet.signer, prep.payload);
+    const signResult = await signPayload(wallet.signer, prep.payload);
+    if (!signResult) return { success: false, message: 'Operation cancelled by user' };
+    
+    if (onSigned) onSigned();
+    const { signature, timestamp } = signResult;
     return prep.execute(signature, timestamp);
 }
 
@@ -436,20 +462,30 @@ export async function performTransferOwnership(
     wallet: WalletInfo,
     dppId: string,
     currentOwner: string,
-    newOwner: string
+    newOwner: string,
+    onSigned?: () => void
 ) {
     const prep = prepareTransferOwnership(wallet, dppId, currentOwner, newOwner);
-    const { signature, timestamp } = await signPayload(wallet.signer, prep.payload);
+    const signResult = await signPayload(wallet.signer, prep.payload);
+    if (!signResult) return { success: false, message: 'Operation cancelled by user' };
+
+    if (onSigned) onSigned();
+    const { signature, timestamp } = signResult;
     return prep.execute(signature, timestamp);
 }
 
 export async function performRotateKey(
     wallet: WalletInfo,
     dppId: string,
-    currentOwner: string
+    currentOwner: string,
+    onSigned?: () => void
 ) {
     const prep = prepareRotateKey(wallet, dppId, currentOwner);
-    const { signature, timestamp } = await signPayload(wallet.signer, prep.payload);
+    const signResult = await signPayload(wallet.signer, prep.payload);
+    if (!signResult) return { success: false, message: 'Operation cancelled by user' };
+
+    if (onSigned) onSigned();
+    const { signature, timestamp } = signResult;
     return prep.execute(signature, timestamp);
 }
 
@@ -457,10 +493,15 @@ export async function performUpdateDID(
     wallet: WalletInfo,
     dppId: string,
     currentOwner: string,
-    updates: { serviceEndpoints?: any[]; description?: string; }
+    updates: { serviceEndpoints?: any[]; description?: string; },
+    onSigned?: () => void
 ) {
     const prep = prepareUpdateDID(wallet, dppId, currentOwner, updates);
-    const { signature, timestamp } = await signPayload(wallet.signer, prep.payload);
+    const signResult = await signPayload(wallet.signer, prep.payload);
+    if (!signResult) return { success: false, message: 'Operation cancelled by user' };
+
+    if (onSigned) onSigned();
+    const { signature, timestamp } = signResult;
     return prep.execute(signature, timestamp);
 }
 
@@ -468,10 +509,15 @@ export async function performDeactivateDID(
     wallet: WalletInfo,
     dppId: string,
     currentOwner: string,
-    reason: string
+    reason: string,
+    onSigned?: () => void
 ) {
     const prep = prepareDeactivateDID(wallet, dppId, currentOwner, reason);
-    const { signature, timestamp } = await signPayload(wallet.signer, prep.payload);
+    const signResult = await signPayload(wallet.signer, prep.payload);
+    if (!signResult) return { success: false, message: 'Operation cancelled by user' };
+
+    if (onSigned) onSigned();
+    const { signature, timestamp } = signResult;
     return prep.execute(signature, timestamp);
 }
 
@@ -484,9 +530,14 @@ export async function performCertifyProduct(
         certificateType: string;
         notes: string;
         status?: string;
-    }
+    },
+    onSigned?: () => void
 ) {
     const prep = prepareCertifyProduct(wallet, dppId, currentOwner, certificationData);
-    const { signature, timestamp } = await signPayload(wallet.signer, prep.payload);
+    const signResult = await signPayload(wallet.signer, prep.payload);
+    if (!signResult) return { success: false, message: 'Operation cancelled by user' };
+
+    if (onSigned) onSigned();
+    const { signature, timestamp } = signResult;
     return prep.execute(signature, timestamp);
 }

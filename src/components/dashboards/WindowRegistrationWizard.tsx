@@ -138,13 +138,19 @@ export default function WindowRegistrationWizard({ onClose, onComplete }: Window
         // 2. Execute Batch (One Signature)
         // This will trigger ONE MetaMask popup
         // Order: Window first so relationships don't fail foreign key checks
-        const results = await executeBatch(walletInfo, [
-          windowPrep,
-          glassPrep,
-          framePrep,
-          rel1Prep,
-          rel2Prep
-        ]);
+        const results = await executeBatch(
+          walletInfo, 
+          [
+            windowPrep,
+            glassPrep,
+            framePrep,
+            rel1Prep,
+            rel2Prep
+          ],
+          () => {
+            console.log('✍️ Batch signature received, processing registrations...');
+          }
+        );
 
         // Extract DIDs/IDs for post-processing
         // results array matches the order of operations
@@ -295,10 +301,15 @@ export default function WindowRegistrationWizard({ onClose, onComplete }: Window
       setTimeout(() => {
         onComplete();
       }, 2000);
-    } catch (error) {
-      console.error('Error creating DPP:', error);
-      alert('Something went wrong. Please try again.');
-      setStep('review');
+    } catch (error: any) {
+      if (error.message === 'Transaction cancelled') {
+        console.log('User cancelled transaction');
+        // Stay on review step so they can try again
+      } else {
+        console.error('Error creating DPP:', error);
+        alert('Something went wrong. Please try again.');
+        setStep('review');
+      }
     }
   }
 

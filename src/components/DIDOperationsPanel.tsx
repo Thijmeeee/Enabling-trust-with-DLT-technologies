@@ -182,13 +182,29 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
     try {
       if (currentRole === 'Wallet User' && signer) {
         const walletInfo = { address: address || '', signer: signer, did: currentRoleDID };
-        result = await performTransferOwnership(walletInfo, dpp.id, dpp.did, newOwnerDID);
+        result = await performTransferOwnership(
+          walletInfo, 
+          dpp.id, 
+          dpp.did, 
+          newOwnerDID,
+          () => {
+            // Callback when signed but before backend execution
+            setShowTransferModal(false);
+            setMessage({ type: 'success', text: '✍️ Signature received! Syncing with network...' });
+          }
+        );
       } else {
         result = await transferOwnership(dpp.id, currentRoleDID, newOwnerDID);
       }
     } catch (err: any) {
-      console.error('[DID Operations] Transfer error:', err);
-      result = { success: false, message: err.message || 'Transfer failed' };
+      // Don't log full error for user rejections
+      if (err.code === 'ACTION_REJECTED' || err.code === 4001) {
+        console.log('[DID Operations] User cancelled transaction');
+        result = { success: false, message: 'Transaction cancelled' };
+      } else {
+        console.error('[DID Operations] Transfer error:', err);
+        result = { success: false, message: err.message || 'Transfer failed' };
+      }
     } finally {
       setOperationLoading(null);
     }
@@ -243,19 +259,29 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
     }
 
     setOperationLoading('rotate');
-
-    setOperationLoading('rotate');
     let result;
     try {
       if (currentRole === 'Wallet User' && signer) {
         const walletInfo = { address: address || '', signer: signer, did: currentRoleDID };
-        result = await performRotateKey(walletInfo, dpp.id, dpp.did);
+        result = await performRotateKey(
+          walletInfo, 
+          dpp.id, 
+          dpp.did,
+          () => {
+            setMessage({ type: 'success', text: '✍️ Signature received! Syncing with network...' });
+          }
+        );
       } else {
         result = await rotateKey(dpp.id, currentRoleDID);
       }
     } catch (err: any) {
-      console.error('[DID Operations] Role Error:', err);
-      result = { success: false, message: err.message || 'Rotation failed' };
+      if (err.code === 'ACTION_REJECTED' || err.code === 4001) {
+        console.log('[DID Operations] User cancelled rotation');
+        result = { success: false, message: 'Transaction cancelled' };
+      } else {
+        console.error('[DID Operations] Role Error:', err);
+        result = { success: false, message: err.message || 'Rotation failed' };
+      }
     } finally {
       setOperationLoading(null);
     }
@@ -313,8 +339,6 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
     }
 
     setOperationLoading('update');
-
-    setOperationLoading('update');
     let result;
     const updates = {
       description: updateDescription,
@@ -328,13 +352,27 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
     try {
       if (currentRole === 'Wallet User' && signer) {
         const walletInfo = { address: address || '', signer: signer, did: currentRoleDID };
-        result = await performUpdateDID(walletInfo, dpp.id, dpp.did, updates);
+        result = await performUpdateDID(
+          walletInfo, 
+          dpp.id, 
+          dpp.did, 
+          updates,
+          () => {
+            setShowUpdateModal(false);
+            setMessage({ type: 'success', text: '✍️ Signature received! Updating DID...' });
+          }
+        );
       } else {
         result = await updateDIDViaBackend(dpp.id, currentRoleDID, updates);
       }
     } catch (err: any) {
-      console.error('[DID Operations] Update Error:', err);
-      result = { success: false, message: err.message || 'Update failed' };
+      if (err.code === 'ACTION_REJECTED' || err.code === 4001) {
+        console.log('[DID Operations] User cancelled update');
+        result = { success: false, message: 'Transaction cancelled' };
+      } else {
+        console.error('[DID Operations] Update Error:', err);
+        result = { success: false, message: err.message || 'Update failed' };
+      }
     } finally {
       setOperationLoading(null);
     }
@@ -366,44 +404,34 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
     }
 
     setOperationLoading('deactivate');
-
-    // MetaMask Signature for Wallet Users
-    if (currentRole === 'Wallet User') {
-      if (!signer) {
-        setMessage({ type: 'error', text: 'Please connect your wallet first' });
-        setOperationLoading(null);
-        return;
-      }
-      try {
-        setMessage({ type: 'info', text: 'Please sign the message in MetaMask to authorize deactivation...' });
-        const signatureMessage = `Authorize deactivation of product:\n\nDID: ${dpp.did}\nReason: ${deactivateReason}\n\nWARNING: This is permanent and cannot be undone.`;
-        await signer.signMessage(signatureMessage);
-        setMessage(null); // Clear prompt immediately after signing
-        console.log('[DID Operations] MetaMask signature obtained');
-      } catch (err: any) {
-        console.error('[DID Operations] MetaMask signature failed:', err);
-        setMessage({ type: 'error', text: 'MetaMask signature rejected. Operation cancelled.' });
-        setOperationLoading(null);
-        return;
-      }
-    }
-
-    setOperationLoading('deactivate');
     let result;
     try {
       if (currentRole === 'Wallet User' && signer) {
         const walletInfo = { address: address || '', signer: signer, did: currentRoleDID };
-        result = await performDeactivateDID(walletInfo, dpp.id, dpp.did, deactivateReason);
+        result = await performDeactivateDID(
+          walletInfo, 
+          dpp.id, 
+          dpp.did, 
+          deactivateReason,
+          () => {
+            setShowDeactivateModal(false);
+            setMessage({ type: 'success', text: '✍️ Signature received! Deactivating DID...' });
+          }
+        );
       } else {
         result = await deactivateDID(dpp.id, currentRoleDID, deactivateReason);
       }
     } catch (err: any) {
-      console.error('[DID Operations] Deactivate Error:', err);
-      result = { success: false, message: err.message || 'Deactivation failed' };
+      if (err.code === 'ACTION_REJECTED' || err.code === 4001) {
+        console.log('[DID Operations] User cancelled deactivation');
+        result = { success: false, message: 'Transaction cancelled' };
+      } else {
+        console.error('[DID Operations] Deactivate Error:', err);
+        result = { success: false, message: err.message || 'Deactivation failed' };
+      }
     } finally {
       setOperationLoading(null);
     }
-    setOperationLoading(null);
 
     if (result.success) {
       setMessage({ type: 'success', text: '✅ DID has been permanently deactivated' });
