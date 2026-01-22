@@ -83,9 +83,9 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
       }
       setLoading(false);
     };
-    
+
     loadHistory();
-    
+
     // Auto-refresh history every 10 seconds to catch anchoring updates
     const interval = setInterval(loadHistory, 10000);
     return () => clearInterval(interval);
@@ -183,9 +183,9 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
       if (currentRole === 'Wallet User' && signer) {
         const walletInfo = { address: address || '', signer: signer, did: currentRoleDID };
         result = await performTransferOwnership(
-          walletInfo, 
-          dpp.id, 
-          dpp.did, 
+          walletInfo,
+          dpp.id,
+          dpp.did,
           newOwnerDID,
           () => {
             // Callback when signed but before backend execution
@@ -264,8 +264,8 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
       if (currentRole === 'Wallet User' && signer) {
         const walletInfo = { address: address || '', signer: signer, did: currentRoleDID };
         result = await performRotateKey(
-          walletInfo, 
-          dpp.id, 
+          walletInfo,
+          dpp.id,
           dpp.did,
           () => {
             setMessage({ type: 'success', text: '✍️ Signature received! Syncing with network...' });
@@ -285,7 +285,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
     } finally {
       setOperationLoading(null);
     }
-    
+
     if (result.success) {
       setMessage(null);
 
@@ -353,9 +353,9 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
       if (currentRole === 'Wallet User' && signer) {
         const walletInfo = { address: address || '', signer: signer, did: currentRoleDID };
         result = await performUpdateDID(
-          walletInfo, 
-          dpp.id, 
-          dpp.did, 
+          walletInfo,
+          dpp.id,
+          dpp.did,
           updates,
           () => {
             setShowUpdateModal(false);
@@ -409,9 +409,9 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
       if (currentRole === 'Wallet User' && signer) {
         const walletInfo = { address: address || '', signer: signer, did: currentRoleDID };
         result = await performDeactivateDID(
-          walletInfo, 
-          dpp.id, 
-          dpp.did, 
+          walletInfo,
+          dpp.id,
+          dpp.did,
           deactivateReason,
           () => {
             setShowDeactivateModal(false);
@@ -528,7 +528,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
             </div>
           </div>
         </div>
-        
+
         <div className="p-6 space-y-4">
           <div>
             <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">DID Identifier</span>
@@ -541,7 +541,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
               <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Current Owner</span>
               <div className="flex items-center gap-2 mt-1">
                 <p className="text-sm font-mono bg-gray-50 dark:bg-gray-700 px-3 py-2 rounded-lg flex-1 break-all text-gray-900 dark:text-white border border-gray-200 dark:border-gray-600">
-                  {dpp.owner.substring(0, 25)}...
+                  {dpp.owner}
                 </p>
                 {isOwner && (
                   <span className="text-xs bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300 px-3 py-1 rounded-full font-bold whitespace-nowrap">
@@ -553,11 +553,10 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
             <div>
               <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</span>
               <div className="mt-1">
-                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold ${
-                  isDeactivated 
-                    ? 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300' 
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold ${isDeactivated
+                    ? 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300'
                     : 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
-                }`}>
+                  }`}>
                   {isDeactivated ? <Power size={14} /> : <CheckCircle size={14} />}
                   {isDeactivated ? 'Deactivated' : 'Active'}
                 </span>
@@ -579,7 +578,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
               Manage your Decentralized Identifier with these previousOperations
             </p>
           </div>
-          
+
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Rotate Key Card */}
             <div className="bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-5 hover:shadow-md transition-all">
@@ -679,11 +678,10 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
 
       {/* Message Display */}
       {message && (
-        <div className={`p-4 rounded-xl flex items-center gap-3 ${
-          message.type === 'success' 
-            ? 'bg-green-50 dark:bg-green-900/30 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800' 
+        <div className={`p-4 rounded-xl flex items-center gap-3 ${message.type === 'success'
+            ? 'bg-green-50 dark:bg-green-900/30 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800'
             : 'bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-800'
-        }`}>
+          }`}>
           {message.type === 'success' ? <CheckCircle size={20} /> : <XCircle size={20} />}
           {message.text}
         </div>
@@ -825,15 +823,14 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                   return (
                     <div key={index} className="flex gap-6">
                       {/* Timeline Icon */}
-                      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center z-10 shadow-sm ${
-                        formatted.label.toLowerCase().includes('create') ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' :
-                        formatted.label.toLowerCase().includes('transfer') || formatted.label.toLowerCase().includes('ownership') ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' :
-                        'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400'
-                      }`}>
-                        {formatted.icon === '🆕' ? <CheckCircle size={18} /> : 
-                         formatted.icon === '🔑' ? <Key size={18} /> : 
-                         formatted.icon === '🔄' ? <ArrowRightLeft size={18} /> : 
-                         <Clock size={18} />}
+                      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center z-10 shadow-sm ${formatted.label.toLowerCase().includes('create') ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' :
+                          formatted.label.toLowerCase().includes('transfer') || formatted.label.toLowerCase().includes('ownership') ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' :
+                            'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400'
+                        }`}>
+                        {formatted.icon === '🆕' ? <CheckCircle size={18} /> :
+                          formatted.icon === '🔑' ? <Key size={18} /> :
+                            formatted.icon === '🔄' ? <ArrowRightLeft size={18} /> :
+                              <Clock size={18} />}
                       </div>
 
                       {/* Content Card */}
@@ -852,7 +849,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                                 </span>
                               )}
                               {attestation.tx_hash && (
-                                <a 
+                                <a
                                   href={etherscanTxUrl(attestation.tx_hash) || '#'}
                                   target="_blank"
                                   rel="noopener noreferrer"
@@ -864,13 +861,13 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                               )}
                             </div>
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                              {new Date(attestation.timestamp).toLocaleString(undefined, { 
-                                dateStyle: 'medium', 
-                                timeStyle: 'short' 
+                              {new Date(attestation.timestamp).toLocaleString(undefined, {
+                                dateStyle: 'medium',
+                                timeStyle: 'short'
                               })}
                             </p>
                           </div>
-                          
+
                           <div className="text-right">
                             <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase font-semibold tracking-widest">Witness</p>
                             <p className="text-xs font-mono text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-900 px-2 py-1 rounded mt-1">
@@ -912,7 +909,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                                 </>
                               )}
                             </button>
-                            
+
                             {isExpanded && (
                               <div className="mt-3 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
                                 <div className="bg-gray-100 dark:bg-gray-800 px-3 py-1.5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
@@ -1009,7 +1006,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                 <h3 className="text-lg font-bold text-white">Update DID Document</h3>
               </div>
             </div>
-            
+
             <div className="p-6">
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                 Choose what you want to update in your DID document. This creates a new version in the DID log.
@@ -1021,11 +1018,10 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                   What would you like to update?
                 </label>
                 <div className="grid grid-cols-1 gap-3">
-                  <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all ${
-                    updateType === 'service' 
-                      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' 
+                  <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all ${updateType === 'service'
+                      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
                       : 'border-gray-200 dark:border-gray-600 hover:border-emerald-300'
-                  }`}>
+                    }`}>
                     <input
                       type="radio"
                       name="updateType"
@@ -1041,12 +1037,11 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                       </p>
                     </div>
                   </label>
-                  
-                  <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all ${
-                    updateType === 'metadata' 
-                      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' 
+
+                  <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all ${updateType === 'metadata'
+                      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
                       : 'border-gray-200 dark:border-gray-600 hover:border-emerald-300'
-                  }`}>
+                    }`}>
                     <input
                       type="radio"
                       name="updateType"
@@ -1179,7 +1174,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                 <h3 className="text-lg font-bold text-white">Deactivate DID</h3>
               </div>
             </div>
-            
+
             <div className="p-6">
               <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
                 <div className="flex gap-3">
@@ -1190,7 +1185,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                 </div>
               </div>
 
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Reason for Deactivation <span className="text-red-500">*</span>
