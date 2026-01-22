@@ -11,7 +11,8 @@ import { getDIDOperationsHistory } from '../../lib/operations/didOperationsLocal
 import { hashOperation } from '../../lib/utils/merkleTree';
 import { useRole } from '../../lib/utils/roleContext';
 import { DPP } from '../../lib/data/localData';
-import { api, type WatcherAlert } from '../../lib/api';
+import { api } from '../../lib/api';
+import { type WatcherAlert } from '../../lib/data/localData';
 
 import MerkleTreeVisualizer from '../visualizations/MerkleTreeVisualizer';
 
@@ -75,7 +76,7 @@ export default function WatcherDashboard() {
 
       // Find ALL alerts that match this SCID
       const dppAlerts = alerts.filter(a => {
-        const alertScid = extractSCID(a.did);
+        const alertScid = extractSCID(a.did || '');
         return alertScid.toLowerCase() === dppScid.toLowerCase() && alertScid.length > 5;
       });
 
@@ -88,7 +89,6 @@ export default function WatcherDashboard() {
       // Only count '-event-' keys to avoid triple-counting (we also store by hash/index)
       const manualFailuresForDPP = Object.keys(manualVerificationResults)
         .filter(key => {
-          const parts = key.split('-');
           // Search for scid prefix precisely
           const isScidMatch = key.toLowerCase().startsWith(dppScid.toLowerCase());
           const isEventKey = key.includes('-event-');
@@ -484,7 +484,7 @@ export default function WatcherDashboard() {
 
       if (!result.isValid) {
         const isAlreadyAlerted = alerts.some(a =>
-          extractSCID(a.did).toLowerCase() === dppScid &&
+          extractSCID(a.did || '').toLowerCase() === dppScid &&
           String(a.event_id) === eventId
         );
 
@@ -667,11 +667,11 @@ export default function WatcherDashboard() {
                     <div className="flex items-center gap-4 mt-1">
                       <p className="text-gray-500 text-xs font-mono">{selectedDPP.did}</p>
                       {alerts.filter(a =>
-                        extractSCID(a.did).toLowerCase() === extractSCID(selectedDPP.did).toLowerCase() && !a.event_id
-                      ).map((alert, idx) => (
+                        extractSCID(a.did || '').toLowerCase() === extractSCID(selectedDPP.did).toLowerCase() && !a.event_id
+                      ).map((a, idx) => (
                         <div key={idx} className="flex items-center gap-1.5 px-2 py-0.5 bg-red-600 text-white text-[10px] font-bold rounded animate-pulse uppercase">
                           <AlertTriangle className="w-3 h-3" />
-                          {alert.reason.replace(/_/g, ' ')}
+                          {a.reason?.replace(/_/g, ' ')}
                         </div>
                       ))}
                     </div>
@@ -765,7 +765,7 @@ export default function WatcherDashboard() {
                         localOperation={fileBasedVerificationData?.fileOp}
                         onVerificationComplete={handleVerificationComplete}
                         onReset={handleReset}
-                        alerts={alerts.filter(a => extractSCID(a.did).toLowerCase() === extractSCID(selectedDPP.did).toLowerCase())}
+                        alerts={alerts.filter(a => extractSCID(a.did || '').toLowerCase() === extractSCID(selectedDPP.did).toLowerCase())}
                       />
                     </div>
                   </section>
@@ -817,12 +817,12 @@ export default function WatcherDashboard() {
 
                         // Check backend alerts
                         const isEventFlagged = alerts.some(a =>
-                          extractSCID(a.did).toLowerCase() === dppScid &&
+                          extractSCID(a.did || '').toLowerCase() === dppScid &&
                           (a.event_id !== null && (String(a.event_id) === eventId || (vId && String(a.event_id) === vId)))
                         );
 
                         const isGlobalFlagged = alerts.some(a =>
-                          extractSCID(a.did).toLowerCase() === dppScid && !a.event_id
+                          extractSCID(a.did || '').toLowerCase() === dppScid && !a.event_id
                         );
 
                         // Check local results: Match by Event ID, Hash, Index, or Version

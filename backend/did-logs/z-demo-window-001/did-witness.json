@@ -29,5 +29,16 @@
     "blockNumber": 5432101,
     "timestamp": "2026-01-23T16:10:22.880Z",
     "chainId": "11155111"
+  },
+  {
+    "versionId": "3",
+    "batchId": 136,
+    "merkleRoot": "0x91b38fc90619b30c4993a0f97a35802562ed32e84f9166bf086b0b8a8df1b7bb",
+    "leafHash": "0x91b38fc90619b30c4993a0f97a35802562ed32e84f9166bf086b0b8a8df1b7bb",
+    "merkleProof": [],
+    "leafIndex": 0,
+    "txHash": "0x88b38295e251c0011538e2a5d9ecb027d74b2a1b6105eda3acb65f8483aa54d5",
+    "blockNumber": 10101021,
+    "timestamp": "2026-01-22T20:00:03.669Z"
   }
 ]

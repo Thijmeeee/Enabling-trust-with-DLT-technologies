@@ -15,8 +15,6 @@ import { generateWitnessAttestations, generateAnchoringEvents } from '../../lib/
 import { useRole } from '../../lib/utils/roleContext';
 import { useWallet } from '../../lib/utils/WalletContext';
 import {
-  createSignedDPP,
-  createSignedRelationship,
   prepareCreateDPP,
   prepareRelationship,
   executeBatch
@@ -139,7 +137,7 @@ export default function WindowRegistrationWizard({ onClose, onComplete }: Window
         // This will trigger ONE MetaMask popup
         // Order: Window first so relationships don't fail foreign key checks
         const results = await executeBatch(
-          walletInfo, 
+          walletInfo,
           [
             windowPrep,
             glassPrep,

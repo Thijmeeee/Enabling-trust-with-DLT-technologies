@@ -10,10 +10,9 @@
 
 import { api, blockchainClient, etherscanBlockUrl } from '../api';
 import { API_CONFIG } from '../api/config';
-import type { Identity, DIDEvent, Batch, Audit } from '../api/client';
+import type { DIDEvent, Batch, Audit } from '../api/client';
 import { localDB } from './localData';
 import type { DPP, AnchoringEvent, WitnessAttestation, WatcherAlert } from './localData';
-import { enhancedDB } from './enhancedDataStore';
 
 // Mode configuration
 let useBackendApi = true;
@@ -83,7 +82,7 @@ export async function getAllDPPs(): Promise<DPP[]> {
 
         // Fetch events to get model/type from create event payloads
         const dpps: DPP[] = [];
-        
+
         // Fetch all alerts once to avoid N+1 and allow status overwriting
         const allAlerts = await getAllAlerts();
         const tamperedDids = new Set(allAlerts.filter(a => !a.resolved).map(a => a.did));
@@ -91,10 +90,10 @@ export async function getAllDPPs(): Promise<DPP[]> {
         for (const identity of identities) {
           // Use metadata directly from optimized backend query
           const payload = (identity as any).metadata as any;
-          
+
           let effectiveStatus = identity.status || 'active';
           if (tamperedDids.has(identity.did)) {
-            effectiveStatus = 'tampered';
+            effectiveStatus = 'tampered' as any;
           }
 
           // Harmonize metadata for UI expectations
@@ -274,9 +273,9 @@ export async function getBlockchainVerification(batchId: number, expectedRoot: s
     const result = await blockchainClient.verifyOnChain(batchId, expectedRoot);
     return {
       verified: result.verified,
-      onChainRoot: result.onChainRoot,
+      onChainRoot: result.onChainRoot ? String(result.onChainRoot) : '',
       blockNumber: result.blockNumber,
-      etherscanUrl: result.etherscanBlockUrl,
+      etherscanUrl: result.etherscanBlockUrl || '',
     };
   } catch (e) {
     console.warn('Blockchain verification failed:', e);
@@ -346,8 +345,8 @@ export async function getAttestationsByDID(did: string): Promise<WitnessAttestat
       const backendAttestations: WitnessAttestation[] = [];
 
       for (const event of events) {
-        if (event.witness_proofs?.witnesses) {
-          for (const witness of event.witness_proofs.witnesses) {
+        if ((event.witness_proofs as any)?.witnesses) {
+          for (const witness of (event.witness_proofs as any).witnesses) {
             backendAttestations.push({
               id: `${event.id}-${witness.witnessDid}`,
               dpp_id: '', // Will be filled by caller if needed
@@ -377,7 +376,7 @@ export async function getAttestationsByDID(did: string): Promise<WitnessAttestat
             witness_proofs: event.witness_proofs, // Pass through Merkle proof info for visualization
             tx_hash: event.witness_proofs?.txHash, // Ensure tx_hash is available for explorer links
             version_id: event.version_id, // Pass through version info for lookup
-            timestamp: event.timestamp || event.created_at,
+            timestamp: String(event.timestamp || event.created_at),
             created_at: event.created_at,
             approval_status: 'approved' as const,
             witness_status: (event.witness_proofs?.batchId !== undefined && event.witness_proofs?.merkleRoot) ? 'anchored' : 'pending',
@@ -468,17 +467,17 @@ export async function getWatcherStatus(): Promise<{
  */
 export async function getAllAlerts(): Promise<WatcherAlert[]> {
   const localAlerts = await localDB.getAlerts();
-  
+
   if (useBackendApi && backendAvailable) {
     try {
       const backendAlerts = await api.watcher.getAlerts();
-      
+
       // Merge: unique by DID + Reason
       const seen = new Set<string>();
       const merged: WatcherAlert[] = [...localAlerts];
-      
+
       merged.forEach(a => seen.add(`${a.did}-${a.reason}`));
-      
+
       backendAlerts.forEach(a => {
         const key = `${a.did}-${a.reason}`;
         if (!seen.has(key)) {
@@ -489,13 +488,13 @@ export async function getAllAlerts(): Promise<WatcherAlert[]> {
           });
         }
       });
-      
+
       return merged;
     } catch {
       return localAlerts;
     }
   }
-  
+
   return localAlerts;
 }
 
@@ -520,9 +519,9 @@ export async function updateAlert(alertId: string, updates: Partial<WatcherAlert
 export async function getAlertsByDID(did: string): Promise<WatcherAlert[]> {
   const allAlerts = await getAllAlerts();
   const dppScid = extractScidFromDid(did);
-  
+
   return allAlerts.filter(a => {
-    const alertScid = extractScidFromDid(a.did);
+    const alertScid = extractScidFromDid(a.did || '');
     return alertScid === dppScid;
   });
 }
@@ -606,13 +605,13 @@ export async function insertDPP(data: Omit<DPP, 'id' | 'created_at' | 'updated_a
         ownerDid: data.owner,
         requestedDid: data.did // Pass the prescribed DID to the backend
       });
-      
-      const newDPP = { 
-        ...data, 
-        id: result.scid, 
+
+      const newDPP = {
+        ...data,
+        id: result.scid,
         did: result.did, // Use what the backend ultimately chose (usually requestedDid)
-        created_at: new Date().toISOString(), 
-        updated_at: new Date().toISOString() 
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
 
       // If there's a parent_did, we must also link it in the backend
@@ -736,24 +735,6 @@ function extractScidFromDid(did: string): string | null {
   }
 }
 
-function identityToDPP(identity: Identity): DPP {
-  return {
-    id: identity.scid,
-    did: identity.did,
-    type: 'main',
-    model: 'Unknown', // Would need additional metadata
-    parent_did: null,
-    lifecycle_status: identity.status,
-    owner: identity.owner || 'Unknown',
-    custodian: null,
-    metadata: {},
-    version: 1,
-    previous_version_id: null,
-    created_at: identity.created_at,
-    updated_at: identity.updated_at,
-  };
-}
-
 function eventToAnchoringEvent(event: DIDEvent): AnchoringEvent {
   const proof = event.witness_proofs;
   return {
@@ -766,8 +747,8 @@ function eventToAnchoringEvent(event: DIDEvent): AnchoringEvent {
     component_hashes: null,
     anchor_type: event.event_type,
     timestamp: event.timestamp ? new Date(Number(event.timestamp)).toISOString() : new Date().toISOString(),
-    metadata: { 
-      batchId: proof?.batchId, 
+    metadata: {
+      batchId: proof?.batchId,
       versionId: event.version_id,
       leafIndex: proof?.leafIndex,
       leafHash: proof?.leafHash

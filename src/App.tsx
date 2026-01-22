@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import EnhancedDashboard from './components/dashboards/EnhancedDashboard';
 import MainDPPView from './components/dpp/MainDPPView';
 import CreateDPPForm from './components/dpp/CreateDPPForm';
@@ -30,8 +30,6 @@ function AppContent() {
   console.log('[App] Current Role:', currentRole, 'Locked:', isWalletLocked);
   const { theme, toggleTheme } = useTheme();
   const { viewMode, toggleViewMode } = useUI();
-  const location = useLocation();
-  const isResolverPage = location.pathname === '/resolver';
 
   const [view, setView] = useState<View>('dashboard');
   const [currentDID, setCurrentDID] = useState<string>('');
@@ -188,11 +186,10 @@ function AppContent() {
                 <button
                   onClick={() => !isWalletLocked && setShowRoleDropdown(!showRoleDropdown)}
                   disabled={isWalletLocked}
-                  className={`flex items-center gap-2 px-4 py-2 border rounded-lg shadow-sm transition-all ${
-                    isWalletLocked 
-                      ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 cursor-not-allowed text-blue-700 dark:text-blue-300' 
+                  className={`flex items-center gap-2 px-4 py-2 border rounded-lg shadow-sm transition-all ${isWalletLocked
+                      ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 cursor-not-allowed text-blue-700 dark:text-blue-300'
                       : 'bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 border-gray-300 dark:border-gray-600'
-                  }`}
+                    }`}
                   title={isWalletLocked ? "Role locked to Wallet User while connected" : "Select user role"}
                 >
                   {isWalletLocked ? (
@@ -211,15 +208,15 @@ function AppContent() {
                     {roles
                       .filter(r => r.value !== 'Wallet User') // Only available via wallet connection
                       .map((role) => (
-                      <button
-                        key={role.value}
-                        onClick={() => handleRoleChange(role.value as any)}
-                        className={`w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${currentRole === role.value ? 'bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-700 dark:text-gray-300'
-                          }`}
-                      >
-                        {role.label}
-                      </button>
-                    ))}
+                        <button
+                          key={role.value}
+                          onClick={() => handleRoleChange(role.value as any)}
+                          className={`w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${currentRole === role.value ? 'bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-700 dark:text-gray-300'
+                            }`}
+                        >
+                          {role.label}
+                        </button>
+                      ))}
                   </div>
                 )}
               </div>
