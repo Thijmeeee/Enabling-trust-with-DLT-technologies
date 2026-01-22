@@ -34,8 +34,15 @@ const DEMO_IDENTITIES = [
  */
 const sha256 = (data: string | Buffer) => crypto.createHash('sha256').update(data).digest();
 
+
 async function generateDemoLogs() {
     console.log('🔧 Generating demo did.jsonl files (Real Merkle Logic)...');
+
+    // 1. GENERATE KEYS FIRST so we can use the public key in the DID Document
+    // This ensures the backend can AUTHORIZE operations using the default-key
+    const demoKey = await generateDemoKeys();
+    const demoPublicKey = demoKey.publicKeyMultibase;
+    console.log(`   🔑 Using Demo Public Key for DIDs: ${demoPublicKey}`);
 
     for (const identity of DEMO_IDENTITIES) {
         const dirPath = path.join(STORAGE_ROOT, identity.scid);
@@ -44,11 +51,16 @@ async function generateDemoLogs() {
         // Create directory
         await fs.mkdir(dirPath, { recursive: true });
 
-        // 1. Setup Version 1
-        const demoPublicKey = 'z6Mk' + crypto.randomBytes(32).toString('hex').substring(0, 43);
-        const v1NextKey = 'z6Mk' + crypto.randomBytes(32).toString('hex').substring(0, 43);
+        // 2. Setup Version 1
+        // Use the SAME public key as the generated default-key
+        // This fixes the 403 Forbidden errors on backend
+        // Also ensure next keys use 'u' prefix for consistency
+        const v1NextKeyBytes = crypto.randomBytes(32);
+        const v1NextKeyPrefix = new Uint8Array([0xed, 0x01]);
+        const v1NextKey = 'u' + Buffer.concat([Buffer.from(v1NextKeyPrefix), v1NextKeyBytes]).toString('base64url');
+
         const timestamp = new Date().toISOString();
-        
+
         const v1State = {
             '@context': ['https://www.w3.org/ns/did/v1', 'https://w3id.org/security/multikey/v1'],
             id: identity.did,
@@ -56,7 +68,7 @@ async function generateDemoLogs() {
                 id: `${identity.did}#key-1`,
                 controller: identity.did,
                 type: 'Multikey',
-                publicKeyMultibase: demoPublicKey
+                publicKeyMultibase: demoPublicKey // <--- FIXED: Use consistent key from default-key
             }],
             authentication: [`${identity.did}#key-1`],
             assertionMethod: [`${identity.did}#key-1`],
@@ -88,11 +100,14 @@ async function generateDemoLogs() {
             ]
         };
 
-        // 2. Setup Version 2 (for demonstrating history/witnesses)
+        // 3. Setup Version 2 (for demonstrating history/witnesses)
         const v2Timestamp = new Date(Date.now() + 86400000).toISOString();
         // v1Hash MUST be calculated on the object WITHOUT the MerkleProof2019
         const v1Hash = crypto.createHash('sha256').update(JSON.stringify(v1Entry)).digest('hex');
-        
+
+        const v2NextKeyBytes = crypto.randomBytes(32);
+        const v2NextKey = 'u' + Buffer.concat([Buffer.from(v1NextKeyPrefix), v2NextKeyBytes]).toString('base64url');
+
         const v2Entry: any = {
             versionId: '2',
             versionTime: v2Timestamp,
@@ -100,7 +115,7 @@ async function generateDemoLogs() {
                 method: 'did:webvh:1.0',
                 scid: identity.scid,
                 prevVersionHash: v1Hash,
-                updateKeys: ['z6Mk' + crypto.randomBytes(32).toString('hex').substring(0, 43)]
+                updateKeys: [v2NextKey]
             },
             state: v1State, // same state for demo
             proof: [
@@ -115,7 +130,7 @@ async function generateDemoLogs() {
             ]
         };
 
-        // 3. GENERATE REAL MERKLE PROOFS
+        // 4. GENERATE REAL MERKLE PROOFS
         // Note: leaves are calculated from objects BEFORE adding MerkleProof2019
         const v1Leaf = crypto.createHash('sha256').update(JSON.stringify(v1Entry)).digest();
         const v2Leaf = crypto.createHash('sha256').update(JSON.stringify(v2Entry)).digest();
@@ -129,7 +144,7 @@ async function generateDemoLogs() {
         [v1Entry, v2Entry].forEach((entry, idx) => {
             const leaf = idx === 0 ? v1Leaf : v2Leaf;
             const proof = tree.getHexProof(leaf);
-            
+
             entry.proof.push({
                 type: 'MerkleProof2019',
                 proofPurpose: 'witness',
@@ -147,12 +162,12 @@ async function generateDemoLogs() {
         await fs.writeFile(logPath, logContent);
         console.log(`   ✅ Created ${logPath} (REAL Merkle hashes generated)`);
 
-        // 4. GENERATE did-witness.json (for visualization)
+        // 5. GENERATE did-witness.json (for visualization)
         const witnessPath = path.join(dirPath, 'did-witness.json');
         const witnessProofs = [v1Entry, v2Entry].map((entry, idx) => {
             const leaf = idx === 0 ? v1Leaf : v2Leaf;
             const proof = tree.getHexProof(leaf);
-            
+
             return {
                 versionId: entry.versionId,
                 batchId: 100 + idx,
@@ -172,15 +187,15 @@ async function generateDemoLogs() {
     }
 
     console.log('✅ Demo logs updated with mathematically valid Merkle proofs!');
-    await generateDemoKeys();
 }
 
 /**
  * Generate demo keys for the Key Management Service
  * Creates a 'default-key' that can be used for all demo operations
+ * Returns the generated key object
  */
 async function generateDemoKeys() {
-    const KEY_STORAGE_DIR = './key-store';
+    const KEY_STORAGE_DIR = path.join(__dirname, '../key-store');
     console.log('🔑 Generating demo keys...');
 
     await fs.mkdir(KEY_STORAGE_DIR, { recursive: true });
@@ -210,7 +225,7 @@ async function generateDemoKeys() {
     const multicodecPrefix = new Uint8Array([0xed, 0x01]);
     const demoPublicKey = crypto.createHash('sha256').update(privateKeyBytes).digest();
     const prefixedKey = Buffer.concat([Buffer.from(multicodecPrefix), demoPublicKey]);
-    const publicKeyMultibase = 'z' + prefixedKey.toString('base64url');
+    const publicKeyMultibase = 'u' + prefixedKey.toString('base64url'); // FIXED: 'u' prefix for base64url
 
     const demoKey = {
         keyId: 'default-key',
@@ -234,6 +249,7 @@ async function generateDemoKeys() {
     }
 
     console.log('✅ Demo keys generated successfully!');
+    return demoKey;
 }
 
 generateDemoLogs().catch(console.error);

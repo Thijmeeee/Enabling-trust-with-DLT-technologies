@@ -201,7 +201,7 @@ app.post('/api/products/create', async (req, res) => {
         };
 
         let didResult;
-        
+
         // If the user requested a specific DID (e.g. from frontend prediction), try to respect it
         // Note: Real did:webvh SCIDs should be derived from the genesis log, so we prioritize 
         // the structure while allowing the path to be influenced if possible.
@@ -352,7 +352,7 @@ async function createDIDFallback(options: {
 
     // Create the DID
     let did = `did:webvh:${domain}:${scid}`;
-    
+
     // Use requested DID if provided
     if (requestedDid) {
         console.log(`[Identity] Fallback: Using requested DID ${requestedDid}`);
@@ -558,7 +558,7 @@ app.put('/api/did/:did/update', async (req, res) => {
         }
 
         if (!signer) {
-            return res.status(403).json({ 
+            return res.status(403).json({
                 error: 'Invalid keyId - not authorized',
                 suggestion: 'Ensure the backend can resolve the signing key from the DID doc.'
             });
@@ -567,7 +567,7 @@ app.put('/api/did/:did/update', async (req, res) => {
         // Calculate previous hash (stripping witness proofs to match stable hash chain)
         const prevEntryNorm = JSON.parse(JSON.stringify(previousEntry));
         if (prevEntryNorm.proof && Array.isArray(prevEntryNorm.proof)) {
-            prevEntryNorm.proof = prevEntryNorm.proof.filter((p: any) => 
+            prevEntryNorm.proof = prevEntryNorm.proof.filter((p: any) =>
                 p.type !== 'MerkleProof2019' && p.proofPurpose !== 'witness'
             );
         }
@@ -702,7 +702,7 @@ app.delete('/api/did/:did/deactivate', async (req, res) => {
         }
 
         if (!signer) {
-            return res.status(403).json({ 
+            return res.status(403).json({
                 error: 'Invalid keyId - not authorized',
                 suggestion: 'Ensure the backend can resolve the signing key from the DID doc.'
             });
@@ -711,7 +711,7 @@ app.delete('/api/did/:did/deactivate', async (req, res) => {
         // Create deactivation entry
         const prevEntryNorm = JSON.parse(JSON.stringify(previousEntry));
         if (prevEntryNorm.proof && Array.isArray(prevEntryNorm.proof)) {
-            prevEntryNorm.proof = prevEntryNorm.proof.filter((p: any) => 
+            prevEntryNorm.proof = prevEntryNorm.proof.filter((p: any) =>
                 p.type !== 'MerkleProof2019' && p.proofPurpose !== 'witness'
             );
         }
@@ -775,6 +775,12 @@ app.delete('/api/did/:did/deactivate', async (req, res) => {
                 newVersionId,
                 Date.now()
             ]
+        );
+
+        // Update database status
+        await pool.query(
+            `UPDATE identities SET status = 'deactivated', updated_at = NOW() WHERE did = $1`,
+            [did]
         );
 
         console.log(`✅ Deactivated DID: ${did}`);
@@ -970,14 +976,14 @@ app.post('/api/did/:did/rotate', async (req, res) => {
                     // Explicitly reassigned
                     const anyReq = req.body as any;
                     anyReq.keyId = resolvedKeyId;
-                    keyId = resolvedKeyId; 
+                    keyId = resolvedKeyId;
                     oldSigner = await keyManagementService.createSigner(keyId);
                 }
             }
         }
 
         if (!oldSigner) {
-            return res.status(403).json({ 
+            return res.status(403).json({
                 error: 'Unauthorized: No valid signing key found for this DID iteration.',
                 suggestion: 'This often happens if the product was created with a non-default key (as windows/glasses are).'
             });
@@ -1016,10 +1022,12 @@ app.post('/api/did/:did/rotate', async (req, res) => {
             updated: new Date().toISOString()
         };
 
+
         // Calculate previous hash (stripping witness proofs to match stable hash chain)
+        const previousEntry = log[log.length - 1];
         const prevEntryNorm = JSON.parse(JSON.stringify(previousEntry));
         if (prevEntryNorm.proof && Array.isArray(prevEntryNorm.proof)) {
-            prevEntryNorm.proof = prevEntryNorm.proof.filter((p: any) => 
+            prevEntryNorm.proof = prevEntryNorm.proof.filter((p: any) =>
                 p.type !== 'MerkleProof2019' && p.proofPurpose !== 'witness'
             );
         }
@@ -1203,7 +1211,7 @@ app.post('/api/did/:did/transfer', async (req, res) => {
             console.log('[Identity] Checking MetaMask authorization for:', signerAddress);
             const currentOwner = (currentDoc.controller || '').toLowerCase();
             const signer = signerAddress.toLowerCase();
-            
+
             if (currentOwner.includes(signer) || currentOwner === '') {
                 console.log('[Identity] MetaMask signer matches owner (or owner is empty/wallet). Using maintenance key.');
                 currentSigner = await keyManagementService.createSigner('default-key');
@@ -1211,7 +1219,7 @@ app.post('/api/did/:did/transfer', async (req, res) => {
         }
 
         if (!currentSigner) {
-            return res.status(403).json({ 
+            return res.status(403).json({
                 error: 'Invalid keyId - not authorized',
                 suggestion: 'For Windows/Glasses products, the key is random. Ensure the backend can resolve the signing key from the DID doc.'
             });
@@ -1247,7 +1255,7 @@ app.post('/api/did/:did/transfer', async (req, res) => {
         // Calculate previous hash (stripping witness proofs to match stable hash chain)
         const previousEntry = JSON.parse(JSON.stringify(log[log.length - 1]));
         if (previousEntry.proof && Array.isArray(previousEntry.proof)) {
-            previousEntry.proof = previousEntry.proof.filter((p: any) => 
+            previousEntry.proof = previousEntry.proof.filter((p: any) =>
                 p.type !== 'MerkleProof2019' && p.proofPurpose !== 'witness'
             );
         }
