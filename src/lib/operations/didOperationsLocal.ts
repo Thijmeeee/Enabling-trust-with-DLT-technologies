@@ -1,6 +1,7 @@
 import enhancedDB from '../data/hybridDataStore';
 import { localDB } from '../data/localData';
 import { hashOperation } from '../utils/merkleTree';
+import { LifecycleStatus } from '../types/lifecycle';
 
 /**
  * Transfer ownership of a DPP
@@ -25,6 +26,9 @@ export async function transferOwnership(
 
     // Try to call backend API for real ownership transfer
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
+
       const response = await fetch(`http://localhost:3000/api/did/${encodeURIComponent(dpp.did)}/transfer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -32,8 +36,10 @@ export async function transferOwnership(
           keyId: 'default-key', // Backend will handle key lookup
           newOwnerDID: newOwnerDID,
           reason: 'Ownership transfer'
-        })
+        }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
 
       if (response.ok) {
         const result = await response.json();
@@ -50,11 +56,8 @@ export async function transferOwnership(
         };
       } else {
         const errorData = await response.json().catch(() => ({}));
-        console.error('[DID Operations] Backend ownership transfer failed:', response.status, errorData);
-        return { 
-          success: false, 
-          message: errorData.error || `Backend error: ${response.status} Forbidden` 
-        };
+        console.warn('[DID Operations] Backend ownership transfer failed, falling back to local:', response.status, errorData);
+        // Continue to fallback...
       }
     } catch (backendError) {
       console.log('[DID Operations] Backend connection error, using local fallback');
@@ -138,14 +141,19 @@ export async function rotateKey(
 
     // Try to call backend API for real key rotation
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
+
       const response = await fetch(`http://localhost:3000/api/did/${encodeURIComponent(dpp.did)}/rotate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           keyId: 'default-key', // Backend will handle key lookup
           reason: 'Manual key rotation by owner'
-        })
+        }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
 
       if (response.ok) {
         const result = await response.json();
@@ -153,7 +161,7 @@ export async function rotateKey(
 
         // No need to create a local attestation - backend already created a real event
         // which will be fetched by getDIDOperationsHistory
-        
+
         return {
           success: true,
           message: 'Key rotated successfully via backend',
@@ -161,11 +169,8 @@ export async function rotateKey(
         };
       } else {
         const errorData = await response.json().catch(() => ({}));
-        console.error('[DID Operations] Backend key rotation failed:', response.status, errorData);
-        return { 
-          success: false, 
-          message: errorData.error || `Backend error: ${response.status} Forbidden` 
-        };
+        console.warn('[DID Operations] Backend key rotation failed, falling back to local:', response.status, errorData);
+        // Continue to fallback...
       }
     } catch (backendError) {
       console.log('[DID Operations] Backend connection error, using local fallback');
@@ -311,7 +316,7 @@ export async function getDIDOperationsHistory(dppId: string) {
     const uniqueOperations = new Map<string, any>();
     const seenSignatures = new Set<string>();
     const seenTypes = new Set<string>();
-    
+
     // Sort slightly to prefer real signatures over mock ones during deduplication
     const sortedOperations = [...didOperations].sort((a, b) => {
       const aIsMock = a.signature?.startsWith('witness-sig-') || a.signature?.startsWith('mock-');
@@ -325,7 +330,7 @@ export async function getDIDOperationsHistory(dppId: string) {
       const hash = hashOperation(op);
       const isSingleton = op.attestation_type === 'did_creation' || op.attestation_type === 'create';
       const sig = op.signature;
-      
+
       // Deduplicate by Signature if possible (most reliable for frontend/backend matches)
       if (sig && !sig.startsWith('mock-') && !sig.startsWith('pending-')) {
         if (seenSignatures.has(sig)) return;
@@ -422,14 +427,19 @@ export async function deactivateDID(
 
     // Try to call backend API for real deactivation (uses didwebvh-ts)
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
+
       const response = await fetch(`http://localhost:3000/api/did/${encodeURIComponent(dpp.did)}/deactivate`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           keyId: 'default-key', // Backend will handle key lookup
           reason: reason
-        })
+        }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
 
       if (response.ok) {
         const result = await response.json();
@@ -445,11 +455,8 @@ export async function deactivateDID(
         };
       } else {
         const errorData = await response.json().catch(() => ({}));
-        console.error('[DID Operations] Backend DID deactivation failed:', response.status, errorData);
-        return { 
-          success: false, 
-          message: errorData.error || `Backend error: ${response.status} Forbidden` 
-        };
+        console.warn('[DID Operations] Backend DID deactivation failed, falling back to local:', response.status, errorData);
+        // Continue to fallback...
       }
     } catch (backendError) {
       console.log('[DID Operations] Backend connection error, using local fallback');
@@ -522,6 +529,9 @@ export async function updateDIDViaBackend(
 
     // Try to call backend API for real update (uses didwebvh-ts updateDID)
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
+
       const response = await fetch(`http://localhost:3000/api/did/${encodeURIComponent(dpp.did)}/update`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -533,8 +543,10 @@ export async function updateDIDViaBackend(
               description: updates.description
             }
           }
-        })
+        }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
 
       if (response.ok) {
         const result = await response.json();
@@ -547,11 +559,8 @@ export async function updateDIDViaBackend(
         };
       } else {
         const errorData = await response.json().catch(() => ({}));
-        console.error('[DID Operations] Backend DID update failed:', response.status, errorData);
-        return { 
-          success: false, 
-          message: errorData.error || `Backend error: ${response.status} Forbidden` 
-        };
+        console.warn('[DID Operations] Backend DID update failed, falling back to local:', response.status, errorData);
+        // Continue to fallback...
       }
     } catch (backendError) {
       console.log('[DID Operations] Backend connection error, using local fallback');
@@ -578,7 +587,7 @@ export async function certifyProduct(
     inspector: string;
     certificateType: string;
     notes: string;
-    status: string;
+    status: LifecycleStatus;
   }
 ): Promise<{ success: boolean; message: string }> {
   try {

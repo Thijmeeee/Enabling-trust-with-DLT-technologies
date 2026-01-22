@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { Package, Grid, List as ListIcon } from 'lucide-react';
 import enhancedDB from '../../lib/data/hybridDataStore';
 import { FilterPanel, FilterState } from '../modals/FilterPanel';
@@ -6,6 +6,11 @@ import { DPPCard } from '../dpp/DPPCard';
 import type { DPP } from '../../lib/data/localData';
 
 type ViewMode = 'grid' | 'list';
+
+// ... imports
+import { useRole } from '../../lib/utils/roleContext';
+// Lazy load to prevent circular dependencies
+const LifecycleActionModal = lazy(() => import('./LifecycleActionModal').then(m => ({ default: m.LifecycleActionModal })));
 
 export default function EnhancedDashboard({
   onNavigate,
@@ -21,6 +26,10 @@ export default function EnhancedDashboard({
   const [currentPage, setCurrentPage] = useState(1);
   const [totalResults, setTotalResults] = useState(0);
   const itemsPerPage = 20;
+
+  // Lifecycle Management State
+  const [lifecycleTarget, setLifecycleTarget] = useState<DPP | null>(null);
+  const { currentRoleDID } = useRole();
 
   useEffect(() => {
     loadData();
@@ -44,6 +53,7 @@ export default function EnhancedDashboard({
     setLoading(false);
   };
 
+  // ... keep handleFilterChange ... (assuming it's unchanged)
   const handleFilterChange = useCallback(async (filters: FilterState) => {
     setLoading(true);
 
@@ -191,12 +201,33 @@ export default function EnhancedDashboard({
                 key={dpp.id}
                 dpp={dpp}
                 onClick={() => onNavigate(dpp.did)}
+                onManage={(e) => {
+                  e.stopPropagation();
+                  setLifecycleTarget(dpp);
+                }}
                 viewMode={viewMode}
               />
             ))}
           </div>
         )}
       </div>
+
+      {/* Lifecycle Management Modal */}
+      {/* Lifecycle Management Modal */}
+      <Suspense fallback={null}>
+        {lifecycleTarget && (
+          <LifecycleActionModal
+            isOpen={true}
+            dpp={lifecycleTarget}
+            onClose={() => setLifecycleTarget(null)}
+            onUpdate={() => {
+              loadData(); // Reload data after update
+              setLifecycleTarget(null);
+            }}
+            currentUserDid={currentRoleDID || 'did:ethr:0x000'} // Fallback if wallet not connected
+          />
+        )}
+      </Suspense>
     </div>
   );
 }

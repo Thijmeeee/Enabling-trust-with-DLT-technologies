@@ -37,5 +37,16 @@
     "txHash": "0x775284c605b1f1f6773edf28c938447871050ec792da1f11117a83a421261167",
     "blockNumber": 10099893,
     "timestamp": "2026-01-22T16:14:26.209Z"
+  },
+  {
+    "versionId": "4",
+    "batchId": 137,
+    "merkleRoot": "0x9b32c3b9bf4fe8d1d82cc0cf0f951268a06acb10ad677f5ba51fe07a7982045f",
+    "leafHash": "0x9b32c3b9bf4fe8d1d82cc0cf0f951268a06acb10ad677f5ba51fe07a7982045f",
+    "merkleProof": [],
+    "leafIndex": 0,
+    "txHash": "0x88e3f630f8c69c3831943098193188bccb462a88eb5de78302214ff3ec1f59c9",
+    "blockNumber": 10101165,
+    "timestamp": "2026-01-22T20:28:52.991Z"
   }
 ]

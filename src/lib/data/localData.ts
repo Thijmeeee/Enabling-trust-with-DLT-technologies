@@ -1,10 +1,12 @@
+import { LifecycleStatus } from '../types/lifecycle';
+
 export type DPP = {
   id: string;
   did: string;
   type: 'main' | 'component';
   model: string;
   parent_did: string | null;
-  lifecycle_status: string;
+  lifecycle_status: LifecycleStatus | string; // Allow string for backward compatibility during migration
   owner: string;
   custodian: string | null;
   metadata: Record<string, unknown>;
