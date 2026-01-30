@@ -30,8 +30,6 @@ dist-ssr
 .env.*.local
 
 # Project specific
-did-logs/
-backend/did-logs/
 key-store/
 
 backend/key-store/
