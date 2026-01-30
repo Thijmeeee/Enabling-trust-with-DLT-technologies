@@ -12,7 +12,7 @@ services:
     volumes:
       - caddy_data:/data
       - caddy_config:/config
-      - ../backend/did-logs:/usr/share/caddy/did:ro
+      - ./test-logs:/usr/share/caddy/did:ro
       - ./dist-app:/usr/share/caddy/app:ro
     networks:
       - shared_pod
