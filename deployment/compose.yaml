@@ -78,8 +78,6 @@ services:
       - postgres
     networks:
       - shared_pod
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
 
   watcher:
     build:
@@ -97,8 +95,8 @@ services:
       - shared_pod
     volumes:
       - ./did-logs:/var/www/did-logs:ro
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    networks:
+      - shared_pod
 
 volumes:
   caddy_data:
