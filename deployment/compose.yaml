@@ -12,7 +12,7 @@ services:
     volumes:
       - caddy_data:/data
       - caddy_config:/config
-      - ./test-logs:/usr/share/caddy/did:ro
+      - ./did-logs:/usr/share/caddy/did:ro
       - ./dist-app:/usr/share/caddy/app:ro
     networks:
       - shared_pod
@@ -63,7 +63,7 @@ services:
     networks:
       - shared_pod
     volumes:
-      - ./test-logs:/var/www/did-logs
+      - ./did-logs:/var/www/did-logs
 
   witness:
     build:
@@ -96,19 +96,18 @@ services:
     networks:
       - shared_pod
     volumes:
-      - ./test-logs:/var/www/did-logs:ro
+      - ./did-logs:/var/www/did-logs:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-  # --- Local Blockchain (Included for Local Dev/Demo) ---
-  blockchain:
-    image: ghcr.io/nomicfoundation/hardhat:latest
-    # Simple command to run standard node
-    command: ["npx", "hardhat", "node", "--hostname", "0.0.0.0"]
-    ports:
-      - "8545:8545" # Exposed for host interactions (Metamask/Remix)
-    networks:
-      - shared_pod
+  # --- Local Blockchain (Optional) ---
+  # blockchain:
+  #   image: ghcr.io/nomicfoundation/hardhat:latest
+  #   command: ["npx", "hardhat", "node", "--hostname", "0.0.0.0"]
+  #   ports:
+  #     - "8545:8545"
+  #   networks:
+  #     - shared_pod
 
 volumes:
   caddy_data:

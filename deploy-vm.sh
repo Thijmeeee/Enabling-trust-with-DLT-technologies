@@ -26,9 +26,14 @@ cp -r dist/* deployment/dist-app/
 mkdir -p deployment/did-logs
 chmod -R 777 deployment/did-logs
 
-# 5. Start Infrastructure (DB and Blockchain)
+# 5. Start Infrastructure (DB and optionally Blockchain)
 echo "🐳 Starting Infrastructure..."
-podman-compose -f deployment/compose.yaml up -d postgres blockchain
+# Check for --skip-blockchain flag (case-insensitive)
+if [[ "${*,,}" == *"--skip-blockchain"* ]]; then
+    podman-compose -f deployment/compose.yaml up -d postgres
+else
+    podman-compose -f deployment/compose.yaml up -d postgres blockchain
+fi
 echo "Waiting for services to initialize..."
 sleep 10
 
@@ -49,8 +54,7 @@ podman-compose -f deployment/compose.yaml up -d --build
 
 echo "✅ Deployment Complete!"
 echo "------------------------------------------------"
-echo "Frontend (Caddy): http://localhost:8080"
-echo "Backend API:      http://localhost:3000"
-echo "Blockchain RPC:   http://localhost:8545"
+echo "Frontend: http://webvh.web3connect.nl"
+echo "Backend API:      http://webvh.web3connect.nl/api"
 echo "------------------------------------------------"
 echo "Use './stop-vm.sh' to stop the services."
