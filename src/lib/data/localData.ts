@@ -1,3 +1,4 @@
+import { LifecycleStatus } from '../types/lifecycle';
 
 export type DPP = {
   id: string;
@@ -5,7 +6,7 @@ export type DPP = {
   type: 'main' | 'component';
   model: string;
   parent_did: string | null;
-  lifecycle_status: string;
+  lifecycle_status: LifecycleStatus | string; // Allow string for backward compatibility during migration
   owner: string;
   custodian: string | null;
   metadata: Record<string, unknown>;
@@ -202,6 +203,10 @@ class LocalDataStore {
   async getDPPs(limit?: number): Promise<DPP[]> {
     const dpps = Array.from(this.dpps.values());
     return limit ? dpps.slice(0, limit) : dpps;
+  }
+
+  async getDPP(id: string): Promise<DPP | null> {
+    return this.dpps.get(id) || null;
   }
 
   async getDPPByDID(did: string): Promise<DPP | null> {

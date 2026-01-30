@@ -2,9 +2,9 @@ import { useState, useEffect, useMemo } from 'react';
 import {
   Activity, CheckCircle, Shield, Eye,
   Package, FileText, GitBranch,
-  Search, LayoutDashboard, Database, Flag,
+  Search, LayoutDashboard, Database, Flag, FlagOff,
   ShieldCheck, AlertTriangle, RefreshCw,
-  ExternalLink
+  ExternalLink, Power
 } from 'lucide-react';
 import enhancedDB from '../../lib/data/hybridDataStore';
 import { getDIDOperationsHistory } from '../../lib/operations/didOperationsLocal';
@@ -12,10 +12,9 @@ import { hashOperation } from '../../lib/utils/merkleTree';
 import { useRole } from '../../lib/utils/roleContext';
 import { DPP } from '../../lib/data/localData';
 import { api } from '../../lib/api';
+import { type WatcherAlert } from '../../lib/data/localData';
+
 import MerkleTreeVisualizer from '../visualizations/MerkleTreeVisualizer';
-
-
-
 
 /**
  * Robust helper to extract SCID from any DID format
@@ -37,18 +36,7 @@ function extractSCID(did: string): string {
  */
 function getEventId(op: any): string {
   if (!op) return '';
-  let idStr = String(op.id || op.version_id || op.version || '');
-
-  // Fallback to URI parsing if no direct ID found
-  if (!idStr && op.uri) {
-    if (op.uri.includes('version=')) {
-      idStr = op.uri.split('version=')[1];
-    } else if (op.uri.includes('operation-')) {
-      idStr = op.uri.split('operation-')[1];
-    }
-  }
-
-  if (!idStr) return '';
+  const idStr = String(op.id || op.version_id || '');
   const match = idStr.match(/(\d+)$/);
   return match ? match[1] : idStr;
 }
@@ -63,7 +51,7 @@ interface MonitoredDPP extends DPP {
 export default function WatcherDashboard() {
   const { currentRoleDID } = useRole();
   const [allDPPs, setAllDPPs] = useState<DPP[]>([]);
-  const [alerts, setAlerts] = useState<any[]>([]);
+  const [alerts, setAlerts] = useState<WatcherAlert[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Track manual verification results to override background alerts
@@ -88,9 +76,8 @@ export default function WatcherDashboard() {
 
       // Find ALL alerts that match this SCID
       const dppAlerts = alerts.filter(a => {
-        const alertScid = extractSCID(a.did);
-        const match = alertScid.toLowerCase() === dppScid.toLowerCase();
-        return match;
+        const alertScid = extractSCID(a.did || '');
+        return alertScid.toLowerCase() === dppScid.toLowerCase() && alertScid.length > 5;
       });
 
       // Deduplicate alerts
@@ -185,10 +172,11 @@ export default function WatcherDashboard() {
   const handleReset = async () => {
     setIsRefreshing(true);
     const dppScid = selectedDPP?.scid?.toLowerCase() || (selectedDPP ? extractSCID(selectedDPP.did).toLowerCase() : '');
+    const dppDid = selectedDPP?.did;
 
     console.log('[WatcherDashboard] Resetting audit state for', dppScid);
 
-    // Clear local flags for this product
+    // 1. Clear local flags for this product
     if (dppScid) {
       setManualVerificationResults(prev => {
         const next = { ...prev };
@@ -199,6 +187,18 @@ export default function WatcherDashboard() {
         });
         return next;
       });
+    }
+
+    // 2. Clear backend alerts for this DID
+    if (dppDid) {
+      try {
+        await api.watcher.deleteAlerts(dppDid);
+        // Refresh alerts list locally as well
+        const refreshedAlerts = await api.watcher.getAlerts();
+        setAlerts(refreshedAlerts);
+      } catch (e) {
+        console.error('[WatcherDashboard] Failed to clear backend alerts:', e);
+      }
     }
 
     // Force re-fetch of underlying files
@@ -289,15 +289,12 @@ export default function WatcherDashboard() {
               leafHash.startsWith('0x0000');
 
             if (isPlaceholder) {
-              // If it's a placeholder, just clear any previous false result
+              // If it's a placeholder, consider it valid for the demo environment 
+              // but don't overwrite if we already have a manual failure
               const key = `${dppScid}-event-${eventId}`;
               setManualVerificationResults(prev => {
-                if (prev[key] === false) {
-                  const next = { ...prev };
-                  delete next[key];
-                  return next;
-                }
-                return prev;
+                if (prev[key] === false) return prev;
+                return { ...prev, [key]: true };
               });
               return;
             }
@@ -305,7 +302,7 @@ export default function WatcherDashboard() {
             if (proof.leafHash) {
               const key = `${dppScid}-event-${eventId}`;
 
-              // NEVER overwrite an existing manual result
+              // NEVER overwrite an existing manual result (especially a 'true' from the visualizer)
               if (manualVerificationResults[key] !== undefined) return;
 
               // Basic sanity check: leafHash + proof must yield merkleRoot
@@ -319,10 +316,17 @@ export default function WatcherDashboard() {
                     [key]: false,
                     [`${dppScid}-version-${vId}`]: false
                   }));
+                } else {
+                  setManualVerificationResults(prev => ({
+                    ...prev,
+                    [key]: true
+                  }));
                 }
-                // Do NOT set true automatically - this hides actual alerts/flags
               } else {
-                // Do NOT set true automatically
+                setManualVerificationResults(prev => ({
+                  ...prev,
+                  [key]: true
+                }));
               }
             }
           }
@@ -394,54 +398,67 @@ export default function WatcherDashboard() {
     const eventId = getEventId(flagTargetEvent);
     const numericEventId = parseInt(eventId);
 
-    // Clear manual verification result for this event to ensures the alert shows up in sidebar
-    // regardless of previous "valid" status.
-    if (numericEventId && selectedDPP) {
-      const dppScid = extractSCID(selectedDPP.did).toLowerCase();
-      const key = `${dppScid}-event-${numericEventId}`;
-      setManualVerificationResults(prev => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
+    try {
+      await api.watcher.createAlert({
+        did: selectedDPP.did,
+        event_id: isNaN(numericEventId) ? null : numericEventId,
+        reason: flagForm.reason,
+        details: flagForm.details || 'Manually flagged by operator',
+        reporter: currentRoleDID
       });
+
+      // Invalidate cache and reload
+      await enhancedDB.clearAllAlerts();
+      await loadMonitoringData();
+      setShowFlagModal(false);
+    } catch (err) {
+      console.error('Failed to report flag:', err);
     }
-
-    await api.watcher.createAlert({
-      did: selectedDPP.did,
-      event_id: isNaN(numericEventId) ? null : numericEventId,
-      reason: flagForm.reason,
-      details: flagForm.details,
-      reporter: currentRoleDID
-    });
-
-    // Invalidate cache and reload
-    await enhancedDB.clearAllAlerts();
-    await loadMonitoringData();
-
-    setShowFlagModal(false);
   }
 
-  async function handleResolveAlerts(specificEventId?: string | number) {
+  async function handleUnflagEvent(eventOverride?: Record<string, unknown>) {
+    const targetEvent = eventOverride || flagTargetEvent;
+    if (!targetEvent || !selectedDPP) return;
+
+    const dppDid = selectedDPP.did;
+    const dppScid = extractSCID(dppDid).toLowerCase();
+    const eventId = getEventId(targetEvent);
+
+    try {
+      // 1. Delete matching alerts from backend (either for whole DID or specific event)
+      await api.watcher.deleteAlerts(dppDid, eventId);
+
+      // 2. Clear manual verification results if any
+      setManualVerificationResults(prev => {
+        const next = { ...prev };
+        Object.keys(next).forEach(key => {
+          if (key.toLowerCase().includes(dppScid) && key.includes(eventId)) {
+            delete next[key];
+          }
+        });
+        return next;
+      });
+
+      // 3. Reload data
+      await loadMonitoringData();
+      setShowFlagModal(false);
+    } catch (err) {
+      console.error('Failed to unflag event:', err);
+    }
+  }
+
+  async function handleResolveAlerts() {
     if (!selectedDPP) return;
 
     try {
-      await api.watcher.deleteAlerts(selectedDPP.did, specificEventId);
+      await api.watcher.deleteAlerts(selectedDPP.did);
       // Invalidate cache and reload
       await enhancedDB.clearAlertsByDID(selectedDPP.did);
       await loadMonitoringData();
-
-      // Use alert instead of toast since library is missing
-      if (specificEventId) {
-        console.log('Event flag removed');
-      } else {
-        console.log('All flags resolved');
-      }
     } catch (err) {
       console.error('Failed to resolve alerts:', err);
-      alert('Failed to resolve alerts');
     }
   }
-
 
   /**
    * Automatically create a system alert if a manual verification fails
@@ -467,7 +484,7 @@ export default function WatcherDashboard() {
 
       if (!result.isValid) {
         const isAlreadyAlerted = alerts.some(a =>
-          extractSCID(a.did).toLowerCase() === dppScid &&
+          extractSCID(a.did || '').toLowerCase() === dppScid &&
           String(a.event_id) === eventId
         );
 
@@ -532,7 +549,7 @@ export default function WatcherDashboard() {
           ? witnessData
           : (witnessData.anchoringProofs || witnessData.witnessProofs || []);
 
-        fileProof = proofs.find((p: any) =>
+        fileProof = proofs.find((p: { versionId?: string; version_id?: string }) =>
           String(p.versionId) === String(dbOp.version_id) ||
           String(p.version_id) === String(dbOp.version_id)
         );
@@ -583,16 +600,16 @@ export default function WatcherDashboard() {
                 key={dpp.id}
                 onClick={() => setSelectedDPPId(dpp.id)}
                 className={`w-full flex items-center justify-between p-3 rounded-lg transition-all text-left group border ${selectedDPPId === dpp.id
-                  ? (dpp.integrityScore < 90 || dpp.alertCount > 0
+                  ? (dpp.integrityScore < 90
                     ? 'bg-red-50 dark:bg-red-900/40 border-red-500 ring-1 ring-red-500 shadow-lg'
                     : 'bg-blue-50 dark:bg-blue-900/40 border-blue-200 dark:border-blue-800 shadow-sm')
-                  : (dpp.integrityScore < 90 || dpp.alertCount > 0
+                  : (dpp.integrityScore < 90
                     ? 'bg-red-50/30 dark:bg-red-900/10 border-red-200 dark:border-red-900/40'
                     : 'hover:bg-gray-50 dark:hover:bg-gray-700 border-transparent')
                   }`}
               >
                 <div className="flex items-center gap-3">
-                  {dpp.integrityScore < 90 || dpp.alertCount > 0 ? (
+                  {dpp.integrityScore < 90 ? (
                     <AlertTriangle className="w-5 h-5 text-red-500 animate-pulse" />
                   ) : (
                     <Package className={`w-5 h-5 ${selectedDPPId === dpp.id ? 'text-blue-600' : 'text-gray-400'}`} />
@@ -600,14 +617,14 @@ export default function WatcherDashboard() {
                   <div>
                     <div className="font-medium text-gray-900 dark:text-white text-sm flex items-center gap-2">
                       {dpp.model}
-                      {(dpp.integrityScore < 90 || dpp.alertCount > 0) && (
+                      {dpp.integrityScore < 90 && (
                         <Flag className="w-4 h-4 text-red-600 fill-red-600 animate-bounce" />
                       )}
                     </div>
                     <div className="text-[10px] uppercase font-mono text-gray-500 dark:text-gray-400">{dpp.scid}</div>
                   </div>
                 </div>
-                {(dpp.integrityScore < 90 || dpp.alertCount > 0) && (
+                {dpp.integrityScore < 90 && (
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white shadow-sm animate-bounce">
                     {dpp.alertCount || '!'}
                   </span>
@@ -640,19 +657,21 @@ export default function WatcherDashboard() {
                       </span>
                       <span className={`text-xs uppercase font-extrabold px-3 py-1 rounded-full border-2 ${selectedDPP.integrityScore < 90
                         ? 'bg-red-600 text-white border-red-700'
-                        : 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                        : (selectedDPP.lifecycle_status === 'deactivated'
+                          ? 'bg-gray-100 text-gray-600 border-gray-300'
+                          : 'bg-emerald-100 text-emerald-700 border-emerald-200')
                         }`}>
-                        {selectedDPP.integrityScore < 90 ? 'STATUS: REJECTED / TAMPERED' : 'STATUS: ACTIVE (CERTIFIED)'}
+                        {selectedDPP.integrityScore < 90 ? 'STATUS: REJECTED / TAMPERED' : (selectedDPP.lifecycle_status === 'deactivated' ? 'STATUS: DEACTIVATED' : 'STATUS: ACTIVE (CERTIFIED)')}
                       </span>
                     </h1>
                     <div className="flex items-center gap-4 mt-1">
                       <p className="text-gray-500 text-xs font-mono">{selectedDPP.did}</p>
                       {alerts.filter(a =>
-                        extractSCID(a.did).toLowerCase() === extractSCID(selectedDPP.did).toLowerCase() && !a.event_id
-                      ).map((alert, idx) => (
+                        extractSCID(a.did || '').toLowerCase() === extractSCID(selectedDPP.did).toLowerCase() && !a.event_id
+                      ).map((a, idx) => (
                         <div key={idx} className="flex items-center gap-1.5 px-2 py-0.5 bg-red-600 text-white text-[10px] font-bold rounded animate-pulse uppercase">
                           <AlertTriangle className="w-3 h-3" />
-                          {alert.reason.replace(/_/g, ' ')}
+                          {a.reason?.replace(/_/g, ' ')}
                         </div>
                       ))}
                     </div>
@@ -662,7 +681,9 @@ export default function WatcherDashboard() {
                 <div className="flex gap-4">
                   <div className="text-right">
                     <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">Status</div>
-                    <div className={`flex items-center gap-2 font-bold ${selectedDPP.integrityScore < 90 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'
+                    <div className={`flex items-center gap-2 font-bold ${selectedDPP.integrityScore < 90
+                      ? 'text-red-600 dark:text-red-400'
+                      : (selectedDPP.lifecycle_status === 'deactivated' ? 'text-gray-500 dark:text-gray-400' : 'text-green-600 dark:text-green-400')
                       }`}>
                       {selectedDPP.integrityScore < 90 ? (
                         <div className="flex flex-col items-end gap-1">
@@ -671,7 +692,7 @@ export default function WatcherDashboard() {
                             REJECTED
                           </div>
                           <button
-                            onClick={() => handleResolveAlerts()}
+                            onClick={handleResolveAlerts}
                             className="text-[10px] bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 py-1 rounded border border-emerald-300 transition-colors flex items-center gap-1"
                           >
                             <Shield className="w-3 h-3" />
@@ -679,10 +700,17 @@ export default function WatcherDashboard() {
                           </button>
                         </div>
                       ) : (
-                        <>
-                          <CheckCircle className="w-4 h-4" />
-                          ACTIVE
-                        </>
+                        selectedDPP.lifecycle_status === 'deactivated' ? (
+                          <>
+                            <Power className="w-4 h-4" />
+                            DEACTIVATED
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="w-4 h-4" />
+                            ACTIVE
+                          </>
+                        )
                       )}
                     </div>
                   </div>
@@ -737,7 +765,7 @@ export default function WatcherDashboard() {
                         localOperation={fileBasedVerificationData?.fileOp}
                         onVerificationComplete={handleVerificationComplete}
                         onReset={handleReset}
-                        alerts={alerts.filter(a => extractSCID(a.did).toLowerCase() === extractSCID(selectedDPP.did).toLowerCase())}
+                        alerts={alerts.filter(a => extractSCID(a.did || '').toLowerCase() === extractSCID(selectedDPP.did).toLowerCase())}
                       />
                     </div>
                   </section>
@@ -789,12 +817,12 @@ export default function WatcherDashboard() {
 
                         // Check backend alerts
                         const isEventFlagged = alerts.some(a =>
-                          extractSCID(a.did).toLowerCase() === dppScid &&
+                          extractSCID(a.did || '').toLowerCase() === dppScid &&
                           (a.event_id !== null && (String(a.event_id) === eventId || (vId && String(a.event_id) === vId)))
                         );
 
                         const isGlobalFlagged = alerts.some(a =>
-                          extractSCID(a.did).toLowerCase() === dppScid && !a.event_id
+                          extractSCID(a.did || '').toLowerCase() === dppScid && !a.event_id
                         );
 
                         // Check local results: Match by Event ID, Hash, Index, or Version
@@ -805,24 +833,24 @@ export default function WatcherDashboard() {
                           (vId ? manualVerificationResults[`${dppScid}-version-${vId}`] : undefined);
 
                         const isManualFailure = manualResult === false;
+                        const isManualSuccess = manualResult === true;
 
-                        // RE-CHECK: If the visualizer says it's invalid, we MUST show it here 
-                        const isFlagged = isEventFlagged || isGlobalFlagged || isManualFailure;
+                        // RE-CHECK: If the visualizer says it's invalid, we MUST show it here.
+                        // If it says it's VALID, we should SUPPRESS global flags for this specific event view.
+                        const isFlagged = (isEventFlagged || isGlobalFlagged || isManualFailure) && !isManualSuccess;
 
                         // IMPORTANT: An event is only "Verified" if it's anchored AND NO AUDIT HAS FAILED IT
-                        const isAnchored = Boolean(op.witness_proofs || op.signature);
+                        const isAnchored = Boolean(op.witness_proofs?.batchId !== undefined && op.witness_proofs?.merkleRoot);
                         const showVerifiedBadge = isAnchored && !isFlagged;
 
                         return (
                           <div
                             key={idx}
                             onClick={() => setSelectedOperationIndex(idx)}
-                            className={`group relative bg-white dark:bg-gray-800 rounded-xl border p-4 transition-all cursor-pointer ${isFlagged
-                              ? 'border-red-500 ring-2 ring-red-500/50 shadow-lg'
-                              : selectedOperationIndex === idx
-                                ? 'border-blue-500 ring-2 ring-blue-500 shadow-lg translate-x-1'
-                                : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
-                              }`}
+                            className={`group relative bg-white dark:bg-gray-800 rounded-xl border p-4 transition-all cursor-pointer ${selectedOperationIndex === idx
+                              ? 'border-blue-500 ring-2 ring-blue-500 shadow-lg translate-x-1'
+                              : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                              } ${isFlagged ? 'bg-red-50 dark:bg-red-900/10 border-red-500 ring-2 ring-red-500 shadow-red-500/20' : ''}`}
                           >
                             <div className="flex items-center justify-between mb-3">
                               <div className="flex items-center gap-3">
@@ -842,33 +870,34 @@ export default function WatcherDashboard() {
                                   </div>
                                 )}
                                 {isFlagged && (
-                                  <div className="flex items-center gap-2">
-                                    <div className="flex items-center gap-1 text-red-600 text-xs font-bold px-2 py-1 bg-red-100 dark:bg-red-900/20 rounded-full border border-red-300 animate-in fade-in zoom-in duration-300">
-                                      <Flag className="w-3 h-3" />
-                                      REJECTED
-                                    </div>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        const eventId = getEventId(op);
-                                        const numericId = parseInt(eventId);
-                                        // Pass specific ID if valid, otherwise it might resolve all
-                                        handleResolveAlerts(!isNaN(numericId) ? numericId : eventId);
-                                      }}
-                                      className="flex items-center gap-1 px-2 py-0.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 text-[10px] font-medium rounded transition-colors border border-gray-200 dark:border-gray-600"
-                                    >
-                                      <Shield className="w-3 h-3" />
-                                      Unflag
-                                    </button>
+                                  <div className="flex items-center gap-1 text-red-600 text-xs font-bold px-2 py-1 bg-red-100 dark:bg-red-900/20 rounded-full border border-red-300 animate-in fade-in zoom-in duration-300">
+                                    <Flag className="w-3 h-3" />
+                                    REJECTED
                                   </div>
                                 )}
+
+                                {(isEventFlagged || isGlobalFlagged) && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleUnflagEvent(op);
+                                    }}
+                                    className="flex items-center gap-1 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-emerald-600 rounded-full border border-emerald-200 dark:border-emerald-800 transition-all shadow-sm group/btn z-10"
+                                    title="Resolve / Unflag"
+                                  >
+                                    <FlagOff className="w-3.5 h-3.5 transition-transform group-hover/btn:scale-110" />
+                                    <span className="text-[10px] font-extrabold uppercase tracking-tight">Unflag</span>
+                                  </button>
+                                )}
+
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setFlagTargetEvent(op);
                                     setShowFlagModal(true);
                                   }}
-                                  className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  className={`p-2 rounded-full transition-all hover:bg-gray-100 opacity-0 group-hover:opacity-100 ${isFlagged ? 'text-red-500' : 'text-gray-400'
+                                    }`}
                                   title="Report Inconsistency"
                                 >
                                   <Flag className="w-4 h-4" />
@@ -1023,13 +1052,14 @@ export default function WatcherDashboard() {
             <div className="p-6 bg-gray-50 dark:bg-gray-900/50 flex gap-3">
               <button
                 onClick={() => setShowFlagModal(false)}
-                className="flex-1 px-4 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg transition-colors"
+                className="px-4 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg transition-colors"
               >
                 Cancel
               </button>
+
               <button
                 onClick={handleFlagEvent}
-                className="flex-1 px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition-colors shadow-lg shadow-red-500/20"
+                className="px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition-colors shadow-lg shadow-red-500/20 flex-1"
               >
                 Submit Flag
               </button>

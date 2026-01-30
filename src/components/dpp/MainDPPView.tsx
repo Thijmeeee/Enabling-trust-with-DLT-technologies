@@ -60,6 +60,13 @@ import {
   getPendingAndRejectedOperations,
   getDIDOperationsHistory
 } from '../../lib/operations/didOperationsLocal';
+import { 
+  performTransferOwnership,
+  performUpdateDID,
+  performDeactivateDID,
+  performCertifyProduct
+} from '../../lib/operations/didOperationsMetaMask';
+import { useWallet } from '../../lib/utils/WalletContext';
 
 export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
   did: string;
@@ -67,7 +74,8 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
   onNavigate: (did: string) => void;
   backLabel?: string;
 }) {
-  const { currentRole } = useRole();
+  const { currentRole, currentRoleDID } = useRole();
+  const { isConnected, signer, address } = useWallet();
   const { viewMode, t } = useUI();
   const [data, setData] = useState<any>(null);
   const [metrics, setMetrics] = useState<any>(null);
@@ -148,7 +156,7 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
           }
         }
       }
-    }, 2000);
+    }, 10000); // Poll status every 10 seconds
 
     return () => clearInterval(interval);
   }, [data?.dpp?.did, data?.dpp?.id]);
@@ -157,7 +165,25 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
     if (!data?.dpp) return;
     setOpLoading(true);
     try {
-      const result = await transferOwnership(data.dpp.id, data.dpp.owner, newOwnerDID);
+      let result;
+      
+      // Use MetaMask if wallet is connected
+      if (isConnected && signer && address) {
+        const walletInfo = { address, signer, did: currentRoleDID };
+        result = await performTransferOwnership(
+          walletInfo, 
+          data.dpp.id, 
+          data.dpp.owner, 
+          newOwnerDID,
+          () => {
+            setShowTransferModal(false);
+            console.log('✍️ Signature received, syncing...');
+          }
+        );
+      } else {
+        result = await transferOwnership(data.dpp.id, data.dpp.owner, newOwnerDID);
+      }
+
       if (result.success) {
         // Manage operation status for persistent UI updates (matches Technical Mode)
         const opDetails = {
@@ -176,7 +202,7 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
 
         if (result.message.includes('via backend')) {
           localStorage.setItem(`approved_op_${data.dpp.did}`, JSON.stringify(opDetails));
-          alert('✅ Ownership transferred and anchored to blockchain!');
+          alert('✅ Ownership transferred and verified by decentralized network!');
         } else {
           localStorage.setItem(`pending_op_${data.dpp.did}`, JSON.stringify(opDetails));
           alert('⏳ Operation submitted. Waiting for witness approval...');
@@ -188,8 +214,13 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
       } else {
         alert('Error during transfer: ' + result.message);
       }
-    } catch (err) {
-      alert('An unexpected error occurred.');
+    } catch (err: any) {
+      if (err.code === 'ACTION_REJECTED' || err.code === 4001) {
+        console.log('[DID Operations] User cancelled transaction');
+      } else {
+        console.error('[DID Operations] Transfer error:', err);
+        alert('An unexpected error occurred.');
+      }
     } finally {
       setOpLoading(false);
     }
@@ -199,14 +230,39 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
     if (!data?.dpp) return;
     setOpLoading(true);
     try {
-      const result = await updateDIDViaBackend(data.dpp.id, data.dpp.owner, {
-        serviceEndpoints: params.updateType === 'service' ? [{
-          id: `#${params.selectedServiceType.toLowerCase()}-service`,
-          type: params.selectedServiceType,
-          serviceEndpoint: params.serviceEndpoint
-        }] : undefined,
-        description: params.updateType === 'metadata' ? params.description : undefined
-      });
+      let result;
+      
+      // Use MetaMask if wallet is connected
+      if (isConnected && signer && address) {
+        const walletInfo = { address, signer, did: currentRoleDID };
+        const updates = {
+          serviceEndpoints: params.updateType === 'service' ? [{
+            id: `#${params.selectedServiceType.toLowerCase()}-service`,
+            type: params.selectedServiceType,
+            serviceEndpoint: params.serviceEndpoint
+          }] : undefined,
+          description: params.updateType === 'metadata' ? params.description : undefined
+        };
+        result = await performUpdateDID(
+          walletInfo, 
+          data.dpp.id, 
+          data.dpp.owner, 
+          updates,
+          () => {
+            setShowUpdateModal(false);
+            console.log('✍️ Signature received, updating...');
+          }
+        );
+      } else {
+        result = await updateDIDViaBackend(data.dpp.id, data.dpp.owner, {
+          serviceEndpoints: params.updateType === 'service' ? [{
+            id: `#${params.selectedServiceType.toLowerCase()}-service`,
+            type: params.selectedServiceType,
+            serviceEndpoint: params.serviceEndpoint
+          }] : undefined,
+          description: params.updateType === 'metadata' ? params.description : undefined
+        });
+      }
 
       if (result.success) {
         const opDetails = {
@@ -222,7 +278,7 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
 
         if (result.message.includes('via backend')) {
           localStorage.setItem(`approved_op_${data.dpp.did}`, JSON.stringify(opDetails));
-          alert('✅ Passport successfully updated and anchored!');
+          alert('✅ Passport successfully updated and verified by network!');
         } else {
           localStorage.setItem(`pending_op_${data.dpp.did}`, JSON.stringify(opDetails));
           alert('⏳ Update submitted. Waiting for blockchain confirmation...');
@@ -234,8 +290,13 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
       } else {
         alert('Error during update: ' + result.message);
       }
-    } catch (err) {
-      alert('An unexpected error occurred.');
+    } catch (err: any) {
+      if (err.code === 'ACTION_REJECTED' || err.code === 4001) {
+        console.log('[DID Operations] User cancelled update');
+      } else {
+        console.error('[DID Operations] Update error:', err);
+        alert('An unexpected error occurred.');
+      }
     } finally {
       setOpLoading(false);
     }
@@ -245,7 +306,25 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
     if (!data?.dpp) return;
     setOpLoading(true);
     try {
-      const result = await certifyProduct(data.dpp.id, data.dpp.owner, certData);
+      let result;
+      
+      // Use MetaMask if wallet is connected
+      if (isConnected && signer && address) {
+        const walletInfo = { address, signer, did: currentRoleDID };
+        result = await performCertifyProduct(
+          walletInfo, 
+          data.dpp.id, 
+          data.dpp.owner, 
+          certData,
+          () => {
+            setShowCertifyModal(false);
+            console.log('✍️ Signature received, certifying...');
+          }
+        );
+      } else {
+        result = await certifyProduct(data.dpp.id, data.dpp.owner, certData);
+      }
+
       if (result.success) {
         const opDetails = {
           type: 'certification',
@@ -259,15 +338,20 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
         localStorage.removeItem(`pending_op_${data.dpp.did}`);
         localStorage.setItem(`approved_op_${data.dpp.did}`, JSON.stringify(opDetails));
 
-        alert('✅ Product successfully certified and anchored!');
+        alert('✅ Product successfully certified and verified by network!');
         setShowCertifyModal(false);
         await loadData();
         setEventRefreshKey(prev => prev + 1);
       } else {
         alert('Error during certification: ' + result.message);
       }
-    } catch (err) {
-      alert('An unexpected error occurred.');
+    } catch (err: any) {
+      if (err.code === 'ACTION_REJECTED' || err.code === 4001) {
+        console.log('[DID Operations] User cancelled certification');
+      } else {
+        console.error('[DID Operations] Certification error:', err);
+        alert('An unexpected error occurred.');
+      }
     } finally {
       setOpLoading(false);
     }
@@ -277,7 +361,25 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
     if (!data?.dpp) return;
     setOpLoading(true);
     try {
-      const result = await deactivateDID(data.dpp.id, data.dpp.owner, reason);
+      let result;
+      
+      // Use MetaMask if wallet is connected
+      if (isConnected && signer && address) {
+        const walletInfo = { address, signer, did: currentRoleDID };
+        result = await performDeactivateDID(
+          walletInfo, 
+          data.dpp.id, 
+          data.dpp.owner, 
+          reason,
+          () => {
+            setShowDeactivateModal(false);
+            console.log('✍️ Signature received, deactivating...');
+          }
+        );
+      } else {
+        result = await deactivateDID(data.dpp.id, data.dpp.owner, reason);
+      }
+
       if (result.success) {
         const opDetails = {
           type: 'deactivation',
@@ -297,8 +399,13 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
       } else {
         alert('Error during deactivation: ' + result.message);
       }
-    } catch (err) {
-      alert('An unexpected error occurred.');
+    } catch (err: any) {
+      if (err.code === 'ACTION_REJECTED' || err.code === 4001) {
+        console.log('[DID Operations] User cancelled deactivation');
+      } else {
+        console.error('[DID Operations] Deactivation error:', err);
+        alert('An unexpected error occurred.');
+      }
     } finally {
       setOpLoading(false);
     }
@@ -385,10 +492,10 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
     console.log('MainDPPView mounted with DID:', did);
     loadData();
     
-    // Add interval to sync status with background audits/alerts
+    // Add interval to sync status with background audits/alerts every 15 seconds
     const statusInterval = setInterval(() => {
       refreshStatus();
-    }, 5000);
+    }, 15000);
     
     return () => clearInterval(statusInterval);
   }, [did]);
@@ -1119,9 +1226,11 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                           <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                         )}
                         <div>
-                          <div className="font-medium text-gray-900 dark:text-white">Blockchain Anchored</div>
+                          <div className="font-medium text-gray-900 dark:text-white">
+                            {trustScore.breakdown.anchoring >= 20 ? 'Blockchain Anchored' : 'Anchoring Pending'}
+                          </div>
                           <div className="text-xs text-gray-600 dark:text-gray-400">
-                            {trustScore.breakdown.anchoring >= 20 ? 'Data immutably recorded on blockchain' : 'Pending blockchain anchoring'}
+                            {trustScore.breakdown.anchoring >= 20 ? 'Data immutably recorded on blockchain' : 'Awaiting scheduled anchoring batch'}
                           </div>
                         </div>
                       </div>
@@ -1456,7 +1565,7 @@ export default function MainDPPView({ did, onBack, onNavigate, backLabel }: {
                     <CheckCircle className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="font-bold text-emerald-900 dark:text-emerald-200 uppercase text-xs tracking-wider">Operation Anchored</h4>
+                    <h4 className="font-bold text-emerald-900 dark:text-emerald-200 uppercase text-xs tracking-wider">Operation Witnessed</h4>
                     <p className="text-sm text-emerald-700 dark:text-emerald-300">
                       Your recent <strong>{currentApprovedOp.type.replace('_', ' ')}</strong> has been successfully verified by multiple nodes.
                     </p>

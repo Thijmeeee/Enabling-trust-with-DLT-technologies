@@ -55,26 +55,27 @@ cd ..
 
 ---
 
-## ⚙️ 3. Configuration (Sepolia Setup)
+## ⚙️ 3. Configuration (Critical Setup)
 
-We use a single central configuration file for the entire team so we can work with the same wallet and contract.
+To interact with the Ethereum Sepolia network, you must configure your own credentials in the `deployment/.env` file. These are sensitive and should never be shared or committed to version control.
 
-1.  Go to the `deployment/` folder.
-2.  Open or create the `.env` file.
-3.  Ensure the following values are set (these are shared within the team):
+### Required Environment Variables
+1.  **DEPLOYER_PRIVATE_KEY**: The private key of the account that will deploy and own the smart contracts. This account needs Sepolia ETH (available via faucets).
+2.  **RELAYER_PRIVATE_KEY**: The private key of the account used to pay for transaction fees during anchoring. In this setup, it is often same as the deployer.
+3.  **ETHERSCAN_API_KEY**: Required for verifying smart contracts on Etherscan. You can get a free key by creating an account at [etherscan.io](https://etherscan.io/).
+4.  **RPC_URL & VITE_RPC_URL**: A connection URL to the Sepolia network (e.g., from Infura or Alchemy).
 
-```env
-# Blockchain Connection
-RPC_URL=https://sepolia.infura.io/v3/YOUR_API_KEY
-
-# Team Wallets (Share these securely, NOT on GitHub!)
-DEPLOYER_PRIVATE_KEY=b48f... # The 'owner' of the contract
-RELAYER_PRIVATE_KEY=b48f...  # The key that pays for transaction fees
-
-# The current contract on Sepolia
-CONTRACT_ADDRESS=0x06563e729443CCBbc5Ff7bD2412d78de55B66a65
-VITE_CONTRACT_ADDRESS=0x06563e729443CCBbc5Ff7bD2412d78de55B66a65
-```
+### How to set up:
+1.  Navigate to the `deployment/` folder.
+2.  Open the `.env` file.
+3.  Replace the placeholders with your actual keys:
+    ```env
+    DEPLOYER_PRIVATE_KEY=your_private_key_here
+    RELAYER_PRIVATE_KEY=your_private_key_here
+    ETHERSCAN_API_KEY=your_api_key_here
+    RPC_URL=https://sepolia.infura.io/v3/YOUR_PROJECT_ID
+    VITE_RPC_URL=https://sepolia.infura.io/v3/YOUR_PROJECT_ID
+    ```
 
 ---
 
@@ -94,20 +95,32 @@ Once you have configured the `.env` and Podman is running, you can start everyth
 
 ---
 
-## 🛠️ Troubleshooting
+## 🏗️ Production & Strategic Documents
 
-### "Not an authorized witness" error
-Getting this error in the Witness terminal?
-1.  Are you using the correct `RELAYER_PRIVATE_KEY` from the shared `.env`?
-2.  If you want to use your own wallet, the contract owner must add you via the `add-witness` script, or you must deploy a new contract yourself:
-    ```powershell
-    cd contracts
-    npm run deploy:sepolia
-    ```
+For a professional rollout beyond a local development environment, please refer to the `production/` folder:
+- **[PRODUCTION_PLAN.md](production/PRODUCTION_PLAN.md)**: A comprehensive architecture and deployment strategy for moving to a live environment.
+- **[PRODUCTION_CODE.md](production/PRODUCTION_CODE.md)**: Infrastructure-as-code snippets, including Caddy configurations and optimized Dockerfiles for microservices.
 
-### Database won't start
-*   Ensure **Podman Desktop** is active.
-*   Check port 5432: if another Postgres instance is already running on your PC, Podman cannot start.
+---
+
+## 🐛 Known Issues (Backlog)
+
+The following bugs are currently identified and should be addressed in future iterations:
+*   **Watcher Alerts**: Creating new "Window" type products can sometimes trigger incorrect integrity alerts in the Watcher service.
+*   **Duplicate Events**: The DID Operations History (provenance log) may occasionally show duplicate event entries due to synchronization race conditions between the local database and blockchain events.
+
+---
+
+## 🛤️ Path to Production (Roadmap)
+
+To transition this system from a prototype to a production-ready solution, the following strategic steps are recommended:
+
+1.  **Main-net Migration**: Transition from Sepolia Testnet to Ethereum Main-net or a cost-effective Layer 2 solution (e.g., Arbitrum, Polygon) for real-world security.
+2.  **ESPR Compliance**: Align the Digital Product Passport (DPP) data structure with the **Ecodesign for Sustainable Products Regulation (ESPR)** standards.
+3.  **Automated Data Integration**: Implement automated data pipelines to ingest product information directly from existing ERP, MES, or PLM systems, removing manual entry errors.
+4.  **Full SSI Integration**: Move towards a true **Self-Sovereign Identity (SSI)** model. Integrate wallets like **MetaMask** so that users (Manufacturers, Witnesses) manage their own private keys directly, rather than storing them in environment files.
+5.  **Mobile Ecosystem**: Develop a mobile application with QR code scanning capabilities, enabling consumers and regulators to verify product authenticity instantly in the field.
+6.  **Decentralized Governance**: Shift the responsibility of the **Witness** and **Watcher** nodes to independent, authorized third-party organizations (e.g., NGOs, government bodies). This ensures that the system's integrity is not solely managed by the manufacturer.
 
 ---
 

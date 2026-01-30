@@ -188,7 +188,7 @@ export async function generateBulkTestData(input: BulkDPPInput): Promise<void> {
           });
           
           // Generate attestations
-          await generateWitnessAttestations(compDpp.id, compDid, 'component');
+          await generateWitnessAttestations(compDpp.id, compDid, 'component', true);
           
           // Generate default lifecycle events for component
           await generateDefaultLifecycleEvents(compDpp.id, compDid, 'component', 0);
@@ -241,7 +241,7 @@ export async function generateBulkTestData(input: BulkDPPInput): Promise<void> {
     });
     
     // Generate attestations
-    await generateWitnessAttestations(mainDpp.id, did, mainDpp.type);
+    await generateWitnessAttestations(mainDpp.id, did, mainDpp.type, true);
     
     // Generate anchoring with component hashes
     await generateAnchoringEvents(mainDpp.id, did, componentDids);

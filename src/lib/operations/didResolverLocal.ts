@@ -217,13 +217,20 @@ export function parseDID(did: string): ParsedDID {
 /**
  * Transform DID to HTTPS URL for did.jsonl
  * did:webvh:example.com:abc123 -> https://example.com/.well-known/did/abc123/did.jsonl
+ * did:webvh:example.com:products:abc123 -> https://example.com/products/.well-known/did/abc123/did.jsonl
  */
 export function didToHttpsUrl(did: string): string {
   const parsed = parseDID(did);
   if (!parsed.domain || !parsed.scid) return '';
 
+  // FOR THE UI: Use a relative path to leverage the Vite proxy if the domain matches
+  // This ensures it works regardless of whether the domain is localhost or example.com
+  if (typeof window !== 'undefined' && 
+      (parsed.domain === window.location.hostname || parsed.domain === window.location.host)) {
+    return `/.well-known/did/${parsed.scid}/did.jsonl`;
+  }
+
   // Determine protocol: http for localhost/IPs, https otherwise
-  // Also check if we are currently on http
   const isIP = /^(\d{1,3}\.){3}\d{1,3}$/.test(parsed.domain.split(':')[0]);
   const isLocal = parsed.domain.includes('localhost') || 
                   parsed.domain.includes('127.0.0.1') || 
@@ -233,23 +240,18 @@ export function didToHttpsUrl(did: string): string {
   let protocol = isLocal ? 'http' : 'https';
   
   // If we are currently on HTTP, default to HTTP for resolution too (common in VM setups)
-  if (window.location.protocol === 'http:') {
+  if (typeof window !== 'undefined' && window.location.protocol === 'http:') {
     protocol = 'http';
   }
 
   // FIX: If domain is localhost/127.0.0.1 without port, default to dev backend port
   let domain = parsed.domain;
   if ((domain === 'localhost' || domain === '127.0.0.1')) {
-    // If we're on a non-standard port or accessing via a VM, 
-    // we should bridge to the backend port if the DID doesn't have one
     domain = 'localhost:3000';
   }
 
   // If the DID domain matches our current host, use it (handles VM IP access)
-  if (parsed.domain === window.location.hostname && !parsed.domain.includes(':')) {
-    // If we are on port 80/443 (default), but backend is on 3000
-    // Actually, in the VM deployment Caddy handles this.
-    // So if hostname matches, we can just use the current origin's host
+  if (typeof window !== 'undefined' && parsed.domain === window.location.hostname && !parsed.domain.includes(':')) {
     domain = window.location.host; 
   }
 
@@ -264,20 +266,39 @@ export function didToWitnessUrl(did: string): string {
   const parsed = parseDID(did);
   if (!parsed.domain || !parsed.scid) return '';
 
+  // FOR THE UI: Use a relative path to leverage the Vite proxy
+  if (typeof window !== 'undefined') {
+    return `/.well-known/did/${parsed.scid}/did-witness.json`;
+  }
+
+  // segments[0] is host, segments[1...] are either port or path segments
+  const segments = parsed.domain.split(':');
+  let host = segments[0];
+  let pathSegments = segments.slice(1);
+  let path = '';
+
+  // Check if first path segment is actually a port number
+  if (pathSegments.length > 0 && /^\d+$/.test(pathSegments[0])) {
+    host = `${host}:${pathSegments[0]}`;
+    pathSegments = pathSegments.slice(1);
+  }
+
+  if (pathSegments.length > 0) {
+    path = '/' + pathSegments.join('/');
+  }
+
   // Handle local development or explicit ports
-  const isLocal = parsed.domain.includes('localhost') || 
-                  parsed.domain.includes('127.0.0.1') || 
-                  parsed.domain.includes(':');
+  const isLocal = host.includes('localhost') || 
+                  host.includes('127.0.0.1');
                   
   const protocol = isLocal ? 'http' : 'https';
 
   // FIX: If domain is localhost/127.0.0.1 without port, default to dev backend port
-  let domain = parsed.domain;
-  if ((domain === 'localhost' || domain === '127.0.0.1')) {
-    domain = 'localhost:3000';
+  if ((host === 'localhost' || host === '127.0.0.1')) {
+    host = 'localhost:3000';
   }
 
-  return `${protocol}://${domain}/.well-known/did/${parsed.scid}/did-witness.json`;
+  return `${protocol}://${host}${path}/.well-known/did/${parsed.scid}/did-witness.json`;
 }
 
 /**

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useRole, roleDIDs, type UserRole } from '../lib/utils/roleContext';
+import { useWallet } from '../lib/utils/WalletContext';
 import { transferOwnership, rotateKey, getDIDOperationsHistory, getPendingAndRejectedOperations, deactivateDID, updateDIDViaBackend } from '../lib/operations/didOperationsLocal';
+import { performTransferOwnership, performRotateKey, performDeactivateDID, performUpdateDID } from '../lib/operations/didOperationsMetaMask';
 import type { DPP, WitnessAttestation } from '../lib/data/localData';
 import { Key, ArrowRightLeft, ChevronDown, ChevronUp, Clock, XCircle, CheckCircle, Shield, Power, FileEdit, AlertTriangle, ExternalLink } from 'lucide-react';
 import { etherscanTxUrl } from '../lib/api/config';
@@ -11,7 +13,8 @@ interface DIDOperationsPanelProps {
 }
 
 export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanelProps) {
-  const { currentRoleDID } = useRole();
+  const { currentRole, currentRoleDID } = useRole();
+  const { signer, address } = useWallet();
   const [history, setHistory] = useState<WitnessAttestation[]>([]);
 
   // Load pending/approved/rejected from localStorage on mount
@@ -38,7 +41,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
   const [updateServiceEndpoint, setUpdateServiceEndpoint] = useState('');
   const [updateDescription, setUpdateDescription] = useState('');
   const [deactivateReason, setDeactivateReason] = useState('');
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
   const [operationLoading, setOperationLoading] = useState<string | null>(null);
 
@@ -80,9 +83,9 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
       }
       setLoading(false);
     };
-    
+
     loadHistory();
-    
+
     // Auto-refresh history every 10 seconds to catch anchoring updates
     const interval = setInterval(loadHistory, 10000);
     return () => clearInterval(interval);
@@ -92,20 +95,19 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
   useEffect(() => {
     if (!currentPendingOp) return;
 
+    // Increase polling interval to 10 seconds to reduce console noise
     const interval = setInterval(async () => {
       const statusResult = await getPendingAndRejectedOperations(dpp.did);
 
-      console.log('🔍 Polling status:', {
-        dppDid: dpp.did,
-        currentPendingType: currentPendingOp.type,
-        rejectedCount: statusResult.rejected.length,
-        rejectedItems: statusResult.rejected.map((r: any) => ({
-          type: r.attestation_type,
-          approval_status: r.approval_status,
-          id: r.id
-        })),
-        pendingCount: statusResult.pending.length
-      });
+      // Only log polling if state is interesting (rarely)
+      if ((statusResult.pending.length > 0 || statusResult.rejected.length > 0) && Math.random() < 0.2) {
+        console.log('🔍 Polling status (active):', {
+          dppDid: dpp.did,
+          currentPendingType: currentPendingOp.type,
+          rejectedCount: statusResult.rejected.length,
+          pendingCount: statusResult.pending.length
+        });
+      }
 
       // Check if operation was rejected
       if (statusResult.rejected.length > 0) {
@@ -113,11 +115,13 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
         const rejectedOp = statusResult.rejected.find((op: any) => {
           const attestationType = op.attestation_type;
           const matches = attestationType === currentPendingOp.type;
-          console.log('🔎 Checking rejection match:', {
-            attestationType,
-            currentPendingType: currentPendingOp.type,
-            matches
-          });
+          // Silent by default unless matches
+          if (matches) {
+            console.log('🔎 Found matching rejection:', {
+              attestationType,
+              currentPendingType: currentPendingOp.type
+            });
+          }
           return matches;
         });
 
@@ -162,7 +166,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
           }
         }
       }
-    }, 2000); // Poll every 2 seconds
+    }, 10000); // Poll every 10 seconds (reduced from 2s to silence console)
 
     return () => clearInterval(interval);
   }, [currentPendingOp, dpp.id, onUpdate]);
@@ -173,7 +177,37 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
       return;
     }
 
-    const result = await transferOwnership(dpp.id, currentRoleDID, newOwnerDID);
+    setOperationLoading('transfer');
+    let result;
+    try {
+      if (currentRole === 'Wallet User' && signer) {
+        const walletInfo = { address: address || '', signer: signer, did: currentRoleDID };
+        result = await performTransferOwnership(
+          walletInfo,
+          dpp.id,
+          dpp.did,
+          newOwnerDID,
+          () => {
+            // Callback when signed but before backend execution
+            setShowTransferModal(false);
+            setMessage({ type: 'success', text: '✍️ Signature received! Syncing with network...' });
+          }
+        );
+      } else {
+        result = await transferOwnership(dpp.id, currentRoleDID, newOwnerDID);
+      }
+    } catch (err: any) {
+      // Don't log full error for user rejections
+      if (err.code === 'ACTION_REJECTED' || err.code === 4001) {
+        console.log('[DID Operations] User cancelled transaction');
+        result = { success: false, message: 'Transaction cancelled' };
+      } else {
+        console.error('[DID Operations] Transfer error:', err);
+        result = { success: false, message: err.message || 'Transfer failed' };
+      }
+    } finally {
+      setOperationLoading(null);
+    }
     if (result.success) {
       setMessage(null);
       setNewOwnerDID('');
@@ -201,7 +235,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
         // Backend success = immediately approved (green)
         localStorage.setItem(`approved_op_${dpp.did}`, JSON.stringify(opDetails));
         setCurrentApprovedOp(opDetails);
-        setMessage({ type: 'success', text: '✅ Ownership transferred and anchored to blockchain!' });
+        setMessage({ type: 'success', text: '✅ Ownership transferred and verified by decentralized network!' });
       } else {
         // Fallback mode = pending (orange)
         localStorage.setItem(`pending_op_${dpp.did}`, JSON.stringify(opDetails));
@@ -225,9 +259,33 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
     }
 
     setOperationLoading('rotate');
-    const result = await rotateKey(dpp.id, currentRoleDID);
-    setOperationLoading(null);
-    
+    let result;
+    try {
+      if (currentRole === 'Wallet User' && signer) {
+        const walletInfo = { address: address || '', signer: signer, did: currentRoleDID };
+        result = await performRotateKey(
+          walletInfo,
+          dpp.id,
+          dpp.did,
+          () => {
+            setMessage({ type: 'success', text: '✍️ Signature received! Syncing with network...' });
+          }
+        );
+      } else {
+        result = await rotateKey(dpp.id, currentRoleDID);
+      }
+    } catch (err: any) {
+      if (err.code === 'ACTION_REJECTED' || err.code === 4001) {
+        console.log('[DID Operations] User cancelled rotation');
+        result = { success: false, message: 'Transaction cancelled' };
+      } else {
+        console.error('[DID Operations] Role Error:', err);
+        result = { success: false, message: err.message || 'Rotation failed' };
+      }
+    } finally {
+      setOperationLoading(null);
+    }
+
     if (result.success) {
       setMessage(null);
 
@@ -252,7 +310,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
         // Backend success = immediately approved (green)
         localStorage.setItem(`approved_op_${dpp.did}`, JSON.stringify(opDetails));
         setCurrentApprovedOp(opDetails);
-        setMessage({ type: 'success', text: '✅ Key rotated and anchored to blockchain!' });
+        setMessage({ type: 'success', text: '✅ Key rotated and verified by decentralized network!' });
       } else {
         // Fallback mode = pending (orange)
         localStorage.setItem(`pending_op_${dpp.did}`, JSON.stringify(opDetails));
@@ -281,14 +339,43 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
     }
 
     setOperationLoading('update');
-    const result = await updateDIDViaBackend(dpp.id, currentRoleDID, {
+    let result;
+    const updates = {
+      description: updateDescription,
       serviceEndpoints: updateType === 'service' && updateServiceEndpoint ? [{
         id: `#${selectedServiceType.toLowerCase()}-service`,
         type: selectedServiceType,
         serviceEndpoint: updateServiceEndpoint
-      }] : undefined,
-      description: updateType === 'metadata' ? updateDescription : undefined
-    });
+      }] : undefined
+    };
+
+    try {
+      if (currentRole === 'Wallet User' && signer) {
+        const walletInfo = { address: address || '', signer: signer, did: currentRoleDID };
+        result = await performUpdateDID(
+          walletInfo,
+          dpp.id,
+          dpp.did,
+          updates,
+          () => {
+            setShowUpdateModal(false);
+            setMessage({ type: 'success', text: '✍️ Signature received! Updating DID...' });
+          }
+        );
+      } else {
+        result = await updateDIDViaBackend(dpp.id, currentRoleDID, updates);
+      }
+    } catch (err: any) {
+      if (err.code === 'ACTION_REJECTED' || err.code === 4001) {
+        console.log('[DID Operations] User cancelled update');
+        result = { success: false, message: 'Transaction cancelled' };
+      } else {
+        console.error('[DID Operations] Update Error:', err);
+        result = { success: false, message: err.message || 'Update failed' };
+      }
+    } finally {
+      setOperationLoading(null);
+    }
     setOperationLoading(null);
 
     if (result.success) {
@@ -317,8 +404,34 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
     }
 
     setOperationLoading('deactivate');
-    const result = await deactivateDID(dpp.id, currentRoleDID, deactivateReason);
-    setOperationLoading(null);
+    let result;
+    try {
+      if (currentRole === 'Wallet User' && signer) {
+        const walletInfo = { address: address || '', signer: signer, did: currentRoleDID };
+        result = await performDeactivateDID(
+          walletInfo,
+          dpp.id,
+          dpp.did,
+          deactivateReason,
+          () => {
+            setShowDeactivateModal(false);
+            setMessage({ type: 'success', text: '✍️ Signature received! Deactivating DID...' });
+          }
+        );
+      } else {
+        result = await deactivateDID(dpp.id, currentRoleDID, deactivateReason);
+      }
+    } catch (err: any) {
+      if (err.code === 'ACTION_REJECTED' || err.code === 4001) {
+        console.log('[DID Operations] User cancelled deactivation');
+        result = { success: false, message: 'Transaction cancelled' };
+      } else {
+        console.error('[DID Operations] Deactivate Error:', err);
+        result = { success: false, message: err.message || 'Deactivation failed' };
+      }
+    } finally {
+      setOperationLoading(null);
+    }
 
     if (result.success) {
       setMessage({ type: 'success', text: '✅ DID has been permanently deactivated' });
@@ -415,7 +528,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
             </div>
           </div>
         </div>
-        
+
         <div className="p-6 space-y-4">
           <div>
             <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">DID Identifier</span>
@@ -428,7 +541,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
               <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Current Owner</span>
               <div className="flex items-center gap-2 mt-1">
                 <p className="text-sm font-mono bg-gray-50 dark:bg-gray-700 px-3 py-2 rounded-lg flex-1 break-all text-gray-900 dark:text-white border border-gray-200 dark:border-gray-600">
-                  {dpp.owner.substring(0, 25)}...
+                  {dpp.owner}
                 </p>
                 {isOwner && (
                   <span className="text-xs bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300 px-3 py-1 rounded-full font-bold whitespace-nowrap">
@@ -440,11 +553,10 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
             <div>
               <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</span>
               <div className="mt-1">
-                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold ${
-                  isDeactivated 
-                    ? 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300' 
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold ${isDeactivated
+                    ? 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300'
                     : 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
-                }`}>
+                  }`}>
                   {isDeactivated ? <Power size={14} /> : <CheckCircle size={14} />}
                   {isDeactivated ? 'Deactivated' : 'Active'}
                 </span>
@@ -466,7 +578,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
               Manage your Decentralized Identifier with these previousOperations
             </p>
           </div>
-          
+
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Rotate Key Card */}
             <div className="bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-5 hover:shadow-md transition-all">
@@ -566,11 +678,10 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
 
       {/* Message Display */}
       {message && (
-        <div className={`p-4 rounded-xl flex items-center gap-3 ${
-          message.type === 'success' 
-            ? 'bg-green-50 dark:bg-green-900/30 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800' 
+        <div className={`p-4 rounded-xl flex items-center gap-3 ${message.type === 'success'
+            ? 'bg-green-50 dark:bg-green-900/30 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800'
             : 'bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-800'
-        }`}>
+          }`}>
           {message.type === 'success' ? <CheckCircle size={20} /> : <XCircle size={20} />}
           {message.text}
         </div>
@@ -712,15 +823,14 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                   return (
                     <div key={index} className="flex gap-6">
                       {/* Timeline Icon */}
-                      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center z-10 shadow-sm ${
-                        formatted.label.toLowerCase().includes('create') ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' :
-                        formatted.label.toLowerCase().includes('transfer') || formatted.label.toLowerCase().includes('ownership') ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' :
-                        'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400'
-                      }`}>
-                        {formatted.icon === '🆕' ? <CheckCircle size={18} /> : 
-                         formatted.icon === '🔑' ? <Key size={18} /> : 
-                         formatted.icon === '🔄' ? <ArrowRightLeft size={18} /> : 
-                         <Clock size={18} />}
+                      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center z-10 shadow-sm ${formatted.label.toLowerCase().includes('create') ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' :
+                          formatted.label.toLowerCase().includes('transfer') || formatted.label.toLowerCase().includes('ownership') ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' :
+                            'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400'
+                        }`}>
+                        {formatted.icon === '🆕' ? <CheckCircle size={18} /> :
+                          formatted.icon === '🔑' ? <Key size={18} /> :
+                            formatted.icon === '🔄' ? <ArrowRightLeft size={18} /> :
+                              <Clock size={18} />}
                       </div>
 
                       {/* Content Card */}
@@ -739,7 +849,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                                 </span>
                               )}
                               {attestation.tx_hash && (
-                                <a 
+                                <a
                                   href={etherscanTxUrl(attestation.tx_hash) || '#'}
                                   target="_blank"
                                   rel="noopener noreferrer"
@@ -751,13 +861,13 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                               )}
                             </div>
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                              {new Date(attestation.timestamp).toLocaleString(undefined, { 
-                                dateStyle: 'medium', 
-                                timeStyle: 'short' 
+                              {new Date(attestation.timestamp).toLocaleString(undefined, {
+                                dateStyle: 'medium',
+                                timeStyle: 'short'
                               })}
                             </p>
                           </div>
-                          
+
                           <div className="text-right">
                             <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase font-semibold tracking-widest">Witness</p>
                             <p className="text-xs font-mono text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-900 px-2 py-1 rounded mt-1">
@@ -799,7 +909,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                                 </>
                               )}
                             </button>
-                            
+
                             {isExpanded && (
                               <div className="mt-3 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
                                 <div className="bg-gray-100 dark:bg-gray-800 px-3 py-1.5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
@@ -896,7 +1006,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                 <h3 className="text-lg font-bold text-white">Update DID Document</h3>
               </div>
             </div>
-            
+
             <div className="p-6">
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                 Choose what you want to update in your DID document. This creates a new version in the DID log.
@@ -908,11 +1018,10 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                   What would you like to update?
                 </label>
                 <div className="grid grid-cols-1 gap-3">
-                  <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all ${
-                    updateType === 'service' 
-                      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' 
+                  <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all ${updateType === 'service'
+                      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
                       : 'border-gray-200 dark:border-gray-600 hover:border-emerald-300'
-                  }`}>
+                    }`}>
                     <input
                       type="radio"
                       name="updateType"
@@ -928,12 +1037,11 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                       </p>
                     </div>
                   </label>
-                  
-                  <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all ${
-                    updateType === 'metadata' 
-                      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' 
+
+                  <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all ${updateType === 'metadata'
+                      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
                       : 'border-gray-200 dark:border-gray-600 hover:border-emerald-300'
-                  }`}>
+                    }`}>
                     <input
                       type="radio"
                       name="updateType"
@@ -1066,7 +1174,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                 <h3 className="text-lg font-bold text-white">Deactivate DID</h3>
               </div>
             </div>
-            
+
             <div className="p-6">
               <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
                 <div className="flex gap-3">
@@ -1077,7 +1185,7 @@ export default function DIDOperationsPanel({ dpp, onUpdate }: DIDOperationsPanel
                 </div>
               </div>
 
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Reason for Deactivation <span className="text-red-500">*</span>

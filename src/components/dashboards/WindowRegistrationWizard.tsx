@@ -7,11 +7,18 @@ import {
   Package,
   Layers,
   Square,
-  Info
+  Info,
+  Wallet
 } from 'lucide-react';
 import { hybridDataStore as enhancedDB } from '../../lib/data/hybridDataStore';
 import { generateWitnessAttestations, generateAnchoringEvents } from '../../lib/operations/lifecycleHelpers';
 import { useRole } from '../../lib/utils/roleContext';
+import { useWallet } from '../../lib/utils/WalletContext';
+import {
+  prepareCreateDPP,
+  prepareRelationship,
+  executeBatch
+} from '../../lib/operations/didOperationsMetaMask';
 
 interface WindowRegistrationWizardProps {
   onClose: () => void;
@@ -21,7 +28,8 @@ interface WindowRegistrationWizardProps {
 type Step = 'intro' | 'window' | 'glass' | 'frame' | 'review' | 'creating' | 'success';
 
 export default function WindowRegistrationWizard({ onClose, onComplete }: WindowRegistrationWizardProps) {
-  const { currentRoleDID } = useRole();
+  const { currentRole, currentRoleDID } = useRole();
+  const { isConnected, signer, address } = useWallet();
   const [step, setStep] = useState<Step>('intro');
 
   // Form data
@@ -52,131 +60,238 @@ export default function WindowRegistrationWizard({ onClose, onComplete }: Window
           ? 'frame-masters.com'
           : 'example.com';
 
-      const windowDid = `did:webvh:${manufacturerDomain}:products:window-${uniqueId}`;
-      const glassDid = `did:webvh:${manufacturerDomain}:products:glass-${uniqueId}`;
-      const frameDid = `did:webvh:${manufacturerDomain}:products:frame-${uniqueId}`;
+      // Use Wallet Mode if Wallet User role is selected OR if a wallet is connected
+      const useWalletMode = currentRole === 'Wallet User' || (isConnected && signer && address);
 
-      // Create glass component
-      const glassResult = await enhancedDB.insertDPP({
-        did: glassDid,
-        type: 'component',
-        model: `${glassType} Panel`,
-        parent_did: windowDid,
-        lifecycle_status: 'active',
-        owner: currentRoleDID,
-        custodian: currentRoleDID,
-        metadata: {
-          productType: 'glass',
-          glazing_type: glassType,
-          thickness: glassType.includes('Triple') ? 36 : 24,
-          description: `${glassType} for ${windowName}`,
-        },
-        version: 1,
-        previous_version_id: null,
-      });
+      // --- WALLET MODE (BATCHED) ---
+      if (useWalletMode) {
+        if (!isConnected || !address || !signer) {
+          alert('Please connect your wallet to proceed as a Wallet User.');
+          setStep('review');
+          return;
+        }
 
-      // Create frame component
-      const frameResult = await enhancedDB.insertDPP({
-        did: frameDid,
-        type: 'component',
-        model: `${frameType} Frame`,
-        parent_did: windowDid,
-        lifecycle_status: 'active',
-        owner: currentRoleDID,
-        custodian: currentRoleDID,
-        metadata: {
-          productType: 'frame',
-          material: frameType,
-          thermal_break: frameType === 'Aluminium',
-          description: `${frameType} frame for ${windowName}`,
-        },
-        version: 1,
-        previous_version_id: null,
-      });
+        // Create an individual-level DID for the wallet user
+        const walletId = address.substring(2, 10).toLowerCase();
+        const walletDID = `did:webvh:company-${walletId}:user-${walletId}`;
+        const walletInfo = { address, signer, did: walletDID };
 
-      // Create main window
-      const windowResult = await enhancedDB.insertDPP({
-        did: windowDid,
-        type: 'main',
-        model: windowName || `Window-${uniqueId.slice(0, 8)}`,
-        parent_did: null,
-        lifecycle_status: 'active',
-        owner: currentRoleDID,
-        custodian: null,
-        metadata: {
-          productType: 'window',
-          dimensions: { width: windowWidth, height: windowHeight, unit: 'mm' },
-          glazing_type: glassType,
-          frame_material: frameType,
-          description: `${windowName} - ${windowWidth}x${windowHeight}mm`,
-        },
-        version: 1,
-        previous_version_id: null,
-      });
+        // 1. Prepare Operations (No signing yet)
 
-      // Create relationships
-      await enhancedDB.insertRelationship({
-        parent_did: windowDid,
-        child_did: glassDid,
-        relationship_type: 'component',
-        position: 1,
-        metadata: { role: 'glazing', quantity: 1 },
-      });
+        // Prepare Glass
+        const glassPrep = prepareCreateDPP(walletInfo, {
+          type: 'component',
+          model: `${glassType} Panel`,
+          metadata: {
+            productType: 'glass',
+            glazing_type: glassType,
+            thickness: glassType.includes('Triple') ? 36 : 24,
+            description: `${glassType} for ${windowName}`,
+          }
+        }, manufacturerDomain);
+        const glassDid = glassPrep.did!;
 
-      await enhancedDB.insertRelationship({
-        parent_did: windowDid,
-        child_did: frameDid,
-        relationship_type: 'component',
-        position: 2,
-        metadata: { role: 'frame', quantity: 1 },
-      });
+        // Prepare Frame
+        const framePrep = prepareCreateDPP(walletInfo, {
+          type: 'component',
+          model: `${frameType} Frame`,
+          metadata: {
+            productType: 'frame',
+            material: frameType,
+            thermal_break: frameType === 'Aluminium',
+            description: `${frameType} frame for ${windowName}`,
+          }
+        }, manufacturerDomain);
+        const frameDid = framePrep.did!;
 
-      // Create DID documents
-      await enhancedDB.insertDIDDocument({
-        dpp_id: windowResult.id,
-        did: windowDid,
-        controller: currentRoleDID,
-        verification_method: [{
-          id: `${windowDid}#key-1`,
-          type: 'Ed25519VerificationKey2020',
+        // Prepare Window (Main)
+        const windowPrep = prepareCreateDPP(walletInfo, {
+          type: 'main',
+          model: windowName || `Window-${uniqueId.slice(0, 8)}`,
+          metadata: {
+            productType: 'window',
+            dimensions: { width: windowWidth, height: windowHeight, unit: 'mm' },
+            glazing_type: glassType,
+            frame_material: frameType,
+            description: `${windowName} - ${windowWidth}x${windowHeight}mm`,
+          }
+        }, manufacturerDomain);
+        const windowDid = windowPrep.did!;
+
+        // Prepare Relationships
+        const rel1Prep = prepareRelationship(walletInfo, {
+          parentDid: windowDid,
+          childDid: glassDid,
+          type: 'component',
+          metadata: { role: 'glazing', quantity: 1 }
+        });
+
+        const rel2Prep = prepareRelationship(walletInfo, {
+          parentDid: windowDid,
+          childDid: frameDid,
+          type: 'component',
+          metadata: { role: 'frame', quantity: 1 }
+        });
+
+        // 2. Execute Batch (One Signature)
+        // This will trigger ONE MetaMask popup
+        // Order: Window first so relationships don't fail foreign key checks
+        const results = await executeBatch(
+          walletInfo,
+          [
+            windowPrep,
+            glassPrep,
+            framePrep,
+            rel1Prep,
+            rel2Prep
+          ],
+          () => {
+            console.log('✍️ Batch signature received, processing registrations...');
+          }
+        );
+
+        // Extract DIDs/IDs for post-processing
+        // results array matches the order of operations
+        const windowResult = results[0].dpp;
+        const glassResult = results[1].dpp;
+        const frameResult = results[2].dpp;
+
+        // 3. Post-Processing (Attestations & Anchoring)
+        // These are currently automated/mocked and don't require user signing
+        await generateWitnessAttestations(windowResult.id, windowDid, 'main', true);
+        await generateWitnessAttestations(glassResult.id, glassDid, 'component', true);
+        await generateWitnessAttestations(frameResult.id, frameDid, 'component', true);
+
+        await generateAnchoringEvents(windowResult.id, windowDid, [glassDid, frameDid]);
+
+      } else {
+        // --- LEGACY / DEMO MODE (No Wallet) ---
+        const windowDid = `did:webvh:${manufacturerDomain}:products:window-${uniqueId}`;
+        const glassDid = `did:webvh:${manufacturerDomain}:products:glass-${uniqueId}`;
+        const frameDid = `did:webvh:${manufacturerDomain}:products:frame-${uniqueId}`;
+
+        // Create glass component
+        const glassResult = await enhancedDB.insertDPP({
+          did: glassDid,
+          type: 'component',
+          model: `${glassType} Panel`,
+          parent_did: windowDid,
+          lifecycle_status: 'active',
+          owner: currentRoleDID,
+          custodian: currentRoleDID,
+          metadata: {
+            productType: 'glass',
+            glazing_type: glassType,
+            thickness: glassType.includes('Triple') ? 36 : 24,
+            description: `${glassType} for ${windowName}`,
+          },
+          version: 1,
+          previous_version_id: null,
+        });
+
+        // Create frame component
+        const frameResult = await enhancedDB.insertDPP({
+          did: frameDid,
+          type: 'component',
+          model: `${frameType} Frame`,
+          parent_did: windowDid,
+          lifecycle_status: 'active',
+          owner: currentRoleDID,
+          custodian: currentRoleDID,
+          metadata: {
+            productType: 'frame',
+            material: frameType,
+            thermal_break: frameType === 'Aluminium',
+            description: `${frameType} frame for ${windowName}`,
+          },
+          version: 1,
+          previous_version_id: null,
+        });
+
+        // Create main window
+        const windowResult = await enhancedDB.insertDPP({
+          did: windowDid,
+          type: 'main',
+          model: windowName || `Window-${uniqueId.slice(0, 8)}`,
+          parent_did: null,
+          lifecycle_status: 'active',
+          owner: currentRoleDID,
+          custodian: null,
+          metadata: {
+            productType: 'window',
+            dimensions: { width: windowWidth, height: windowHeight, unit: 'mm' },
+            glazing_type: glassType,
+            frame_material: frameType,
+            description: `${windowName} - ${windowWidth}x${windowHeight}mm`,
+          },
+          version: 1,
+          previous_version_id: null,
+        });
+
+        // Create relationships
+        await enhancedDB.insertRelationship({
+          parent_did: windowDid,
+          child_did: glassDid,
+          relationship_type: 'component',
+          position: 1,
+          metadata: { role: 'glazing', quantity: 1 },
+        });
+
+        await enhancedDB.insertRelationship({
+          parent_did: windowDid,
+          child_did: frameDid,
+          relationship_type: 'component',
+          position: 2,
+          metadata: { role: 'frame', quantity: 1 },
+        });
+
+        // Create DID documents
+        await enhancedDB.insertDIDDocument({
+          dpp_id: windowResult.id,
+          did: windowDid,
           controller: currentRoleDID,
-          publicKeyMultibase: `z6Mk${Math.random().toString(36).substring(2, 15)}`,
-        }],
-        service_endpoints: [{
-          id: `${windowDid}#dpp-service`,
-          type: 'DPPService',
-          serviceEndpoint: `https://${manufacturerDomain}/dpp/${windowDid.split(':').pop()}`,
-        }],
-        proof: { type: 'Ed25519Signature2020', created: new Date().toISOString() },
-        document_metadata: { created: true, productType: 'window' },
-      });
+          verification_method: [{
+            id: `${windowDid}#key-1`,
+            type: 'Ed25519VerificationKey2020',
+            controller: currentRoleDID,
+            publicKeyMultibase: `z6Mk${Math.random().toString(36).substring(2, 15)}`,
+          }],
+          service_endpoints: [{
+            id: `${windowDid}#dpp-service`,
+            type: 'DPPService',
+            serviceEndpoint: `https://${manufacturerDomain}/dpp/${windowDid.split(':').pop()}`,
+          }],
+          proof: { type: 'Ed25519Signature2020', created: new Date().toISOString() },
+          document_metadata: { created: true, productType: 'window' },
+        });
 
-      await enhancedDB.insertDIDDocument({
-        dpp_id: glassResult.id,
-        did: glassDid,
-        controller: currentRoleDID,
-        verification_method: [],
-        service_endpoints: [],
-        proof: { type: 'Ed25519Signature2020' },
-        document_metadata: { created: true, productType: 'glass' },
-      });
+        await enhancedDB.insertDIDDocument({
+          dpp_id: glassResult.id,
+          did: glassDid,
+          controller: currentRoleDID,
+          verification_method: [],
+          service_endpoints: [],
+          proof: { type: 'Ed25519Signature2020' },
+          document_metadata: { created: true, productType: 'glass' },
+        });
 
-      await enhancedDB.insertDIDDocument({
-        dpp_id: frameResult.id,
-        did: frameDid,
-        controller: currentRoleDID,
-        verification_method: [],
-        service_endpoints: [],
-        proof: { type: 'Ed25519Signature2020' },
-        document_metadata: { created: true, productType: 'frame' },
-      });
+        await enhancedDB.insertDIDDocument({
+          dpp_id: frameResult.id,
+          did: frameDid,
+          controller: currentRoleDID,
+          verification_method: [],
+          service_endpoints: [],
+          proof: { type: 'Ed25519Signature2020' },
+          document_metadata: { created: true, productType: 'frame' },
+        });
 
-      // Generate attestations and anchoring
-      await generateWitnessAttestations(windowResult.id, windowDid, 'main');
-      await generateWitnessAttestations(glassResult.id, glassDid, 'component');
-      await generateWitnessAttestations(frameResult.id, frameDid, 'component');
+        // Generate attestations and anchoring
+        await generateWitnessAttestations(windowResult.id, windowDid, 'main', true);
+        await generateWitnessAttestations(glassResult.id, glassDid, 'component', true);
+        await generateWitnessAttestations(frameResult.id, frameDid, 'component', true);
 
-      await generateAnchoringEvents(windowResult.id, windowDid, [glassDid, frameDid]);
+        await generateAnchoringEvents(windowResult.id, windowDid, [glassDid, frameDid]);
+      }
 
       setStep('success');
 
@@ -184,10 +299,15 @@ export default function WindowRegistrationWizard({ onClose, onComplete }: Window
       setTimeout(() => {
         onComplete();
       }, 2000);
-    } catch (error) {
-      console.error('Error creating DPP:', error);
-      alert('Something went wrong. Please try again.');
-      setStep('review');
+    } catch (error: any) {
+      if (error.message === 'Transaction cancelled') {
+        console.log('User cancelled transaction');
+        // Stay on review step so they can try again
+      } else {
+        console.error('Error creating DPP:', error);
+        alert('Something went wrong. Please try again.');
+        setStep('review');
+      }
     }
   }
 
@@ -215,10 +335,10 @@ export default function WindowRegistrationWizard({ onClose, onComplete }: Window
               {steps.map((s, index) => (
                 <div key={s.id} className="flex items-center">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStepIndex > index
-                      ? 'bg-green-500 text-white'
-                      : currentStepIndex === index
-                        ? 'bg-white text-blue-600'
-                        : 'bg-blue-500/50 text-blue-200'
+                    ? 'bg-green-500 text-white'
+                    : currentStepIndex === index
+                      ? 'bg-white text-blue-600'
+                      : 'bg-blue-500/50 text-blue-200'
                     }`}>
                     {currentStepIndex > index ? (
                       <CheckCircle className="w-5 h-5" />
@@ -250,6 +370,14 @@ export default function WindowRegistrationWizard({ onClose, onComplete }: Window
               <p className="text-gray-600 mb-8">
                 In a few simple steps, register a new window with glass and frame.
               </p>
+
+              {isConnected && (
+                <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center justify-center gap-2 text-green-800">
+                  <Wallet className="w-5 h-5" />
+                  <span className="font-medium">Connected with MetaMask</span>
+                </div>
+              )}
+
               <button
                 onClick={() => setStep('window')}
                 className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors flex items-center justify-center gap-2"
@@ -328,8 +456,8 @@ export default function WindowRegistrationWizard({ onClose, onComplete }: Window
                     key={type}
                     onClick={() => setGlassType(type)}
                     className={`w-full p-4 rounded-xl border-2 text-left transition-all ${glassType === type
-                        ? 'border-sky-500 bg-sky-50'
-                        : 'border-gray-200 hover:border-gray-300'
+                      ? 'border-sky-500 bg-sky-50'
+                      : 'border-gray-200 hover:border-gray-300'
                       }`}
                   >
                     <div className="flex items-center justify-between">
@@ -361,8 +489,8 @@ export default function WindowRegistrationWizard({ onClose, onComplete }: Window
                     key={type}
                     onClick={() => setFrameType(type)}
                     className={`w-full p-4 rounded-xl border-2 text-left transition-all ${frameType === type
-                        ? 'border-purple-500 bg-purple-50'
-                        : 'border-gray-200 hover:border-gray-300'
+                      ? 'border-purple-500 bg-purple-50'
+                      : 'border-gray-200 hover:border-gray-300'
                       }`}
                   >
                     <div className="flex items-center justify-between">
@@ -405,6 +533,17 @@ export default function WindowRegistrationWizard({ onClose, onComplete }: Window
                   <span className="text-gray-600">Frame</span>
                   <span className="font-medium text-gray-900">{frameType}</span>
                 </div>
+                <div className="flex justify-between border-t border-gray-200 pt-2">
+                  <span className="text-gray-600">Identity</span>
+                  {isConnected ? (
+                    <span className="font-medium text-green-700 flex items-center gap-1">
+                      <Wallet className="w-3 h-3" />
+                      Wallet ({address?.slice(0, 6)}...)
+                    </span>
+                  ) : (
+                    <span className="font-medium text-orange-600">Local Demo</span>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -414,7 +553,9 @@ export default function WindowRegistrationWizard({ onClose, onComplete }: Window
             <div className="text-center py-12">
               <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-6"></div>
               <h3 className="text-xl font-bold text-gray-900 mb-2">Registering...</h3>
-              <p className="text-gray-600">Please wait</p>
+              <p className="text-gray-600">
+                {isConnected ? 'Please sign the requests in your wallet...' : 'Please wait'}
+              </p>
             </div>
           )}
 
@@ -451,8 +592,9 @@ export default function WindowRegistrationWizard({ onClose, onComplete }: Window
               <button
                 onClick={handleSubmit}
                 className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
+                title={isConnected ? "Sign with Wallet" : "Create Demo Product"}
               >
-                Register
+                {isConnected ? 'Sign & Register' : 'Register'}
                 <CheckCircle className="w-4 h-4" />
               </button>
             ) : (

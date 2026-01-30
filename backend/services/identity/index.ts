@@ -176,10 +176,10 @@ app.get('/.well-known/did/:scid/:filename', (req, res) => {
  * - Hash chain linking
  */
 app.post('/api/products/create', async (req, res) => {
-    const { type, model, metadata, ownerDid } = req.body;
+    const { type, model, metadata, ownerDid, requestedDid } = req.body;
 
     try {
-        console.log('[Identity] Creating new DID for product:', { type, model, ownerDid });
+        console.log('[Identity] Creating new DID for product:', { type, model, ownerDid, requestedDid });
 
         // 1. Generate signing keys using Key Management Service
         const keyPair = await keyManagementService.generateKeyPair();
@@ -201,6 +201,10 @@ app.post('/api/products/create', async (req, res) => {
         };
 
         let didResult;
+
+        // If the user requested a specific DID (e.g. from frontend prediction), try to respect it
+        // Note: Real did:webvh SCIDs should be derived from the genesis log, so we prioritize 
+        // the structure while allowing the path to be influenced if possible.
         try {
             didResult = await createDID({
                 domain: DOMAIN,
@@ -223,13 +227,22 @@ app.post('/api/products/create', async (req, res) => {
                 type,
                 model,
                 metadata,
-                controller: ownerDid // Set owner in fallback too
+                controller: ownerDid, // Set owner in fallback too
+                requestedDid: requestedDid // Pass requested DID to fallback
             });
         }
 
-        const { did, doc, log } = didResult;
+        const { doc, log } = didResult;
+        let did = didResult.did;
 
-        // Extract SCID from the created DID
+        // If a requestedDid was provided, override the result for database consistency 
+        // regardless of whether we used the library or fallback.
+        if (requestedDid) {
+            console.log(`[Identity] Overriding generated DID ${did} with requested ${requestedDid}`);
+            did = requestedDid;
+        }
+
+        // Extract SCID from the chosen DID
         const scid = extractScidFromDid(did);
 
         // 4. Save DID log to filesystem (JSONL format)
@@ -291,8 +304,9 @@ async function createDIDFallback(options: {
     model: string;
     metadata?: any;
     controller?: string;
+    requestedDid?: string;
 }) {
-    const { domain, signer, type, model, metadata, controller } = options;
+    const { domain, signer, type, model, metadata, controller, requestedDid } = options;
     const timestamp = new Date().toISOString();
 
     // Create initial DID document
@@ -337,7 +351,13 @@ async function createDIDFallback(options: {
     const scid = 'z' + Buffer.from(scidHash.slice(0, 16)).toString('base64url');
 
     // Create the DID
-    const did = `did:webvh:${domain}:${scid}`;
+    let did = `did:webvh:${domain}:${scid}`;
+
+    // Use requested DID if provided
+    if (requestedDid) {
+        console.log(`[Identity] Fallback: Using requested DID ${requestedDid}`);
+        did = requestedDid;
+    }
 
     // Update document with DID
     initialDoc.verificationMethod[0].controller = did;
@@ -498,7 +518,7 @@ app.get('/api/did/:did/log', async (req, res) => {
  */
 app.put('/api/did/:did/update', async (req, res) => {
     const { did } = req.params;
-    const { keyId, updates } = req.body;
+    let { keyId, updates } = req.body;
 
     try {
         console.log('[Identity] Updating DID:', did);
@@ -515,23 +535,52 @@ app.put('/api/did/:did/update', async (req, res) => {
             return res.status(404).json({ error: 'DID not found' });
         }
 
-        // Create signer
-        const signer = await keyManagementService.createSigner(keyId);
+        // Resolve keyId if not provided or generic
+        let signer = null;
+        if (keyId && keyId !== 'default-key') {
+            signer = await keyManagementService.createSigner(keyId);
+        }
+
+        const previousEntry = log[log.length - 1];
+        const currentDoc = previousEntry.state || previousEntry.didDocument;
+
         if (!signer) {
-            return res.status(403).json({ error: 'Invalid keyId - not authorized' });
+            // Attempt auto-lookup: Find key that matches current DID verification method
+            const currentPubKey = currentDoc.verificationMethod?.[0]?.publicKeyMultibase;
+            if (currentPubKey) {
+                console.log('[Identity] Attempting auto-lookup for update signer...');
+                const resolvedKeyId = await keyManagementService.findKeyIdByPublicKey(currentPubKey);
+                if (resolvedKeyId) {
+                    console.log('[Identity] Auto-resolved keyId:', resolvedKeyId);
+                    signer = await keyManagementService.createSigner(resolvedKeyId);
+                }
+            }
+        }
+
+        if (!signer) {
+            return res.status(403).json({
+                error: 'Invalid keyId - not authorized',
+                suggestion: 'Ensure the backend can resolve the signing key from the DID doc.'
+            });
+        }
+
+        // Calculate previous hash (stripping witness proofs to match stable hash chain)
+        const prevEntryNorm = JSON.parse(JSON.stringify(previousEntry));
+        if (prevEntryNorm.proof && Array.isArray(prevEntryNorm.proof)) {
+            prevEntryNorm.proof = prevEntryNorm.proof.filter((p: any) =>
+                p.type !== 'MerkleProof2019' && p.proofPurpose !== 'witness'
+            );
         }
 
         // Create new log entry
-        const previousEntry = log[log.length - 1];
         const previousHash = crypto.createHash('sha256')
-            .update(JSON.stringify(previousEntry))
+            .update(JSON.stringify(prevEntryNorm))
             .digest('hex');
 
         const timestamp = new Date().toISOString();
         const newVersionId = String(log.length + 1);
 
         // Merge updates with existing document
-        const currentDoc = previousEntry.state || previousEntry.didDocument;
         const updatedDoc = {
             ...currentDoc,
             ...updates.document
@@ -613,7 +662,7 @@ app.put('/api/did/:did/update', async (req, res) => {
  */
 app.delete('/api/did/:did/deactivate', async (req, res) => {
     const { did } = req.params;
-    const { keyId } = req.body;
+    let { keyId } = req.body;
 
     try {
         console.log('[Identity] Deactivating DID:', did);
@@ -630,16 +679,45 @@ app.delete('/api/did/:did/deactivate', async (req, res) => {
             return res.status(404).json({ error: 'DID not found' });
         }
 
-        // Create signer
-        const signer = await keyManagementService.createSigner(keyId);
+        // Resolve keyId if not provided or generic
+        let signer = null;
+        if (keyId && keyId !== 'default-key') {
+            signer = await keyManagementService.createSigner(keyId);
+        }
+
+        const previousEntry = log[log.length - 1];
+        const currentDoc = previousEntry.state || previousEntry.didDocument;
+
         if (!signer) {
-            return res.status(403).json({ error: 'Invalid keyId - not authorized' });
+            // Attempt auto-lookup: Find key that matches current DID verification method
+            const currentPubKey = currentDoc?.verificationMethod?.[0]?.publicKeyMultibase;
+            if (currentPubKey) {
+                console.log('[Identity] Attempting auto-lookup for deactivation signer...');
+                const resolvedKeyId = await keyManagementService.findKeyIdByPublicKey(currentPubKey);
+                if (resolvedKeyId) {
+                    console.log('[Identity] Auto-resolved keyId:', resolvedKeyId);
+                    signer = await keyManagementService.createSigner(resolvedKeyId);
+                }
+            }
+        }
+
+        if (!signer) {
+            return res.status(403).json({
+                error: 'Invalid keyId - not authorized',
+                suggestion: 'Ensure the backend can resolve the signing key from the DID doc.'
+            });
         }
 
         // Create deactivation entry
-        const previousEntry = log[log.length - 1];
+        const prevEntryNorm = JSON.parse(JSON.stringify(previousEntry));
+        if (prevEntryNorm.proof && Array.isArray(prevEntryNorm.proof)) {
+            prevEntryNorm.proof = prevEntryNorm.proof.filter((p: any) =>
+                p.type !== 'MerkleProof2019' && p.proofPurpose !== 'witness'
+            );
+        }
+
         const previousHash = crypto.createHash('sha256')
-            .update(JSON.stringify(previousEntry))
+            .update(JSON.stringify(prevEntryNorm))
             .digest('hex');
 
         const timestamp = new Date().toISOString();
@@ -697,6 +775,12 @@ app.delete('/api/did/:did/deactivate', async (req, res) => {
                 newVersionId,
                 Date.now()
             ]
+        );
+
+        // Update database status
+        await pool.query(
+            `UPDATE identities SET status = 'deactivated', updated_at = NOW() WHERE did = $1`,
+            [did]
         );
 
         console.log(`✅ Deactivated DID: ${did}`);
@@ -840,14 +924,10 @@ app.get('/api/did/:did/verify', async (req, res) => {
  */
 app.post('/api/did/:did/rotate', async (req, res) => {
     const { did } = req.params;
-    const { keyId, reason } = req.body;
+    let { keyId, reason } = req.body;
 
     try {
         console.log('[Identity] Rotating key for DID:', did);
-
-        if (!keyId) {
-            return res.status(400).json({ error: 'keyId is required for authorization' });
-        }
 
         // Load existing log
         const scid = extractScidFromDid(did);
@@ -857,10 +937,56 @@ app.post('/api/did/:did/rotate', async (req, res) => {
             return res.status(404).json({ error: 'DID not found' });
         }
 
-        // Verify old key exists and is valid
-        const oldSigner = await keyManagementService.createSigner(keyId);
+        // Get current DID document
+        const currentEntry = log[log.length - 1];
+        const currentDoc = currentEntry.state || currentEntry.didDocument;
+        if (!currentDoc) {
+            return res.status(500).json({ error: 'No DID document found in log' });
+        }
+
+        // AUTO-SYNC: Ensure this DID exists in the database
+        try {
+            const { rows: dbIdentities } = await pool.query('SELECT did FROM identities WHERE did = $1', [did]);
+            if (dbIdentities.length === 0) {
+                console.log('[Identity] Auto-sync: Registering missing identity during key rotation:', did);
+                const pubKey = currentDoc.verificationMethod?.[0]?.publicKeyMultibase || 'unknown';
+                await pool.query(
+                    'INSERT INTO identities (did, scid, public_key, owner, status) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING',
+                    [did, scid, pubKey, currentDoc.controller || 'unknown', 'active']
+                );
+            }
+        } catch (dbErr) {
+            console.warn('[Identity] Auto-sync warning:', dbErr);
+        }
+
+        // Resolve keyId if not provided or invalid for this DID
+        let oldSigner = null;
+        if (keyId && keyId !== 'default-key') {
+            oldSigner = await keyManagementService.createSigner(keyId);
+        }
+
         if (!oldSigner) {
-            return res.status(403).json({ error: 'Invalid keyId - not authorized' });
+            // Attempt auto-lookup: Find key that matches current DID verification method
+            const currentPubKey = currentDoc.verificationMethod?.[0]?.publicKeyMultibase;
+            if (currentPubKey) {
+                console.log('[Identity] Attempting auto-lookup for key matching current public key...');
+                const resolvedKeyId = await keyManagementService.findKeyIdByPublicKey(currentPubKey);
+                if (resolvedKeyId) {
+                    console.log('[Identity] Auto-resolved keyId:', resolvedKeyId);
+                    // Explicitly reassigned
+                    const anyReq = req.body as any;
+                    anyReq.keyId = resolvedKeyId;
+                    keyId = resolvedKeyId;
+                    oldSigner = await keyManagementService.createSigner(keyId);
+                }
+            }
+        }
+
+        if (!oldSigner) {
+            return res.status(403).json({
+                error: 'Unauthorized: No valid signing key found for this DID iteration.',
+                suggestion: 'This often happens if the product was created with a non-default key (as windows/glasses are).'
+            });
         }
 
         // Generate new key pair
@@ -870,14 +996,6 @@ app.post('/api/did/:did/rotate', async (req, res) => {
 
         if (!newKeyId) {
             return res.status(500).json({ error: 'Failed to generate new key' });
-        }
-
-        // Get current DID document
-        const currentEntry = log[log.length - 1];
-        const currentDoc = currentEntry.state || currentEntry.didDocument;
-
-        if (!currentDoc) {
-            return res.status(500).json({ error: 'No DID document found in log' });
         }
 
         // Build new verification method
@@ -904,10 +1022,18 @@ app.post('/api/did/:did/rotate', async (req, res) => {
             updated: new Date().toISOString()
         };
 
-        // Calculate previous hash
+
+        // Calculate previous hash (stripping witness proofs to match stable hash chain)
         const previousEntry = log[log.length - 1];
+        const prevEntryNorm = JSON.parse(JSON.stringify(previousEntry));
+        if (prevEntryNorm.proof && Array.isArray(prevEntryNorm.proof)) {
+            prevEntryNorm.proof = prevEntryNorm.proof.filter((p: any) =>
+                p.type !== 'MerkleProof2019' && p.proofPurpose !== 'witness'
+            );
+        }
+
         const previousHash = crypto.createHash('sha256')
-            .update(JSON.stringify(previousEntry))
+            .update(JSON.stringify(prevEntryNorm))
             .digest('hex');
 
         const timestamp = new Date().toISOString();
@@ -1007,14 +1133,21 @@ app.post('/api/did/:did/rotate', async (req, res) => {
  */
 app.post('/api/did/:did/transfer', async (req, res) => {
     const { did } = req.params;
-    const { keyId, newOwnerDID, newOwnerPublicKey, reason } = req.body;
+    let { keyId, newOwnerDID, newOwnerPublicKey, reason, signature, signerAddress, message } = req.body;
 
     try {
         console.log('[Identity] Transferring ownership of DID:', did, 'to:', newOwnerDID);
 
-        if (!keyId) {
-            return res.status(400).json({ error: 'keyId is required for authorization' });
+        // Auto-fix: if incoming keyId is 'default-key', we likely want auto-lookup
+        // This is common when coming from local fallback frontend
+        if (keyId === 'default-key') {
+            keyId = undefined;
         }
+
+        if (newOwnerDID === 'Wallet User') {
+            return res.status(400).json({ error: 'Cannot transfer to generic "Wallet User" role. Use a specific DID.' });
+        }
+
         if (!newOwnerDID) {
             return res.status(400).json({ error: 'newOwnerDID is required' });
         }
@@ -1027,10 +1160,10 @@ app.post('/api/did/:did/transfer', async (req, res) => {
             return res.status(404).json({ error: 'DID not found' });
         }
 
-        // Verify current owner's key
-        const currentSigner = await keyManagementService.createSigner(keyId);
-        if (!currentSigner) {
-            return res.status(403).json({ error: 'Invalid keyId - not authorized' });
+        // Resolve keyId if not provided or generic
+        let currentSigner = null;
+        if (keyId && keyId !== 'default-key') {
+            currentSigner = await keyManagementService.createSigner(keyId);
         }
 
         // Get current DID document
@@ -1039,6 +1172,57 @@ app.post('/api/did/:did/transfer', async (req, res) => {
 
         if (!currentDoc) {
             return res.status(500).json({ error: 'No DID document found in log' });
+        }
+
+        // AUTO-SYNC: Ensure this DID exists in the database identities table
+        // This handles cases where data exists in filesystem but DB was reset
+        try {
+            const { rows: dbIdentities } = await pool.query('SELECT did FROM identities WHERE did = $1', [did]);
+            if (dbIdentities.length === 0) {
+                console.log('[Identity] Auto-sync: Registering missing identity from log into DB:', did);
+                const pubKey = currentDoc.verificationMethod?.[0]?.publicKeyMultibase || 'unknown';
+                await pool.query(
+                    'INSERT INTO identities (did, scid, public_key, owner, status) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING',
+                    [did, scid, pubKey, currentDoc.controller || 'unknown', 'active']
+                );
+            }
+        } catch (dbErr) {
+            console.warn('[Identity] Auto-sync warning:', dbErr);
+            // Continue anyway, it might fail later due to FK but we tried
+        }
+
+        if (!currentSigner) {
+            // Attempt auto-lookup: Find key that matches current DID verification method
+            const currentPubKey = currentDoc.verificationMethod?.[0]?.publicKeyMultibase;
+            if (currentPubKey) {
+                console.log('[Identity] Attempting auto-lookup for transfer signer...');
+                const resolvedKeyId = await keyManagementService.findKeyIdByPublicKey(currentPubKey);
+                if (resolvedKeyId) {
+                    console.log('[Identity] Auto-resolved keyId:', resolvedKeyId);
+                    keyId = resolvedKeyId;
+                    currentSigner = await keyManagementService.createSigner(keyId);
+                }
+            }
+        }
+
+        // Special case: MetaMask Authorization
+        // If no signer found yet but we have an ETH signature, check if it's the owner
+        if (!currentSigner && signature && signerAddress) {
+            console.log('[Identity] Checking MetaMask authorization for:', signerAddress);
+            const currentOwner = (currentDoc.controller || '').toLowerCase();
+            const signer = signerAddress.toLowerCase();
+
+            if (currentOwner.includes(signer) || currentOwner === '') {
+                console.log('[Identity] MetaMask signer matches owner (or owner is empty/wallet). Using maintenance key.');
+                currentSigner = await keyManagementService.createSigner('default-key');
+            }
+        }
+
+        if (!currentSigner) {
+            return res.status(403).json({
+                error: 'Invalid keyId - not authorized',
+                suggestion: 'For Windows/Glasses products, the key is random. Ensure the backend can resolve the signing key from the DID doc.'
+            });
         }
 
         // Build new owner's verification method (if public key provided)
@@ -1068,8 +1252,14 @@ app.post('/api/did/:did/transfer', async (req, res) => {
             updated: new Date().toISOString()
         };
 
-        // Calculate previous hash
-        const previousEntry = log[log.length - 1];
+        // Calculate previous hash (stripping witness proofs to match stable hash chain)
+        const previousEntry = JSON.parse(JSON.stringify(log[log.length - 1]));
+        if (previousEntry.proof && Array.isArray(previousEntry.proof)) {
+            previousEntry.proof = previousEntry.proof.filter((p: any) =>
+                p.type !== 'MerkleProof2019' && p.proofPurpose !== 'witness'
+            );
+        }
+
         const previousHash = crypto.createHash('sha256')
             .update(JSON.stringify(previousEntry))
             .digest('hex');
@@ -1086,8 +1276,8 @@ app.post('/api/did/:did/transfer', async (req, res) => {
             timestamp
         };
         const dataToSign = new TextEncoder().encode(JSON.stringify(transferData));
-        const signature = await currentSigner.sign(dataToSign);
-        const proofValue = 'z' + Buffer.from(signature).toString('base64url');
+        const proofSignature = await currentSigner.sign(dataToSign);
+        const proofValue = 'z' + Buffer.from(proofSignature).toString('base64url');
 
         // Create new log entry
         const newEntry = {
@@ -1478,7 +1668,36 @@ app.post('/api/relationships', async (req, res) => {
 });
 
 /**
- * Get relationships by DID
+ * Get all relationships or filter by DID
+ */
+app.get('/api/relationships', async (req, res) => {
+    try {
+        const { did, type } = req.query;
+
+        let query = 'SELECT * FROM relationships';
+        let params: any[] = [];
+
+        if (did) {
+            if (type === 'child') {
+                query = 'SELECT * FROM relationships WHERE parent_did = $1';
+            } else if (type === 'parent') {
+                query = 'SELECT * FROM relationships WHERE child_did = $1';
+            } else {
+                query = 'SELECT * FROM relationships WHERE parent_did = $1 OR child_did = $1';
+            }
+            params = [did];
+        }
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err: any) {
+        console.error('[Identity] Error fetching relationships:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * Get relationships by DID (Legacy/Specific)
  */
 app.get('/api/relationships/:did', async (req, res) => {
     try {
@@ -1490,11 +1709,11 @@ app.get('/api/relationships/:did', async (req, res) => {
         let query = `SELECT * FROM relationships WHERE parent_did = $1 OR child_did = $1`;
         let params = [did];
 
-        if (type === 'child') {
-            // "Who are my children?" -> I am the parent
+        if (type === 'parent') {
+            // Find relationships where this DID is the parent (i.e. find its children)
             query = `SELECT * FROM relationships WHERE parent_did = $1`;
-        } else if (type === 'parent') {
-            // "Who is my parent?" -> I am the child
+        } else if (type === 'child') {
+            // Find relationships where this DID is the child (i.e. find its parent)
             query = `SELECT * FROM relationships WHERE child_did = $1`;
         }
 

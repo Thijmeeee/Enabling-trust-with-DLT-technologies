@@ -170,11 +170,41 @@ export async function runAudit() {
     log.info('Starting audit cycle...');
 
     try {
-        const { rows: identities } = await pool.query('SELECT did, scid, status FROM identities');
+        const { rows: identities } = await pool.query('SELECT did, scid, status, created_at FROM identities');
         log.info(`Auditing ${identities.length} identities...`);
 
+        const NOW = Date.now();
+        const GRACE_PERIOD_MS = 15000; // 15 seconds grace period for file system sync
+
         for (const identity of identities) {
+            // Check grace period
+            const createdAt = new Date(identity.created_at).getTime();
+            if (NOW - createdAt < GRACE_PERIOD_MS) {
+                log.info(`⏳ Skipping new identity (grace period): ${identity.did}`);
+                continue;
+            }
+
             if ((identity.did.includes("demo") || identity.did.includes("z-")) && !identity.did.includes("window-003")) {
+                // ENFORCE DEACTIVATION: Check if the log file says it's deactivated
+                // This prevents the status from reverting to 'active' due to auto-healing
+                try {
+                    const logPath = `${STORAGE_ROOT}/${identity.scid}/did.jsonl`;
+                    const content = await fs.readFile(logPath, 'utf8');
+                    const lines = content.trim().split('\n');
+                    if (lines.length > 0) {
+                        const lastLine = lines[lines.length - 1];
+                        if (lastLine.includes('"deactivated":true') || lastLine.includes('"deactivated": true')) {
+                            if (identity.status !== 'deactivated') {
+                                log.info(`🛡️ Enforcing deactivation status for ${identity.did}`);
+                                await pool.query("UPDATE identities SET status = 'deactivated' WHERE did = $1", [identity.did]);
+                            }
+                            continue; // Skip the tampered->active check below
+                        }
+                    }
+                } catch (e) {
+                    // Log file might not exist yet, ignore
+                }
+
                 log.info(`Skipping demo identity: ${identity.did}`);
                 if (identity.status === 'tampered') {
                     await pool.query("UPDATE identities SET status = 'active' WHERE did = $1", [identity.did]);

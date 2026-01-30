@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import EnhancedDashboard from './components/dashboards/EnhancedDashboard';
 import MainDPPView from './components/dpp/MainDPPView';
 import CreateDPPForm from './components/dpp/CreateDPPForm';
@@ -18,16 +18,19 @@ import { UIProvider, useUI } from './lib/utils/UIContext';
 import { hybridDataStore as enhancedDB } from './lib/data/hybridDataStore';
 import { generateMixedTestData } from './lib/operations/bulkOperations';
 import { User, ChevronDown, HelpCircle, Wallet, ToggleLeft, ToggleRight, Moon, Sun, Trash2, Cpu, Zap } from 'lucide-react';
+import { WalletProvider } from './lib/utils/WalletContext';
+import WalletConnectButton from './components/WalletConnectButton';
 
 type View = 'dashboard' | 'dpp-main' | 'dpp-component' | 'create-dpp' | 'manufacturer-wallet' | 'register-wizard';
 
 function AppContent() {
-  const { currentRole, setRole } = useRole();
+  const roleContext = useRole();
+  const { currentRole, setRole, isWalletLocked } = roleContext;
+  console.log('[App] Full RoleContext:', roleContext);
+  console.log('[App] Current Role:', currentRole, 'Locked:', isWalletLocked);
   const { theme, toggleTheme } = useTheme();
   const { viewMode, toggleViewMode } = useUI();
-  const location = useLocation();
-  const isResolverPage = location.pathname === '/resolver';
-  
+
   const [view, setView] = useState<View>('dashboard');
   const [currentDID, setCurrentDID] = useState<string>('');
   const [isInitializing, setIsInitializing] = useState(true);
@@ -66,7 +69,7 @@ function AppContent() {
       try {
         console.log('[App] Loading data from store...');
         const data = await enhancedDB.getAllDPPs();
-        
+
         if (cancelled) {
           clearTimeout(safetyTimeout);
           return;
@@ -155,6 +158,7 @@ function AppContent() {
     { value: 'Witness' as const, label: 'Witness' },
     { value: 'Watcher' as const, label: 'Watcher' },
     { value: 'Resolver' as const, label: 'Resolver' },
+    { value: 'Wallet User' as const, label: 'Wallet User' }, // Keep in array for label lookups, but we filter in UI
   ];
   const handleRoleChange = (role: typeof roles[number]['value']) => {
     if (role === 'Resolver') {
@@ -180,28 +184,39 @@ function AppContent() {
             <div className="fixed top-4 left-4 z-50 flex items-center gap-2">
               <div className="relative">
                 <button
-                  onClick={() => setShowRoleDropdown(!showRoleDropdown)}
-                  className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm transition-colors"
+                  onClick={() => !isWalletLocked && setShowRoleDropdown(!showRoleDropdown)}
+                  disabled={isWalletLocked}
+                  className={`flex items-center gap-2 px-4 py-2 border rounded-lg shadow-sm transition-all ${isWalletLocked
+                      ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 cursor-not-allowed text-blue-700 dark:text-blue-300'
+                      : 'bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 border-gray-300 dark:border-gray-600'
+                    }`}
+                  title={isWalletLocked ? "Role locked to Wallet User while connected" : "Select user role"}
                 >
-                  <User className="w-4 h-4 text-gray-700 dark:text-gray-300" />
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                  {isWalletLocked ? (
+                    <Wallet className="w-4 h-4" />
+                  ) : (
+                    <User className="w-4 h-4 text-gray-700 dark:text-gray-300" />
+                  )}
+                  <span className="text-sm font-bold">
                     {roles.find(r => r.value === currentRole)?.label}
                   </span>
-                  <ChevronDown className="w-4 h-4 text-gray-700 dark:text-gray-300" />
+                  {!isWalletLocked && <ChevronDown className="w-4 h-4 text-gray-700 dark:text-gray-300" />}
                 </button>
 
-                {showRoleDropdown && (
+                {showRoleDropdown && !isWalletLocked && (
                   <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
-                    {roles.map((role) => (
-                      <button
-                        key={role.value}
-                        onClick={() => handleRoleChange(role.value)}
-                        className={`w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${currentRole === role.value ? 'bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-700 dark:text-gray-300'
-                          }`}
-                      >
-                        {role.label}
-                      </button>
-                    ))}
+                    {roles
+                      .filter(r => r.value !== 'Wallet User') // Only available via wallet connection
+                      .map((role) => (
+                        <button
+                          key={role.value}
+                          onClick={() => handleRoleChange(role.value as any)}
+                          className={`w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${currentRole === role.value ? 'bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-700 dark:text-gray-300'
+                            }`}
+                        >
+                          {role.label}
+                        </button>
+                      ))}
                   </div>
                 )}
               </div>
@@ -267,7 +282,7 @@ function AppContent() {
               </button>
 
               {/* Manufacturer Wallet Button */}
-              {(currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B') && (
+              {(currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B' || currentRole === 'Wallet User') && (
                 <button
                   onClick={() => setView('manufacturer-wallet')}
                   className={`flex items-center justify-center w-10 h-10 border rounded-lg shadow-sm transition-colors ${view === 'manufacturer-wallet'
@@ -294,6 +309,11 @@ function AppContent() {
               >
                 <Trash2 className="w-5 h-5 text-red-600 dark:text-red-400" />
               </button>
+            </div>
+
+            {/* Wallet Connect Button (Top Right) */}
+            <div className="fixed top-4 right-4 z-50">
+              <WalletConnectButton />
             </div>
 
             {/* Introduction Page */}
@@ -334,7 +354,7 @@ function AppContent() {
                 )}
 
                 {/* Manufacturer Wallet */}
-                {view === 'manufacturer-wallet' && (currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B') && (
+                {view === 'manufacturer-wallet' && (currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B' || currentRole === 'Wallet User') && (
                   <ManufacturerDashboard
                     onNavigate={handleSelectDPP}
                     onCreateDPP={handleCreateDPP}
@@ -344,7 +364,7 @@ function AppContent() {
                 )}
 
                 {/* Role-Based Dashboards (when dashboardMode === 'role') */}
-                {view === 'dashboard' && dashboardMode === 'role' && (currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B') && (
+                {view === 'dashboard' && dashboardMode === 'role' && (currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B' || currentRole === 'Wallet User') && (
                   <ManufacturerSimpleDashboard
                     onRegisterWindow={() => setView('register-wizard')}
                     onNavigate={handleSelectDPP}
@@ -372,7 +392,7 @@ function AppContent() {
                 ) && (
                     <EnhancedDashboard
                       onNavigate={handleSelectDPP}
-                      onCreateDPP={(currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B') ? handleCreateDPP : undefined}
+                      onCreateDPP={(currentRole === 'Manufacturer' || currentRole === 'Manufacturer A' || currentRole === 'Manufacturer B' || currentRole === 'Wallet User') ? handleCreateDPP : undefined}
                     />
                   )}
 
@@ -416,9 +436,11 @@ export default function App() {
   return (
     <ThemeProvider>
       <UIProvider>
-        <RoleProvider>
-          <AppContent />
-        </RoleProvider>
+        <WalletProvider>
+          <RoleProvider>
+            <AppContent />
+          </RoleProvider>
+        </WalletProvider>
       </UIProvider>
     </ThemeProvider>
   );

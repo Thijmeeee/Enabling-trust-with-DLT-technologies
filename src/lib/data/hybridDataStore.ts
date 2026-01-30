@@ -10,7 +10,7 @@
 
 import { api, blockchainClient, etherscanBlockUrl } from '../api';
 import { API_CONFIG } from '../api/config';
-import type { Identity, DIDEvent, Batch, Audit } from '../api/client';
+import type { DIDEvent, Batch, Audit } from '../api/client';
 import { localDB } from './localData';
 import type { DPP, AnchoringEvent, WitnessAttestation, WatcherAlert, DPPRelationship } from './localData';
 import { enhancedDB } from './enhancedDataStore';
@@ -69,7 +69,6 @@ export function getDataStoreMode(): { useBackend: boolean; backendAvailable: boo
 // DPP / Identity Operations
 // ============================================
 
-
 /**
  * Get all DPPs/Identities
  */
@@ -79,6 +78,9 @@ export async function getAllDPPs(): Promise<DPP[]> {
       await checkBackendHealth();
       if (backendAvailable) {
         const identities = await api.identity.listIdentities();
+        const relationships = await api.identity.getRelationships();
+        const parentMap = new Map<string, string>();
+        relationships.forEach(r => parentMap.set(r.child_did, r.parent_did));
 
         // Fetch events to get model/type from create event payloads
         const dpps: DPP[] = [];
@@ -93,7 +95,7 @@ export async function getAllDPPs(): Promise<DPP[]> {
 
           let effectiveStatus = identity.status || 'active';
           if (tamperedDids.has(identity.did)) {
-            effectiveStatus = 'tampered';
+            effectiveStatus = 'tampered' as any;
           }
 
           // Harmonize metadata for UI expectations
@@ -107,7 +109,7 @@ export async function getAllDPPs(): Promise<DPP[]> {
             did: identity.did,
             type: (payload?.type === 'window' || payload?.type === 'main') ? 'main' : 'component',
             model: payload?.model || `Product-${identity.scid.substring(0, 8)}`,
-            parent_did: null,
+            parent_did: parentMap.get(identity.did) || null,
             lifecycle_status: effectiveStatus,
             owner: identity.owner || 'did:webvh:unknown:owner',
             custodian: null,
@@ -177,8 +179,47 @@ export async function getDPPByDID(did: string): Promise<DPP | null> {
       const allDPPs = await getCachedDPPs();
       const cached = allDPPs.find(d => d.did === did);
       if (cached) {
+        // Reduced logging frequency for cache hits
+        if (Math.random() < 0.05) {
+          console.log('[HybridDataStore] getDPPByDID: Found in cache (sampled log):', did);
+        }
         return cached;
       }
+
+      // If not in cache but backend available, try direct fetch
+      if (backendAvailable) {
+        const scid = extractScidFromDid(did);
+        if (scid) {
+          console.log('[HybridDataStore] getDPPByDID: Fetching from backend:', scid);
+          const identity = await api.identity.getIdentity(scid);
+
+          // Fetch events to get model/type like getAllDPPs does
+          const events = await api.identity.getEvents(did);
+          const createEvent = events.find(e => e.event_type === 'create');
+          const payload = createEvent?.payload as { type?: string; model?: string } | undefined;
+
+          // Fetch parent if it exists in relationships
+          const relationships = await api.identity.getRelationships();
+          const rel = relationships.find(r => r.child_did === did);
+
+          return {
+            id: identity.scid,
+            did: identity.did,
+            type: (payload?.type === 'window' || payload?.type === 'main') ? 'main' : 'component',
+            model: payload?.model || `Product-${identity.scid.substring(0, 8)}`,
+            parent_did: rel?.parent_did || null,
+            lifecycle_status: identity.status,
+            owner: identity.owner || 'did:webvh:unknown:owner',
+            custodian: null,
+            metadata: payload || {},
+            version: 1,
+            previous_version_id: null,
+            created_at: identity.created_at,
+            updated_at: identity.updated_at,
+          };
+        }
+      }
+>>>>>>> origin/main
     } catch (e) {
       console.warn('[HybridDataStore] getDPPByDID: Backend fetch failed:', e);
     }
@@ -272,9 +313,9 @@ export async function getBlockchainVerification(batchId: number, expectedRoot: s
     const result = await blockchainClient.verifyOnChain(batchId, expectedRoot);
     return {
       verified: result.verified,
-      onChainRoot: result.onChainRoot,
+      onChainRoot: result.onChainRoot ? String(result.onChainRoot) : '',
       blockNumber: result.blockNumber,
-      etherscanUrl: result.etherscanBlockUrl,
+      etherscanUrl: result.etherscanBlockUrl || '',
     };
   } catch (e) {
     console.warn('Blockchain verification failed:', e);
@@ -344,8 +385,8 @@ export async function getAttestationsByDID(did: string): Promise<WitnessAttestat
       const backendAttestations: WitnessAttestation[] = [];
 
       for (const event of events) {
-        if (event.witness_proofs?.witnesses) {
-          for (const witness of event.witness_proofs.witnesses) {
+        if ((event.witness_proofs as any)?.witnesses) {
+          for (const witness of (event.witness_proofs as any).witnesses) {
             backendAttestations.push({
               id: `${event.id}-${witness.witnessDid}`,
               dpp_id: '', // Will be filled by caller if needed
@@ -354,9 +395,12 @@ export async function getAttestationsByDID(did: string): Promise<WitnessAttestat
               attestation_type: event.event_type,
               attestation_data: event.payload,
               signature: witness.signature,
+              witness_proofs: event.witness_proofs,
+              tx_hash: event.witness_proofs?.txHash,
               timestamp: witness.timestamp,
               created_at: event.created_at,
               approval_status: 'approved' as const, // Backend events are considered approved
+              witness_status: (event.witness_proofs?.batchId !== undefined && event.witness_proofs?.merkleRoot) ? 'anchored' : 'pending',
             });
           }
         } else if (event.signature) {
@@ -370,10 +414,12 @@ export async function getAttestationsByDID(did: string): Promise<WitnessAttestat
             attestation_data: event.payload,
             signature: event.signature,
             witness_proofs: event.witness_proofs, // Pass through Merkle proof info for visualization
+            tx_hash: event.witness_proofs?.txHash, // Ensure tx_hash is available for explorer links
             version_id: event.version_id, // Pass through version info for lookup
-            timestamp: event.timestamp || event.created_at,
+            timestamp: String(event.timestamp || event.created_at),
             created_at: event.created_at,
             approval_status: 'approved' as const,
+            witness_status: (event.witness_proofs?.batchId !== undefined && event.witness_proofs?.merkleRoot) ? 'anchored' : 'pending',
           });
         }
       }
@@ -470,10 +516,10 @@ export async function getAllAlerts(): Promise<WatcherAlert[]> {
       const seen = new Set<string>();
       const merged: WatcherAlert[] = [...localAlerts];
 
-      merged.forEach(a => seen.add(`${a.did}-${a.reason}-${a.event_id || 'global'}`));
+      merged.forEach(a => seen.add(`${a.did}-${a.reason}`));
 
       backendAlerts.forEach(a => {
-        const key = `${a.did}-${a.reason}-${a.event_id || 'global'}`;
+        const key = `${a.did}-${a.reason}`;
         if (!seen.has(key)) {
           seen.add(key);
           merged.push({
@@ -483,13 +529,8 @@ export async function getAllAlerts(): Promise<WatcherAlert[]> {
         }
       });
 
-      if (backendAlerts.length > 0) {
-        console.log('[HybridDataStore] Backend alerts:', backendAlerts.length, 'Merged total:', merged.length);
-      }
-
       return merged;
-    } catch (err) {
-      console.warn('Error fetching alerts from backend:', err);
+    } catch {
       return localAlerts;
     }
   }
@@ -520,7 +561,7 @@ export async function getAlertsByDID(did: string): Promise<WatcherAlert[]> {
   const dppScid = extractScidFromDid(did);
 
   return allAlerts.filter(a => {
-    const alertScid = extractScidFromDid(a.did);
+    const alertScid = extractScidFromDid(a.did || '');
     return alertScid === dppScid;
   });
 }
@@ -617,8 +658,35 @@ export async function insertDPP(data: Omit<DPP, 'id' | 'created_at' | 'updated_a
         type: data.type,
         model: data.model,
         metadata: data.metadata as Record<string, unknown>,
+        ownerDid: data.owner,
+        requestedDid: data.did // Pass the prescribed DID to the backend
       });
-      return { ...data, id: result.scid, did: result.did, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+
+      const newDPP = {
+        ...data,
+        id: result.scid,
+        did: result.did, // Use what the backend ultimately chose (usually requestedDid)
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      // If there's a parent_did, we must also link it in the backend
+      if (data.parent_did) {
+        try {
+          await api.identity.createRelationship({
+            parent_did: data.parent_did,
+            child_did: result.did,
+            relationship_type: 'component',
+          });
+        } catch (relError) {
+          console.warn('[HybridDataStore] Failed to create backend relationship:', relError);
+        }
+      }
+
+      // Invalidate cache
+      cacheTimestamp = 0;
+
+      return newDPP;
     } catch (e) {
       console.warn('Backend insert failed, using local:', e);
     }
@@ -632,16 +700,11 @@ export async function insertDPP(data: Omit<DPP, 'id' | 'created_at' | 'updated_a
 export async function insertRelationship(data: { parent_did: string; child_did: string; relationship_type: string; position?: number; metadata?: Record<string, any> }) {
   if (useBackendApi && backendAvailable) {
     try {
-      const result = await api.identity.createRelationship(data);
-      return {
-        id: result.id,
-        parent_did: result.parent_did,
-        child_did: result.child_did,
-        relationship_type: result.relationship_type,
-        created_at: result.created_at
-      };
+      await api.identity.createRelationship(data);
+      // Invalidate cache
+      cacheTimestamp = 0;
     } catch (e) {
-      console.warn('Backend insert relationship failed, using local:', e);
+      console.warn('[HybridDataStore] Backend relationship insert failed:', e);
     }
   }
 
@@ -667,13 +730,13 @@ export async function insertDIDDocument(data: any) {
 export async function getRelationshipsByParent(parentDid: string): Promise<any[]> {
   if (useBackendApi && backendAvailable) {
     try {
-      const relationships = await api.identity.getRelationships(parentDid, 'child');
-      return relationships;
+      // Find relationships where this DID is the parent
+      const results = await api.identity.getRelationships(parentDid, 'parent');
+      return results;
     } catch (e) {
-      console.warn('Backend fetch relationships failed, using local:', e);
+      console.warn('[HybridDataStore] Backend getRelationships failed:', e);
     }
   }
-
   const { enhancedDB } = await import('./enhancedDataStore');
   return enhancedDB.getRelationshipsByParent(parentDid);
 }
@@ -684,13 +747,13 @@ export async function getRelationshipsByParent(parentDid: string): Promise<any[]
 export async function getRelationshipsByChild(childDid: string): Promise<any[]> {
   if (useBackendApi && backendAvailable) {
     try {
-      const relationships = await api.identity.getRelationships(childDid, 'parent');
-      return relationships;
+      // Find relationships where this DID is the child
+      const results = await api.identity.getRelationships(childDid, 'child');
+      return results;
     } catch (e) {
-      console.warn('Backend fetch relationships failed, using local:', e);
+      console.warn('[HybridDataStore] Backend getRelationships failed:', e);
     }
   }
-
   const { enhancedDB } = await import('./enhancedDataStore');
   return enhancedDB.getRelationshipsByChild(childDid);
 }
@@ -728,37 +791,24 @@ function extractScidFromDid(did: string): string | null {
   }
 }
 
-function identityToDPP(identity: Identity): DPP {
-  return {
-    id: identity.scid,
-    did: identity.did,
-    type: 'main',
-    model: 'Unknown', // Would need additional metadata
-    parent_did: null,
-    lifecycle_status: identity.status,
-    owner: identity.owner || 'Unknown',
-    custodian: null,
-    metadata: {},
-    version: 1,
-    previous_version_id: null,
-    created_at: identity.created_at,
-    updated_at: identity.updated_at,
-  };
-}
-
 function eventToAnchoringEvent(event: DIDEvent): AnchoringEvent {
-  const batchId = event.witness_proofs?.batchId;
+  const proof = event.witness_proofs;
   return {
     id: String(event.id),
     dpp_id: '',
     did: event.did,
-    transaction_hash: '', // Would need to fetch from batch
-    block_number: 0, // Would need to fetch from batch
-    merkle_root: null,
+    transaction_hash: proof?.txHash || '',
+    block_number: proof?.blockNumber || 0,
+    merkle_root: proof?.merkleRoot || null,
     component_hashes: null,
     anchor_type: event.event_type,
-    timestamp: new Date(event.timestamp).toISOString(),
-    metadata: { batchId, versionId: event.version_id },
+    timestamp: event.timestamp ? new Date(Number(event.timestamp)).toISOString() : new Date().toISOString(),
+    metadata: {
+      batchId: proof?.batchId,
+      versionId: event.version_id,
+      leafIndex: proof?.leafIndex,
+      leafHash: proof?.leafHash
+    },
   };
 }
 
@@ -891,7 +941,9 @@ async function getDPPById(id: string): Promise<DPP | null> {
     // ID could be the scid or internal id
     const found = allDPPs.find(d => d.id === id || extractScidFromDid(d.did) === id);
     if (found) {
-      console.log('[HybridDataStore] getDPPById: Found:', id);
+      if (Math.random() < 0.05) {
+        console.log('[HybridDataStore] getDPPById: Found (sampled log):', id);
+      }
       return found;
     }
   } catch (e) {
@@ -929,6 +981,126 @@ async function updateDPP(id: string, updates: Partial<DPP>): Promise<DPP | null>
 }
 
 /**
+ * Transfer Ownership (Backend Sync)
+ */
+/**
+ * Resolves a DID and internal ID from either an ID or a DID
+ */
+async function resolveDidAndId(idOrDid: string): Promise<{ did: string; id: string }> {
+  let did = idOrDid;
+  let id = idOrDid;
+
+  if (!idOrDid.startsWith('did:')) {
+    const localDpp = await localDB.getDPP(idOrDid);
+    if (localDpp?.did) {
+      did = localDpp.did;
+    } else if (useBackendApi && backendAvailable) {
+      const allDPPs = await getCachedDPPs();
+      const found = allDPPs.find(d => d.id === idOrDid || extractScidFromDid(d.did) === idOrDid);
+      if (found?.did) did = found.did;
+    }
+  } else {
+    const localDpp = await localDB.getDPPByDID(idOrDid);
+    if (localDpp?.id) {
+      id = localDpp.id;
+    } else if (useBackendApi && backendAvailable) {
+      const allDPPs = await getCachedDPPs();
+      const found = allDPPs.find(d => d.did === idOrDid);
+      if (found?.id) id = found.id;
+    }
+  }
+
+  return { did, id };
+}
+
+/**
+ * Transfer Ownership (Backend Sync)
+ * @param idOrDid Either the DPP ID (z-demo-...) or the full DID
+ */
+async function transferOwnership(idOrDid: string, data: {
+  newOwnerDID: string;
+  reason?: string;
+  signature: string;
+  signerAddress: string;
+}) {
+  // 1. Resolve DID for backend
+  const { did, id } = await resolveDidAndId(idOrDid);
+
+  if (useBackendApi && backendAvailable) {
+    try {
+      await api.identity.transferOwnership(did, data);
+      cacheTimestamp = 0;
+    } catch (e) {
+      console.warn('[HybridDataStore] transferOwnership backend failed:', e);
+    }
+  }
+  // Always update local using internal ID for UI responsiveness
+  return localDB.updateDPP(id, { owner: data.newOwnerDID });
+}
+
+/**
+ * Rotate Key (Backend Sync)
+ */
+async function rotateKey(idOrDid: string, data: {
+  newPublicKey: string;
+  signature: string;
+  signerAddress: string;
+}) {
+  const { did } = await resolveDidAndId(idOrDid);
+
+  if (useBackendApi && backendAvailable) {
+    try {
+      await api.identity.rotateKey(did, data);
+      cacheTimestamp = 0;
+    } catch (e) {
+      console.warn('[HybridDataStore] rotateKey backend failed:', e);
+    }
+  }
+  return true;
+}
+
+/**
+ * Update DID (Backend Sync)
+ */
+async function syncUpdateDID(idOrDid: string, data: {
+  updates: any;
+  signature: string;
+  signerAddress: string;
+}) {
+  const { did } = await resolveDidAndId(idOrDid);
+
+  if (useBackendApi && backendAvailable) {
+    try {
+      await api.identity.updateDID(did, data);
+      cacheTimestamp = 0;
+    } catch (e) {
+      console.warn('[HybridDataStore] updateDID backend failed:', e);
+    }
+  }
+  return true;
+}
+
+/**
+ * Deactivate DID (Backend Sync)
+ */
+async function deactivateDID(idOrDid: string, data: {
+  signature: string;
+  signerAddress: string;
+}) {
+  const { did, id } = await resolveDidAndId(idOrDid);
+
+  if (useBackendApi && backendAvailable) {
+    try {
+      await api.identity.deactivateDID(did, data);
+      cacheTimestamp = 0;
+    } catch (e) {
+      console.warn('[HybridDataStore] deactivateDID backend failed:', e);
+    }
+  }
+  return localDB.updateDPP(id, { lifecycle_status: 'deactivated' });
+}
+
+/**
  * Update Attestation status
  * Used by WitnessDashboard for approving/rejecting events
  */
@@ -959,6 +1131,10 @@ export const hybridDataStore = {
   createProduct,
   insertDPP,
   updateDPP,
+  transferOwnership,
+  rotateKey,
+  updateDID: syncUpdateDID,
+  deactivateDID,
 
   // Stats & Search (now implemented for backend data)
   getStats,

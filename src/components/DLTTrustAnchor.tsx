@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link2, Database, Hash, CheckCircle2, ExternalLink, Blocks } from 'lucide-react';
+import { Link2, Database, Hash, CheckCircle2, ExternalLink, Blocks, Clock } from 'lucide-react';
 import { hybridDataStore } from '../lib/data/hybridDataStore';
 import { useUI } from '../lib/utils/UIContext';
 import type { AnchoringEvent } from '../lib/data/localData';
@@ -75,9 +75,18 @@ export default function DLTTrustAnchor({ did }: { did: string }) {
               <p className="text-xs text-gray-600">Decentralized immutable ledger</p>
             </div>
           </div>
-          <div className="px-4 py-2 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">
-            <CheckCircle2 className="w-4 h-4 inline mr-1" />
-            Anchored
+          <div className={`px-4 py-2 rounded-full text-sm font-medium ${anchorings.length > 0 ? 'bg-purple-100 text-purple-700' : 'bg-amber-100 text-amber-700'}`}>
+            {anchorings.length > 0 ? (
+              <>
+                <CheckCircle2 className="w-4 h-4 inline mr-1" />
+                Anchored
+              </>
+            ) : (
+              <>
+                <Clock className="w-4 h-4 inline mr-1" />
+                Pending Anchor
+              </>
+            )}
           </div>
         </div>
 

@@ -1,18 +1,33 @@
 [
   {
-    "txHash": "0x71bafca0d164dcd0d013a7f0573c15b7f52d150facfcc6848613531c9b9421c1",
-    "batchId": 37,
-    "leafHash": "0x",
-    "leafIndex": 0,
-    "timestamp": "2026-01-18T10:13:38.078Z",
     "versionId": "1",
+    "batchId": 134,
     "merkleRoot": "0x4c047f059300771168b00ecfe372bc498e34868ac3a639136875c51d34cfdf0d",
-    "blockNumber": 10069952,
+    "leafHash": "0x",
     "merkleProof": [
       "0x3333333333333333333333333333333333333333333333333333333333333333",
       "0x2dba5dbc339e7316aea2683faf839c1b7b1ee2313db792112588118df066aa35",
       "0x02d449a31fbb267c8f352e9968a79e3e5fc95c1bbeaa502fd6454ebde5a4bedc",
       "0x2222222222222222222222222222222222222222222222222222222222222222"
-    ]
+    ],
+    "leafIndex": 0,
+    "txHash": "0xb65f4a250e4f7b7b5cff149098108d49bbb99ef8c53f9fb28a44ad5263fc2ad7",
+    "blockNumber": 10099873,
+    "timestamp": "2026-01-22T16:10:26.317Z"
+  },
+  {
+    "versionId": "2",
+    "batchId": 101,
+    "merkleRoot": "0xafb9cd68e5988c6cfe166f4667a6c03078755741faab124bfb77d39f145824d8",
+    "leafHash": "0x8639fb537ecdc5b2958a9ac073902f07187c41a453ecc09319c7b97542b63612",
+    "merkleProof": [
+      "0x625720edda81df9c3e9af2c54a70d3bddf627f07f6c300ea749b56816b69ef39",
+      "0x8eb00e284a7c3b80dd5f21c7a387ac733af0a2618845423845216f75f2930116"
+    ],
+    "leafIndex": 1,
+    "txHash": "0x999f5e97e43e4967a79b4f310f1b6e61454d837a7f877f1d8993e6fa5051a62e",
+    "blockNumber": 5432101,
+    "timestamp": "2026-01-23T16:10:22.890Z",
+    "chainId": "11155111"
   }
 ]
