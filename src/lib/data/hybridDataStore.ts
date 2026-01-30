@@ -219,7 +219,6 @@ export async function getDPPByDID(did: string): Promise<DPP | null> {
           };
         }
       }
->>>>>>> origin/main
     } catch (e) {
       console.warn('[HybridDataStore] getDPPByDID: Backend fetch failed:', e);
     }
