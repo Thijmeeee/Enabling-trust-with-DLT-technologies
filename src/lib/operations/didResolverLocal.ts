@@ -12,9 +12,10 @@
  */
 
 import { localDB, type DIDDocument } from '../data/localData';
+import { API_CONFIG } from '../api/config';
 
-// Backend API base URL
-const API_BASE = 'http://localhost:3000';
+// Backend API base URL - dynamically determined from API_CONFIG
+const API_BASE = API_CONFIG.BASE_URL.replace('/api', '');
 
 // ============================================
 // Types
@@ -103,10 +104,10 @@ export async function resolveDID(
       }
 
       return {
-        did: result.did,
-        document: result.document,
-        metadata: result.metadata || {},
-        verified: result.verified ?? false,
+        did: result.didDocument?.id || did,
+        document: result.didDocument,
+        metadata: result.didDocumentMetadata || {},
+        verified: result.didDocumentMetadata?.verified ?? false,
         log
       };
     }
@@ -221,17 +222,35 @@ export function didToHttpsUrl(did: string): string {
   const parsed = parseDID(did);
   if (!parsed.domain || !parsed.scid) return '';
 
-  // Handle local development or explicit ports
+  // Determine protocol: http for localhost/IPs, https otherwise
+  // Also check if we are currently on http
+  const isIP = /^(\d{1,3}\.){3}\d{1,3}$/.test(parsed.domain.split(':')[0]);
   const isLocal = parsed.domain.includes('localhost') || 
                   parsed.domain.includes('127.0.0.1') || 
-                  parsed.domain.includes(':');
+                  parsed.domain.includes(':') ||
+                  isIP;
                   
-  const protocol = isLocal ? 'http' : 'https';
+  let protocol = isLocal ? 'http' : 'https';
+  
+  // If we are currently on HTTP, default to HTTP for resolution too (common in VM setups)
+  if (window.location.protocol === 'http:') {
+    protocol = 'http';
+  }
 
   // FIX: If domain is localhost/127.0.0.1 without port, default to dev backend port
   let domain = parsed.domain;
   if ((domain === 'localhost' || domain === '127.0.0.1')) {
+    // If we're on a non-standard port or accessing via a VM, 
+    // we should bridge to the backend port if the DID doesn't have one
     domain = 'localhost:3000';
+  }
+
+  // If the DID domain matches our current host, use it (handles VM IP access)
+  if (parsed.domain === window.location.hostname && !parsed.domain.includes(':')) {
+    // If we are on port 80/443 (default), but backend is on 3000
+    // Actually, in the VM deployment Caddy handles this.
+    // So if hostname matches, we can just use the current origin's host
+    domain = window.location.host; 
   }
 
   return `${protocol}://${domain}/.well-known/did/${parsed.scid}/did.jsonl`;

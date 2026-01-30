@@ -32,7 +32,7 @@
     respond @blocked_patterns "Forbidden" 403
 }
 
-:80 {
+http://webvh.web3connect.nl {
     import security_headers
     import rate_limit
 

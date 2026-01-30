@@ -14,6 +14,7 @@ import type { Identity, DIDEvent, Batch, Audit } from '../api/client';
 import { localDB } from './localData';
 import type { DPP, AnchoringEvent, WitnessAttestation, WatcherAlert, DPPRelationship } from './localData';
 import { enhancedDB } from './enhancedDataStore';
+import { resolveDID } from '../operations/didResolverLocal';
 
 // Mode configuration
 let useBackendApi = true;
@@ -135,42 +136,48 @@ export async function getAllDPPs(): Promise<DPP[]> {
 export async function getDPPByDID(did: string): Promise<DPP | null> {
   if (useBackendApi) {
     try {
-      // Use getCachedDPPs which ensures cache is populated and backend is checked
+      // First, check backend health
+      await checkBackendHealth();
+
+      // If backend available, prioritize resolving from the REAL DID log (Source of Truth)
+      if (backendAvailable) {
+        console.log('[HybridDataStore] getDPPByDID: Resolving from real DID logs for:', did);
+        const resolved = await resolveDID(did);
+
+        if (resolved && resolved.document) {
+          const entry = resolved.document;
+          const state = entry.state || {};
+          const scid = extractScidFromDid(did) || '';
+
+          const time = resolved.metadata.versionTime || entry.timestamp || new Date().toISOString();
+          const timeISO = (typeof time === 'number') ? new Date(time).toISOString() : time;
+          
+          // Try to parse version as number, fallback to 1
+          const versionNum = parseInt(entry.versionId);
+
+          return {
+            id: scid,
+            did: did,
+            type: (state.type === 'window' || state.type === 'main') ? 'main' : 'component',
+            model: state.model || `Product-${scid.substring(0, 8)}`,
+            parent_did: null,
+            lifecycle_status: resolved.verified ? 'active' : 'unverified',
+            owner: state.controller || 'did:webvh:unknown:owner',
+            custodian: null,
+            metadata: state.metadata || state,
+            version: isNaN(versionNum) ? 1 : versionNum,
+            previous_version_id: null,
+            created_at: timeISO,
+            updated_at: timeISO,
+          };
+        }
+      }
+
+      // Fallback to cache if resolution failed
       const allDPPs = await getCachedDPPs();
       const cached = allDPPs.find(d => d.did === did);
       if (cached) {
-        console.log('[HybridDataStore] getDPPByDID: Found in cache:', did);
         return cached;
-      }
-
-      // If not in cache but backend available, try direct fetch
-      if (backendAvailable) {
-        const scid = extractScidFromDid(did);
-        if (scid) {
-          console.log('[HybridDataStore] getDPPByDID: Fetching from backend:', scid);
-          const identity = await api.identity.getIdentity(scid);
-
-          // Fetch events to get model/type like getAllDPPs does
-          const events = await api.identity.getEvents(did);
-          const createEvent = events.find(e => e.event_type === 'create');
-          const payload = createEvent?.payload as { type?: string; model?: string } | undefined;
-
-          return {
-            id: identity.scid,
-            did: identity.did,
-            type: payload?.type === 'window' ? 'main' : 'main',
-            model: payload?.model || `Product-${identity.scid.substring(0, 8)}`,
-            parent_did: null,
-            lifecycle_status: identity.status,
-            owner: identity.owner || 'did:webvh:unknown:owner',
-            custodian: null,
-            metadata: payload || {},
-            version: 1,
-            previous_version_id: null,
-            created_at: identity.created_at,
-            updated_at: identity.updated_at,
-          };
-        }
       }
     } catch (e) {
       console.warn('[HybridDataStore] getDPPByDID: Backend fetch failed:', e);
@@ -538,14 +545,30 @@ export async function clearAlertsByDID(did: string): Promise<void> {
  * Get DID Document - generates on-the-fly if not found
  */
 export async function getDIDDocumentByDID(did: string) {
-  // First, try to get from enhancedDB
+  // First, try to get from official resolver (real DID logs)
+  if (useBackendApi) {
+    try {
+      await checkBackendHealth();
+      if (backendAvailable) {
+        console.log('[HybridDataStore] getDIDDocumentByDID: Resolving from official DID log:', did);
+        const resolved = await resolveDID(did);
+        if (resolved && resolved.document) {
+          return resolved.document;
+        }
+      }
+    } catch (e) {
+      console.warn('[HybridDataStore] getDIDDocumentByDID: Protocol resolution failed:', e);
+    }
+  }
+
+  // Fallback: Check enhancedDB
   const { enhancedDB } = await import('./enhancedDataStore');
   const existingDoc = await enhancedDB.getDIDDocumentByDID(did);
   if (existingDoc) {
     return existingDoc;
   }
 
-  // If not found, generate a DID document from identity/DPP data
+  // Last Fallback: generate a basic DID document from the DPP data
   const dpp = await getDPPByDID(did);
   if (dpp) {
     // Generate a basic DID document from the DPP data

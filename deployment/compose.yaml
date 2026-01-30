@@ -7,8 +7,8 @@ services:
       context: .
       dockerfile: Dockerfile.caddy
     ports:
-      - "8080:80"
-      - "8443:443"
+      - "80:80"
+      - "443:443"
     volumes:
       - caddy_data:/data
       - caddy_config:/config
@@ -71,8 +71,7 @@ services:
     environment:
       - SERVICE_ROLE=witness
       - DB_HOST=postgres
-      # Use host machine's Hardhat node (running separately)
-      - RPC_URL=http://172.18.16.1:8545
+      # RPC_URL is loaded from .env
     depends_on:
       - postgres
     networks:
@@ -88,8 +87,7 @@ services:
     environment:
       - SERVICE_ROLE=watcher
       - DB_HOST=postgres
-      # Use host machine's Hardhat node (running separately)
-      - RPC_URL=http://172.18.16.1:8545
+      # RPC_URL is loaded from .env
       - STORAGE_ROOT=/var/www/did-logs
     depends_on:
       - postgres
