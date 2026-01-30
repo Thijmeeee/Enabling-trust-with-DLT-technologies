@@ -12,6 +12,8 @@ services:
     volumes:
       - caddy_data:/data
       - caddy_config:/config
+      - ../backend/did-logs:/usr/share/caddy/did:ro
+      - ./dist-app:/usr/share/caddy/app:ro
     networks:
       - shared_pod
 
@@ -28,7 +30,7 @@ services:
     image: caddy:alpine
     command: caddy file-server --root /usr/share/caddy --listen :80
     volumes:
-      - ./test-logs:/usr/share/caddy/.well-known/did:ro
+      - ../backend/did-logs:/usr/share/caddy/.well-known/did:ro
     networks:
       - shared_pod
 
@@ -61,7 +63,7 @@ services:
     networks:
       - shared_pod
     volumes:
-      - ./test-logs:/var/www/did-logs
+      - ../backend/did-logs:/var/www/did-logs
 
   witness:
     build:
@@ -94,7 +96,7 @@ services:
     networks:
       - shared_pod
     volumes:
-      - ./test-logs:/var/www/did-logs:ro
+      - ../backend/did-logs:/var/www/did-logs:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

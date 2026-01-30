@@ -1,5 +1,6 @@
 import { localDB } from '../data/localData';
 import type { DPP } from '../data/localData';
+import { getAllDPPs } from '../data/hybridDataStore';
 
 export async function getDPPWithRelations(did: string) {
   const dpp = await localDB.getDPPByDID(did);
@@ -74,7 +75,8 @@ export async function searchDPPs(filters: {
   limit?: number;
   offset?: number;
 }): Promise<{ data: DPP[]; count: number }> {
-  let dpps = await localDB.getDPPs();
+  // Use hybridDataStore instead of localDB to bridge backend/frontend data
+  let dpps = await getAllDPPs();
 
   if (filters.type) {
     dpps = dpps.filter(d => d.type === filters.type);

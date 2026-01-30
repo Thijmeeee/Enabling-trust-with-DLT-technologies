@@ -1197,7 +1197,6 @@ app.get('/api/identity/:scid', async (req, res) => {
 app.get('/api/identities', async (req, res) => {
     try {
         // Optimized query to include the 'create' event payload (metadata like model/type)
-        // This avoids N+1 queries from the frontend
         const result = await pool.query(`
             SELECT 
                 i.did, i.scid, i.public_key, i.owner, i.status, i.created_at, i.updated_at,
@@ -1206,7 +1205,22 @@ app.get('/api/identities', async (req, res) => {
             LEFT JOIN events e ON i.did = e.did AND e.event_type = 'create'
             ORDER BY i.created_at DESC
         `);
-        return res.json(result.rows);
+
+        // Filter: Only return identities that actually have a log file on disk
+        // This ensures the dashboard doesn't show "ghost" entries from the database
+        const identitiesWithFiles = [];
+        for (const row of result.rows) {
+            const logPath = path.join(STORAGE_ROOT, row.scid, 'did.jsonl');
+            try {
+                await fs.access(logPath);
+                identitiesWithFiles.push(row);
+            } catch (err) {
+                // File doesn't exist, skip this entry
+                // console.log(`[Identity] Skipping ghost entry (no file): ${row.scid}`);
+            }
+        }
+
+        return res.json(identitiesWithFiles);
     } catch (err: any) {
         res.status(500).json({ error: err.message });
     }
@@ -1216,15 +1230,37 @@ app.get('/api/identities', async (req, res) => {
 app.get('/api/events', async (req, res) => {
     const { did } = req.query;
     try {
+        // Updated query to join with identities and filter out nodes without files
+        // We'll first get the list of active SCIDs to match against filesystem
+        const idResult = await pool.query('SELECT scid, did FROM identities');
+        const validDids = new Set();
+        
+        for (const row of idResult.rows) {
+            const logPath = path.join(STORAGE_ROOT, row.scid, 'did.jsonl');
+            try {
+                await fs.access(logPath);
+                validDids.add(row.did);
+            } catch (err) {}
+        }
+
         let query = 'SELECT id, did, event_type, payload, signature, leaf_hash, version_id, witness_proofs, timestamp, created_at FROM events';
         let params: any[] = [];
 
         if (did) {
             query += ' WHERE did = $1';
             params.push(did);
+        } else {
+            // If no specific DID, filter the global event list to only include valid ones
+            const placeholderList = Array.from(validDids).map((_, i) => `$${i + 1}`).join(',');
+            if (placeholderList) {
+                query += ` WHERE did IN (${placeholderList})`;
+                params = Array.from(validDids);
+            } else {
+                return res.json([]); // No valid DIDs found
+            }
         }
+        
         query += ' ORDER BY created_at DESC';
-
         const result = await pool.query(query, params);
 
         // Ensure timestamp is a number string or number
