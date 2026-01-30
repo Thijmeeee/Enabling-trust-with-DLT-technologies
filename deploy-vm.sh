@@ -27,12 +27,21 @@ mkdir -p deployment/did-logs
 chmod -R 777 deployment/did-logs
 
 # 5. Start Infrastructure (DB and optionally Blockchain)
+echo "🐳 Stopping any existing services to prevent conflicts..."
+podman-compose -f deployment/compose.yaml down || true
+podman stop dpp-postgres || true
+
 echo "🐳 Starting Infrastructure..."
-# Check for --skip-blockchain flag (case-insensitive)
+# Use --skip-blockchain for Sepolia deployment
 if [[ "${*,,}" == *"--skip-blockchain"* ]]; then
     podman-compose -f deployment/compose.yaml up -d postgres
 else
-    podman-compose -f deployment/compose.yaml up -d postgres blockchain
+    # Only try starting blockchain if it exists in compose.yaml
+    if grep -q "blockchain:" deployment/compose.yaml; then
+        podman-compose -f deployment/compose.yaml up -d postgres blockchain
+    else
+        podman-compose -f deployment/compose.yaml up -d postgres
+    fi
 fi
 echo "Waiting for services to initialize..."
 sleep 10

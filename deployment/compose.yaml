@@ -100,15 +100,6 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-  # --- Local Blockchain (Optional) ---
-  # blockchain:
-  #   image: ghcr.io/nomicfoundation/hardhat:latest
-  #   command: ["npx", "hardhat", "node", "--hostname", "0.0.0.0"]
-  #   ports:
-  #     - "8545:8545"
-  #   networks:
-  #     - shared_pod
-
 volumes:
   caddy_data:
   caddy_config:
